@@ -270,7 +270,7 @@ type Check interface {
 }
 ```
 
-Os checks são registrados estaticamente num `registry` (sem carregamento dinâmico de código). A severidade e as ações de cada check podem ser sobrescritas pelo perfil, mas **nunca para baixo de WARNING** quando o check padrão é CRITICAL, a menos que o perfil tenha `overrides_allow_downgrade: true`, o que gera um aviso no preflight.
+Na implementação (ADR 0004), a interface carrega só os metadados (`ID`, `Kind`, `DefaultSeverity`, `Sources`, `SelfTestCases`) e cada check expõe um avaliador puro e tipado; o daemon é dono dos sensores e chama os avaliadores. Os checks são registrados estaticamente num `registry` (sem carregamento dinâmico de código). A severidade e as ações de cada check podem ser sobrescritas pelo perfil, mas **nunca para baixo de WARNING** quando o check padrão é CRITICAL, a menos que o perfil tenha `overrides_allow_downgrade: true`, o que gera um aviso no preflight.
 
 ---
 
@@ -1153,7 +1153,7 @@ lethe/
 ├── internal/
 │   ├── contracts/            # JSON Schemas: event, ipc, profile, outputs --json; tipos Go
 │   ├── engine/               # PURO: severidade, dedup, alertas, cor, máquina da sessão
-│   ├── checks/               # net/, dns/, tun/, host/, persona/, self/ + registry
+│   ├── checks/               # um arquivo por check (net001.go…) + registry (ADR 0004)
 │   ├── discovery/            # interfaces, classificação, túnel, DNS, torctl/
 │   ├── sensors/              # capture/, nflog/, netlinkmon/, sockdiag/, procscan/, nftmon/, dbusmon/
 │   ├── guard/                # geração e aplicação das tabelas nftables
