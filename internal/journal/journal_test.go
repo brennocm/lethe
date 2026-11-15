@@ -413,3 +413,26 @@ func TestVerify_InMemoryTampering(t *testing.T) {
 		})
 	}
 }
+
+func TestJournal_ReaderGroup(t *testing.T) {
+	gid := os.Getgid()
+	if gid == 0 {
+		t.Skip("needs a non-root group")
+	}
+	f := newFixture(t, func(c *Config) { c.ReaderGID = gid })
+	if err := f.w.Close(nil); err != nil {
+		t.Fatal(err)
+	}
+	di, _ := os.Stat(f.dir)
+	if di.Mode()&os.ModeSetgid == 0 || di.Mode().Perm() != 0o750 {
+		t.Fatalf("dir mode %v", di.Mode())
+	}
+	segs, _ := filepath.Glob(filepath.Join(f.dir, "*.lseg"))
+	if len(segs) == 0 {
+		t.Fatal("no segment")
+	}
+	si, _ := os.Stat(segs[0])
+	if si.Mode().Perm() != 0o640 {
+		t.Fatalf("segment mode %v", si.Mode().Perm())
+	}
+}

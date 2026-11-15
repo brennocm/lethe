@@ -31,6 +31,10 @@ type Config struct {
 	CheckpointEvery     time.Duration // default 60s
 	SyncEvery           time.Duration // default 1s
 	StartData           map[string]any
+	// ReaderGID, when >= 0, lets that group read the session: the directory becomes
+	// root:gid 02750 (setgid, so segments inherit the group) and segments 0640. The daemon
+	// keeps no CAP_DAC_OVERRIDE/CAP_CHOWN after start-up, so this is how the operator reads.
+	ReaderGID int
 }
 
 // Writer appends events to a session. It is safe for concurrent use.
@@ -85,6 +89,14 @@ func Open(cfg Config) (*Writer, error) {
 	}
 	if err := os.MkdirAll(cfg.Dir, 0o700); err != nil {
 		return nil, fmt.Errorf("journal: create %s: %w", cfg.Dir, err)
+	}
+	if cfg.ReaderGID > 0 {
+		if err := os.Chown(cfg.Dir, -1, cfg.ReaderGID); err != nil {
+			return nil, fmt.Errorf("journal: group of %s: %w", cfg.Dir, err)
+		}
+		if err := os.Chmod(cfg.Dir, 0o750|os.ModeSetgid); err != nil { // #nosec G302 -- group read is the point
+			return nil, fmt.Errorf("journal: mode of %s: %w", cfg.Dir, err)
+		}
 	}
 	if entries, err := os.ReadDir(cfg.Dir); err != nil || len(entries) > 0 {
 		return nil, fmt.Errorf("journal: session directory %s must be empty", cfg.Dir)
@@ -300,7 +312,11 @@ func (w *Writer) openSegment(now time.Time) error {
 		return err
 	}
 	path := filepath.Join(w.cfg.Dir, segmentName(w.segment))
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY|os.O_APPEND, 0o600) // #nosec G304 -- path built from our own session dir
+	mode := os.FileMode(0o600)
+	if w.cfg.ReaderGID > 0 {
+		mode = 0o640
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY|os.O_APPEND, mode) // #nosec G304 G302 -- our own session dir
 	if err != nil {
 		return fmt.Errorf("journal: create segment: %w", err)
 	}
