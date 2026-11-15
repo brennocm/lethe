@@ -25,6 +25,7 @@ import (
 	"lethe/internal/platform"
 	"lethe/internal/profile"
 	"lethe/internal/response"
+	"lethe/internal/sensors/nftmon"
 )
 
 // Config wires the daemon to the host. Every I/O dependency is injectable for tests.
@@ -100,6 +101,7 @@ type session struct {
 	tunnels         map[string]bool                      // TUN-001: tunnels seen since arm (only grows)
 	learned         []discovery.Endpoint                 // endpoints learned (NFLOG) or confirmed by the operator
 	endpointUnknown bool
+	nftArm          []nftmon.Table // TUN-004: third-party tables at arm (nil = not readable)
 	critical        int
 	sensors         *sensorSet
 	protected       map[int]bool // pids never killed by responses (self, agent)

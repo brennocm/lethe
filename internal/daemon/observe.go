@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"lethe/internal/engine"
 	"lethe/internal/preflight"
 	"lethe/internal/response"
+	"lethe/internal/sensors/nftmon"
 )
 
 // heartbeatTimeout: a source silent for longer is down (SELF-001, SELF-003).
@@ -100,6 +102,28 @@ func (d *Daemon) evaluateConditionsLocked(snap discovery.Snapshot) {
 	d.conditionLocked("NET-004", checks.NET004{}.Evaluate(&snap))
 	d.conditionLocked("TUN-001", checks.TUN001{}.Evaluate(d.tunnelExpectLocked(), &snap))
 	d.conditionLocked("TUN-007", checks.TUN007{}.Evaluate(&snap))
+	if d.sess.nftArm != nil {
+		if now, err := d.nftTables(); err == nil {
+			d.conditionLocked("TUN-004", checks.TUN004{}.Evaluate(d.sess.nftArm, now))
+		}
+	}
+}
+
+// nftTables snapshots the third-party nftables tables (TUN-004).
+func (d *Daemon) nftTables() ([]nftmon.Table, error) {
+	c, err := d.cfg.NFT()
+	if err != nil {
+		return nil, err
+	}
+	l, ok := c.(nftmon.Lister)
+	if !ok {
+		return nil, errors.New("nftables connection cannot list rules")
+	}
+	t, err := nftmon.Snapshot(l)
+	if t == nil && err == nil {
+		t = []nftmon.Table{}
+	}
+	return t, err
 }
 
 func (d *Daemon) tunnelExpectLocked() checks.TunnelExpect {

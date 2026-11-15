@@ -19,7 +19,9 @@ import (
 
 	"filippo.io/age"
 	"github.com/google/nftables"
+	"github.com/google/nftables/expr"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"lethe/internal/baseline"
 	"lethe/internal/cli"
@@ -282,6 +284,43 @@ func TestE2E_AC05_EndpointChange(t *testing.T) {
 	if st.Color == "RED" || st.Color == "GRAY" {
 		t.Fatalf("status %+v", st)
 	}
+}
+
+// TestE2E_AC06_KillSwitchRemoved: a third-party kill switch (inet killswitch, drop in output)
+// exists at arm and is deleted during the session: TUN-004 CRITICAL.
+func TestE2E_AC06_KillSwitchRemoved(t *testing.T) {
+	netlab.New(t, true)
+	c := nft(t)
+	ks := c.AddTable(&nftables.Table{Family: nftables.TableFamilyINet, Name: "killswitch"})
+	accept := nftables.ChainPolicyAccept
+	out := c.AddChain(&nftables.Chain{Name: "out", Table: ks, Type: nftables.ChainTypeFilter,
+		Hooknum: nftables.ChainHookOutput, Priority: nftables.ChainPriorityFilter, Policy: &accept})
+	c.AddRule(&nftables.Rule{Table: ks, Chain: out, Exprs: []expr.Any{
+		&expr.Meta{Key: expr.MetaKeyL4PROTO, Register: 1},
+		&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: []byte{unix.IPPROTO_UDP}},
+		&expr.Payload{DestRegister: 1, Base: expr.PayloadBaseTransportHeader, Offset: 2, Len: 2},
+		&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: []byte{0, 9}},
+		&expr.Verdict{Kind: expr.VerdictDrop},
+	}})
+	if err := c.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c := nft(t); c.DelTable(ks); _ = c.Flush() })
+	s := newSession(t)
+	d, _, _ := startArmed(t, s)
+	time.Sleep(time.Second)
+	if a := alertOf(d, "TUN-004"); a != nil {
+		t.Fatalf("TUN-004 before any change: %+v", a)
+	}
+	c = nft(t)
+	c.DelTable(ks)
+	if err := c.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "TUN-004 CRITICAL", func() bool {
+		a := alertOf(d, "TUN-004")
+		return a != nil && a.Severity == "CRITICAL"
+	})
 }
 
 // TestE2E_AC08_DaemonPanicUnpanic drives the real daemon (strict guard, live sensors) over IPC:

@@ -25,3 +25,10 @@ open.
   only an 8-byte Hop-by-Hop header followed by ICMPv6 MLD to `ff02::/16`; any other chain is
   delivered. Otherwise every MLDv2 report on the egress was a NET-001 CRITICAL, which in strict mode
   means panic.
+- **TUN-004** compares a snapshot of the third-party tables (every table not named `lethe*`) taken
+  at arm with a fresh one on every discovery pass. The arm-time pass runs every 5 s, which is the
+  spec's resampling interval; the `NFNLGRP_NFTABLES` monitor is left out, and that interval is the
+  latency. The hash covers sets, chains and rule expressions, without counters, quota usage or
+  handles, so traffic alone never looks like a change. A table that is added, changed or removed is
+  WARNING. A removed table with a drop (policy, drop or reject) in an output hook is CRITICAL. Only
+  table names reach the events.

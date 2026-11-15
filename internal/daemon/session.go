@@ -151,6 +151,11 @@ func (d *Daemon) Arm(req ArmRequest) (ArmResult, preflight.Report, error) {
 	if req.Force {
 		d.appendLocked(contracts.Event{Type: contracts.EvOperatorForce, Source: contracts.SourceOperator, Data: map[string]any{"command": "arm", "reason": req.Reason, "preflight": rep.Result}})
 	}
+	if t, err := d.nftTables(); err == nil {
+		d.sess.nftArm = t
+	} else {
+		_, _ = fmt.Fprintf(d.cfg.Out, "lethe: TUN-004 unavailable: %v\n", err)
+	}
 	if err := d.applyGuardLocked(snap); err != nil {
 		d.abortLocked(err)
 		return ArmResult{}, rep, err

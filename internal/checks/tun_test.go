@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"lethe/internal/discovery"
+	"lethe/internal/sensors/nftmon"
 )
 
 func reasons(fs []Finding) []string {
@@ -52,5 +53,30 @@ func TestTUN007_Evaluate(t *testing.T) {
 	s.LegacyIPTables = true
 	if fs := (TUN007{}).Evaluate(s); len(fs) != 1 || fs[0].Severity != "WARNING" {
 		t.Fatal(fs)
+	}
+}
+
+func TestTUN004_Evaluate(t *testing.T) {
+	arm := []nftmon.Table{{Name: "inet killswitch", Hash: "a", OutputDrop: true}, {Name: "inet fw", Hash: "b"}}
+	if fs := (TUN004{}).Evaluate(arm, arm); len(fs) != 0 {
+		t.Fatal(fs)
+	}
+	now := []nftmon.Table{{Name: "inet fw", Hash: "c"}, {Name: "ip nat", Hash: "d"}}
+	fs := (TUN004{}).Evaluate(arm, now)
+	got := map[string]string{}
+	for _, f := range fs {
+		got[f.Data["reason"].(string)] = string(f.Severity)
+	}
+	want := map[string]string{"killswitch_removed": "CRITICAL", "changed": "WARNING", "added": "WARNING"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v", got)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Fatalf("%s: got %q want %q (%v)", k, got[k], v, got)
+		}
+	}
+	if fs := (TUN004{}).Evaluate([]nftmon.Table{{Name: "inet fw"}}, nil); len(fs) != 1 || fs[0].Severity != "WARNING" {
+		t.Fatalf("removing a table without output drop is WARNING: %v", fs)
 	}
 }
