@@ -260,6 +260,14 @@ func setUp(name string) error {
 	return netlink.LinkSetUp(l)
 }
 
+func setDown(name string) error {
+	l, err := netlink.LinkByName(name)
+	if err != nil {
+		return err
+	}
+	return netlink.LinkSetDown(l)
+}
+
 func addAddr(name, cidr string) error {
 	l, err := netlink.LinkByName(name)
 	if err != nil {
