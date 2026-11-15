@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lethe:status",
+  "title": "lethe status --json (status.get)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["state", "color", "alerts", "degraded", "sensors", "agent"],
+  "properties": {
+    "state": { "enum": ["NO_BASELINE", "READY", "VERIFIED", "ARMED", "PANIC"] },
+    "color": { "enum": ["GREEN", "YELLOW", "RED", "GRAY"] },
+    "session": { "type": "string" },
+    "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{4}(-[0-9a-f]{4}){7}$" },
+    "guard": { "enum": ["off", "reactive", "strict"] },
+    "started_at": { "type": "string" },
+    "auth_salt": { "type": "string", "contentEncoding": "base64" },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "check", "severity", "state", "count", "first_seen", "last_seen", "acked"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^A-[0-9]{4,}$" },
+          "check": { "type": "string" },
+          "severity": { "enum": ["INFO", "WARNING", "CRITICAL"] },
+          "state": { "enum": ["open", "acknowledged", "resolved"] },
+          "count": { "type": "integer", "minimum": 1 },
+          "first_seen": { "type": "string" },
+          "last_seen": { "type": "string" },
+          "acked": { "type": "boolean" }
+        }
+      }
+    },
+    "degraded": { "type": "array", "items": { "type": "string" } },
+    "sensors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "up"],
+        "properties": { "source": { "type": "string" }, "up": { "type": "boolean" } }
+      }
+    },
+    "agent": { "type": "boolean" }
+  }
+}

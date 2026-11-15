@@ -1,0 +1,277 @@
+package daemon
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"time"
+
+	"lethe/internal/contracts"
+	"lethe/internal/ipc"
+	"lethe/internal/privsep"
+)
+
+// Status is status.get and `lethe status --json` (schema: status).
+type Status struct {
+	State       string       `json:"state"`
+	Color       string       `json:"color"`
+	Session     string       `json:"session,omitempty"`
+	Fingerprint string       `json:"fingerprint,omitempty"`
+	Guard       string       `json:"guard,omitempty"`
+	StartedAt   *time.Time   `json:"started_at,omitempty"`
+	AuthSalt    []byte       `json:"auth_salt,omitempty"` // for K = scrypt(passphrase, salt), spec §17.3
+	Alerts      []AlertView  `json:"alerts"`
+	Degraded    []string     `json:"degraded"`
+	Sensors     []SensorView `json:"sensors"`
+	Agent       bool         `json:"agent"`
+}
+
+// AlertView is one alert in the status.
+type AlertView struct {
+	ID        string    `json:"id"`
+	Check     string    `json:"check"`
+	Severity  string    `json:"severity"`
+	State     string    `json:"state"`
+	Count     int       `json:"count"`
+	FirstSeen time.Time `json:"first_seen"`
+	LastSeen  time.Time `json:"last_seen"`
+	Acked     bool      `json:"acked"`
+}
+
+// SensorView is one heartbeat source.
+type SensorView struct {
+	Source string `json:"source"`
+	Up     bool   `json:"up"`
+}
+
+// Status snapshots the daemon state.
+func (d *Daemon) Status() Status {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	st := Status{State: string(d.eng.Session()), Color: string(d.colorLocked()), Alerts: []AlertView{}, Degraded: []string{}, Sensors: []SensorView{}, Agent: d.agent != nil}
+	s := d.sess
+	if s == nil {
+		return st
+	}
+	t := s.startedAt.UTC()
+	st.Session, st.Fingerprint, st.Guard, st.StartedAt, st.AuthSalt = s.id, s.journal.Fingerprint(), string(s.guardMode), &t, s.salt
+	for _, a := range d.eng.Alerts() {
+		st.Alerts = append(st.Alerts, AlertView{ID: a.ID, Check: a.Check, Severity: string(a.Severity), State: string(a.State),
+			Count: a.Count, FirstSeen: a.FirstSeen.UTC(), LastSeen: a.LastSeen.UTC(), Acked: a.Acked})
+	}
+	st.Degraded = append(st.Degraded, d.eng.Degraded()...)
+	for src := range s.beats {
+		st.Sensors = append(st.Sensors, SensorView{Source: src, Up: !s.down[src]})
+	}
+	sortSensors(st.Sensors)
+	return st
+}
+
+func sortSensors(v []SensorView) {
+	for i := 1; i < len(v); i++ {
+		for j := i; j > 0 && v[j].Source < v[j-1].Source; j-- {
+			v[j], v[j-1] = v[j-1], v[j]
+		}
+	}
+}
+
+func decode(c *ipc.Call, v any) error {
+	if len(c.Req.Params) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(c.Req.Params, v); err != nil {
+		return errParams(err)
+	}
+	return nil
+}
+
+// QueryParams filters events.query and events.subscribe.
+type QueryParams struct {
+	Severity string `json:"severity,omitempty"` // minimum severity
+	Limit    int    `json:"limit,omitempty"`
+}
+
+func (q QueryParams) match(ev contracts.Event) bool {
+	if q.Severity == "" {
+		return true
+	}
+	return ev.Severity.Valid() && ev.Severity.Rank() >= contracts.Severity(q.Severity).Rank()
+}
+
+func (d *Daemon) routes() {
+	h := d.srv.Handle
+	h("auth.challenge", func(*ipc.Call) (any, error) {
+		d.mu.Lock()
+		s := d.sess
+		d.mu.Unlock()
+		if s == nil {
+			return nil, errState(errNotArmed)
+		}
+		n, err := s.auth.Challenge()
+		return map[string]any{"nonce": n}, err
+	})
+	h("status.get", func(*ipc.Call) (any, error) { return d.Status(), nil })
+	h("discovery.get", func(*ipc.Call) (any, error) {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if d.sess == nil {
+			return d.discoverLocked(nil), nil
+		}
+		return d.snap, nil
+	})
+	h("events.query", func(c *ipc.Call) (any, error) {
+		var q QueryParams
+		if err := decode(c, &q); err != nil {
+			return nil, err
+		}
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		out := []contracts.Event{}
+		for _, ev := range d.recent {
+			if q.match(ev) {
+				out = append(out, ev)
+			}
+		}
+		if q.Limit > 0 && len(out) > q.Limit {
+			out = out[len(out)-q.Limit:]
+		}
+		return out, nil
+	})
+	h("events.subscribe", func(c *ipc.Call) (any, error) {
+		var q QueryParams
+		if err := decode(c, &q); err != nil {
+			return nil, err
+		}
+		ch := make(chan contracts.Event, 256)
+		d.mu.Lock()
+		id := d.nextSub
+		d.nextSub++
+		d.subs[id] = ch
+		d.mu.Unlock()
+		go func() {
+			defer func() {
+				d.mu.Lock()
+				delete(d.subs, id)
+				d.mu.Unlock()
+			}()
+			for {
+				select {
+				case <-c.Ctx.Done():
+					return
+				case ev := <-ch:
+					if q.match(ev) && c.Notify(ev) != nil {
+						return
+					}
+				}
+			}
+		}()
+		return map[string]any{"subscribed": true}, nil
+	})
+	h("heartbeat", func(c *ipc.Call) (any, error) {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		role := "gui"
+		if c.Peer.Agent {
+			role = "agent"
+		}
+		if d.sess != nil && role == "agent" {
+			d.sess.beats["agent"] = d.cfg.Now()
+		}
+		d.lastBeat[role] = d.cfg.Now()
+		return map[string]any{"state": string(d.eng.Session()), "color": string(d.colorLocked())}, nil
+	})
+	h("panic.engage", func(*ipc.Call) (any, error) {
+		return map[string]any{"ok": true}, d.Panic("manual")
+	})
+	h("alert.ack", func(c *ipc.Call) (any, error) {
+		var p struct {
+			ID     string `json:"id"`
+			Reason string `json:"reason"`
+		}
+		if err := decode(c, &p); err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true}, d.Ack(p.ID, p.Reason, c.Authorize)
+	})
+	h("agent.report", func(c *ipc.Call) (any, error) {
+		var ev contracts.Event
+		if err := decode(c, &ev); err != nil {
+			return nil, err
+		}
+		if ev.Type != contracts.EvCheckAlert {
+			return nil, errParams(fmt.Errorf("agent may only report %s", contracts.EvCheckAlert))
+		}
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if d.sess == nil {
+			return nil, errState(errNotArmed)
+		}
+		d.alertLocked(contracts.Event{V: 1, Type: ev.Type, Check: ev.Check, Severity: ev.Severity, Source: contracts.SourceAgent, Data: ev.Data})
+		return map[string]any{"ok": true}, nil
+	})
+	h("session.arm", func(c *ipc.Call) (any, error) {
+		var req ArmRequest
+		err := decode(c, &req)
+		wipe(c.Req.Params) // the passphrase travelled base64-encoded in params
+		if err != nil {
+			return nil, err
+		}
+		res, rep, err := d.Arm(req)
+		if errors.Is(err, ErrPreflight) || (err != nil && rep.Result != "") {
+			return nil, &ipc.Error{Code: ipc.CodeState, Message: fmt.Sprintf("%v (preflight %s)", err, rep.Result)}
+		}
+		return res, err
+	})
+	h("session.disarm", func(*ipc.Call) (any, error) { return d.Disarm() })
+	h("panic.release", func(*ipc.Call) (any, error) { return d.Unpanic() })
+}
+
+// agentProc is the session agent spawned by the daemon (portable mode).
+type agentProc struct {
+	pid  int
+	proc *os.Process
+}
+
+func (d *Daemon) isAgent(pid int) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.agent != nil && d.agent.pid == pid
+}
+
+// spawnAgentLocked starts the agent as the operator (setuid before the capabilities drop).
+func (d *Daemon) spawnAgentLocked() error {
+	o := privsep.SpawnOptions{Env: d.cfg.AgentEnv, Stdout: d.cfg.Out, Stderr: d.cfg.Out}
+	if isRoot() && d.cfg.Operator.UID != 0 {
+		o.Cred = &privsep.Credential{UID: d.cfg.Operator.UID, GID: d.cfg.Operator.GID}
+	}
+	cmd, err := privsep.Spawn(d.cfg.Agent, o)
+	if err != nil {
+		return err
+	}
+	a := &agentProc{pid: cmd.Process.Pid, proc: cmd.Process}
+	d.agent = a
+	if d.sess != nil {
+		d.sess.beats["agent"] = d.cfg.Now()
+		d.sess.protected[a.pid] = true
+	}
+	go func() {
+		_ = cmd.Wait()
+		d.mu.Lock()
+		if d.agent == a {
+			d.agent = nil
+		}
+		d.mu.Unlock()
+	}()
+	return nil
+}
+
+// Close stops the agent.
+func (d *Daemon) Close() {
+	d.mu.Lock()
+	a := d.agent
+	d.mu.Unlock()
+	if a != nil {
+		_ = a.proc.Kill()
+	}
+}
