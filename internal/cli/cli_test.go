@@ -31,3 +31,20 @@ func TestExitCode_Wrapped(t *testing.T) {
 		t.Fatal("exit code mapping broken")
 	}
 }
+
+func TestDiscover_RunsUnprivilegedAndMatchesContract(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := Execute([]string{"discover", "--json"}, &out, &errb); code != ExitOK {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	if err := contracts.ValidateJSON("discover", out.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if code := Execute([]string{"discover"}, &out, &errb); code != ExitOK || !bytes.Contains(out.Bytes(), []byte("INTERFACE")) {
+		t.Fatalf("human output: %s", out.String())
+	}
+	if code := Execute([]string{"discover", "--learn"}, &out, &errb); code == ExitOK {
+		t.Fatal("--learn should not be available yet")
+	}
+}

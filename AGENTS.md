@@ -9,8 +9,8 @@ Distribuição: binário estático + deb/rpm — ver `docs/adr/0002-distribuicao
 
 ## Estado
 
-- Marco atual: **M4** (M0–M3 concluídos). Plano em `spec.md` §24.
-- Pendências: —
+- Marco atual: **M5** (M0–M4 concluídos). Plano em `spec.md` §24.
+- Pendências: `baseline create` online (IP público + ASN) depende da base geo (M11); `discover --learn` depende da captura (M5/M8); MACs permanentes na baseline chegam com a integração da descoberta no `baseline create`.
 
 ## Mapa
 

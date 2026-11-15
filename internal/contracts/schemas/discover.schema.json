@@ -1,0 +1,407 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lethe:discover",
+  "title": "lethe discover --json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "taken_at",
+    "ifaces",
+    "capture_ifaces",
+    "tunnels",
+    "endpoints",
+    "routes",
+    "dns",
+    "legacy_iptables",
+    "unavailable"
+  ],
+  "properties": {
+    "taken_at": {
+      "type": "string"
+    },
+    "ifaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "index",
+          "name",
+          "type",
+          "has_device",
+          "class",
+          "up",
+          "running",
+          "addrs",
+          "global_v6",
+          "ipv6_disabled"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "has_device": {
+            "type": "boolean"
+          },
+          "parent_index": {
+            "type": "integer"
+          },
+          "master_index": {
+            "type": "integer"
+          },
+          "class": {
+            "enum": [
+              "loopback",
+              "tunnel",
+              "egress",
+              "internal",
+              "unknown"
+            ]
+          },
+          "up": {
+            "type": "boolean"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "mac": {
+            "type": "string"
+          },
+          "perm_mac": {
+            "type": "string"
+          },
+          "addrs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "global_v6": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ipv6_disabled": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "capture_ifaces": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tunnels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "iface",
+          "kind"
+        ],
+        "properties": {
+          "iface": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "wireguard",
+              "tun",
+              "generic",
+              "tor"
+            ]
+          },
+          "fwmark": {
+            "type": "integer"
+          },
+          "peers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "last_handshake",
+                "tx_bytes",
+                "rx_bytes"
+              ],
+              "properties": {
+                "endpoint": {
+                  "type": "string"
+                },
+                "last_handshake": {
+                  "type": "string"
+                },
+                "tx_bytes": {
+                  "type": "integer"
+                },
+                "rx_bytes": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "endpoints": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(\\[[0-9a-fA-F:.]+\\]|[0-9.]+):[0-9]+/(udp|tcp)$"
+      }
+    },
+    "routes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "default_v4",
+        "default_v6"
+      ],
+      "properties": {
+        "default_v4": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "dst",
+              "iface",
+              "class",
+              "table"
+            ],
+            "properties": {
+              "dst": {
+                "type": "string"
+              },
+              "gateway": {
+                "type": "string"
+              },
+              "iface": {
+                "type": "string"
+              },
+              "class": {
+                "enum": [
+                  "loopback",
+                  "tunnel",
+                  "egress",
+                  "internal",
+                  "unknown",
+                  ""
+                ]
+              },
+              "table": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "default_v6": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "dst",
+              "iface",
+              "class",
+              "table"
+            ],
+            "properties": {
+              "dst": {
+                "type": "string"
+              },
+              "gateway": {
+                "type": "string"
+              },
+              "iface": {
+                "type": "string"
+              },
+              "class": {
+                "enum": [
+                  "loopback",
+                  "tunnel",
+                  "egress",
+                  "internal",
+                  "unknown",
+                  ""
+                ]
+              },
+              "table": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "probe_v4": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "dst",
+            "iface",
+            "class",
+            "table"
+          ],
+          "properties": {
+            "dst": {
+              "type": "string"
+            },
+            "gateway": {
+              "type": "string"
+            },
+            "iface": {
+              "type": "string"
+            },
+            "class": {
+              "enum": [
+                "loopback",
+                "tunnel",
+                "egress",
+                "internal",
+                "unknown",
+                ""
+              ]
+            },
+            "table": {
+              "type": "integer"
+            }
+          }
+        },
+        "probe_v6": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "dst",
+            "iface",
+            "class",
+            "table"
+          ],
+          "properties": {
+            "dst": {
+              "type": "string"
+            },
+            "gateway": {
+              "type": "string"
+            },
+            "iface": {
+              "type": "string"
+            },
+            "class": {
+              "enum": [
+                "loopback",
+                "tunnel",
+                "egress",
+                "internal",
+                "unknown",
+                ""
+              ]
+            },
+            "table": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "dns": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resolv_conf",
+        "resolved"
+      ],
+      "properties": {
+        "resolv_conf": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "nameservers",
+            "stub"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
+            "nameservers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "stub": {
+              "type": "boolean"
+            }
+          }
+        },
+        "resolved": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "available",
+            "links"
+          ],
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "links": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "iface",
+                  "servers",
+                  "default_route",
+                  "domains"
+                ],
+                "properties": {
+                  "iface": {
+                    "type": "string"
+                  },
+                  "servers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "default_route": {
+                    "type": "boolean"
+                  },
+                  "domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "legacy_iptables": {
+      "type": "boolean"
+    },
+    "unavailable": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
