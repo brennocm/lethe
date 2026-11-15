@@ -9,7 +9,7 @@ Distribuição: binário estático + deb/rpm — ver `docs/adr/0002-distribuicao
 
 ## Estado
 
-- Marco atual: **M2** (M0–M1 concluídos). Plano em `spec.md` §24.
+- Marco atual: **M3** (M0–M2 concluídos). Plano em `spec.md` §24.
 - Pendências: —
 
 ## Mapa

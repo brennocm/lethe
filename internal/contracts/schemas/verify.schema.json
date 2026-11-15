@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lethe:verify",
+  "title": "lethe verify --json (integrity result)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session",
+    "events",
+    "segments",
+    "last_seq",
+    "signed_up_to",
+    "unsigned_tail",
+    "checkpoints",
+    "ended",
+    "truncated_tail",
+    "missing_trailer",
+    "fingerprint",
+    "anchored",
+    "final_hash"
+  ],
+  "properties": {
+    "session": {
+      "type": "string"
+    },
+    "events": {
+      "type": "integer"
+    },
+    "segments": {
+      "type": "integer"
+    },
+    "last_seq": {
+      "type": "integer"
+    },
+    "signed_up_to": {
+      "type": "integer",
+      "minimum": -1
+    },
+    "unsigned_tail": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "checkpoints": {
+      "type": "integer"
+    },
+    "ended": {
+      "type": "boolean"
+    },
+    "truncated_tail": {
+      "type": "boolean"
+    },
+    "missing_trailer": {
+      "type": "boolean"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{4}(-[0-9a-f]{4}){7}$"
+    },
+    "anchored": {
+      "type": "boolean"
+    },
+    "final_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

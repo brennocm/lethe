@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lethe:report",
+  "title": "lethe report --format json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session",
+    "start",
+    "end",
+    "duration_s",
+    "green_percent",
+    "timeline",
+    "alerts",
+    "responses",
+    "integrity",
+    "public_key",
+    "warnings"
+  ],
+  "properties": {
+    "session": {
+      "type": "string"
+    },
+    "operation": {
+      "type": "string"
+    },
+    "persona": {
+      "type": "string"
+    },
+    "operator": {
+      "type": "string"
+    },
+    "profile_sha256": {
+      "type": "string"
+    },
+    "baseline_sha256": {
+      "type": "string"
+    },
+    "guard_mode": {
+      "type": "string"
+    },
+    "start": {
+      "type": "string"
+    },
+    "end": {
+      "type": "string"
+    },
+    "duration_s": {
+      "type": "number"
+    },
+    "green_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "color",
+          "from",
+          "to"
+        ],
+        "properties": {
+          "color": {
+            "enum": [
+              "GREEN",
+              "YELLOW",
+              "RED",
+              "GRAY"
+            ]
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "check",
+          "severity",
+          "first",
+          "last",
+          "count",
+          "acknowledged",
+          "resolved"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "check": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "INFO",
+              "WARNING",
+              "CRITICAL"
+            ]
+          },
+          "first": {
+            "type": "string"
+          },
+          "last": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "acknowledged": {
+            "type": "boolean"
+          },
+          "ack_reason": {
+            "type": "string"
+          },
+          "resolved": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ts",
+          "action",
+          "ok",
+          "latency_ms"
+        ],
+        "properties": {
+          "ts": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "type": "number"
+          },
+          "error": {
+            "type": "string"
+          },
+          "alert_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result"
+      ],
+      "properties": {
+        "result": {
+          "type": "string"
+        },
+        "manual_items": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "selftest": {
+      "type": "object"
+    },
+    "forced": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "integrity": {
+      "$ref": "lethe:verify"
+    },
+    "public_key": {
+      "type": "string"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

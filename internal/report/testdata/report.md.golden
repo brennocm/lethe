@@ -1,0 +1,58 @@
+# Relatório da sessão 5f0c9e2a-7b1d-4c3e-9a8f-2d6b1e0c4a77
+
+| Campo | Valor |
+|---|---|
+| Operação | OP-2026-117 |
+| Persona | falcao |
+| Operador | agente-07 |
+| Modo do guarda | strict |
+| Hash do perfil | aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa |
+| Hash da baseline | bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb |
+| Início | 2026-11-15 14:00:00Z |
+| Fim | 2026-11-15 14:19:03Z |
+| Duração | 19m3s |
+| Tempo em VERDE | 78.8% |
+
+## Avisos
+
+Nenhum.
+
+## Linha do tempo
+
+| Cor | De | Até |
+|---|---|---|
+| GREEN | 2026-11-15 14:00:01Z | 2026-11-15 14:10:01Z |
+| RED | 2026-11-15 14:10:01Z | 2026-11-15 14:11:03Z |
+| YELLOW | 2026-11-15 14:11:03Z | 2026-11-15 14:14:03Z |
+| GREEN | 2026-11-15 14:14:03Z | 2026-11-15 14:19:03Z |
+
+## Alertas (2)
+
+| ID | Check | Severidade | Primeiro | Ocorrências | Reconhecido | Motivo | Resolvido | Detalhe |
+|---|---|---|---|---|---|---|---|---|
+| A-0001 | DNS-001 | CRITICAL | 2026-11-15 14:10:01Z | 2 | sim | dig manual de teste | sim | dport=53 dst=192.0.2.53 iface=eth0 proc=/usr/bin/dig qname=[cifrado] |
+| A-0002 | NET-006 | WARNING | 2026-11-15 14:11:03Z | 1 | não | — | não | iface=usb0 |
+
+## Respostas executadas (1)
+
+| Quando | Ação | Resultado | Latência (ms) | Alerta |
+|---|---|---|---|---|
+| 2026-11-15 14:10:01Z | block_all | ok | 42 | A-0001 |
+
+## Preflight
+
+Resultado: **PASS**
+- no_personal_accounts: confirmado
+
+## Integridade
+
+| Campo | Valor |
+|---|---|
+| Eventos | 17 |
+| Segmentos | 2 |
+| Checkpoints assinados | 4 |
+| Encerrada corretamente | sim |
+| Hash final | `<FINAL_HASH>` |
+| Chave pública | `<PUBKEY>` |
+| Impressão digital | `<FINGERPRINT>` |
+| Âncora conferida | sim |

@@ -10,5 +10,5 @@ while IFS= read -r line; do
   echo "fuzz: $pkg $name ($FUZZTIME)"
   go test -run '^$' -fuzz "^${name}\$" -fuzztime "$FUZZTIME" "$pkg"
   found=1
-done < <(grep -rn --include='*_test.go' -E '^func Fuzz[A-Za-z0-9_]+\(' internal || true)
+done < <(grep -rH --include='*_test.go' -E '^func Fuzz[A-Za-z0-9_]+\(' internal || true)
 [[ $found -eq 1 ]] || echo "fuzz: no targets yet"

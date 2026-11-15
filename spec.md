@@ -866,7 +866,7 @@ O schema dos eventos fica em `internal/contracts/event.schema.json` e é a fonte
 - **Encadeamento:** `hash = SHA-256(prev_hash || JCS(evento sem "hash"))`. O primeiro evento usa `prev = sha256:000…0`.
 - **Chave de sessão:** no `arm`, gera-se um par Ed25519. A chave pública vai no `session.start`.
 - **Checkpoints:** a cada 60 s e em cada fechamento de segmento, um `session.checkpoint` assina `(seq, hash)` com a chave de sessão. Um crash preserva assinaturas até o último checkpoint. *(A v0.1 só assinava no fim, então um crash deixava a sessão inteira sem assinatura.)*
-- **Âncora externa (obrigatória para valor probatório):** uma chave gerada pela própria ferramenta só prova consistência interna; quem tem o log pode reescrever tudo com outra chave. Por isso, no `arm`, a impressão digital da chave pública (16 grupos hex) é mostrada para o operador registrar **fora da máquina** (ticket, caderno da operação). Se houver `storage.log_recipients` institucional, a chave pública também é cifrada para ele num arquivo `session.pub.age`.
+- **Âncora externa (obrigatória para valor probatório):** uma chave gerada pela própria ferramenta só prova consistência interna; quem tem o log pode reescrever tudo com outra chave. Por isso, no `arm`, a impressão digital da chave pública (128 bits de SHA-256 da chave, em 8 grupos de 4 hex: `3df8-a7a1-…`) é mostrada para o operador registrar **fora da máquina** (ticket, caderno da operação). Se houver `storage.log_recipients` institucional, a chave pública também é cifrada para ele num arquivo `session.pub.age`.
 - `lethe verify <sessão> [--expect-fingerprint FP]` valida a cadeia, os checkpoints e a assinatura final, e compara com a âncora.
 - Selagem com integridade para frente (a chave evolui a cada checkpoint e a anterior é apagada, como no Forward Secure Sealing do journald): §27, v1.1.
 
@@ -881,6 +881,8 @@ O schema dos eventos fica em `internal/contracts/event.schema.json` e é a fonte
 - Rotação: a cada 5 min ou 10 000 eventos.
 - `fsync` imediato depois de todo evento CRITICAL, `alert.ack`, `response.executed` e `session.*`; nos demais, a cada 1 s. Um crash perde no máximo 1 s de eventos não críticos.
 - O leitor tolera registro final truncado (crash) e o reporta como `truncated_tail`, sem quebrar a verificação do resto.
+- **Trailer de segmento:** todo segmento fechado (rotação ou `disarm`) termina com `"LETHEEND" ‖ u64 contagem ‖ nonce ‖ tag`, autenticado com a chave de dados e com o hash do cabeçalho. Assim, um segmento fechado nunca pode se passar por truncado por crash: qualquer byte alterado em qualquer ponto de um segmento fechado é erro de integridade (AC-10). O cabeçalho entra nos dados associados de todo registro (SHA-256 da linha), então alterar o cabeçalho também invalida o segmento.
+- **Limite inerente:** numa sessão que **não** terminou (crash), quem tem acesso ao disco pode remover registros do fim do último segmento. Isso é indistinguível de um crash e aparece como "sessão não encerrada" e "eventos após a última assinatura". Os checkpoints a cada 60 s limitam o que pode ser removido sem deixar rastro na âncora.
 - Campos sensíveis (`qname`, títulos de janela, SSIDs observados) são cifrados com a **chave sensível** (`"enc": "s1"`). Quem tem só a chave de log vê os eventos, mas não esses campos.
 - Fora de `storage.dir`: nada vai para `/var/log`. No journald, `minimal` registra uma linha de início e uma de fim, sem dados; `none` não registra nada.
 
