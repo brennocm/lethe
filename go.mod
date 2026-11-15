@@ -20,6 +20,7 @@ require (
 	golang.org/x/sys v0.50.0
 	golang.org/x/term v0.48.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
+	kernel.org/pub/linux/libs/security/libcap/cap v1.2.78
 )
 
 require (
@@ -34,4 +35,5 @@ require (
 	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173 // indirect
+	kernel.org/pub/linux/libs/security/libcap/psx v1.2.78 // indirect
 )
