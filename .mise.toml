@@ -21,8 +21,8 @@ run = [
   "mise run check",
   "CGO_ENABLED=1 go test -race -count=1 ./...",
   "go build ./...",
-  "go run golang.org/x/tools/cmd/deadcode@v0.38.0 -test ./...",
-  "go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...",
+  "go run golang.org/x/tools/cmd/deadcode@v0.52.0 -tags e2e -test ./...",
+  "go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...",
   "go run ./scripts/trace-matrix",
 ]
 
