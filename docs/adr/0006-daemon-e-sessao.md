@@ -44,14 +44,22 @@ contradict each other once the code had to run.
   list already covers them, and the color is what the operator acts on.
 - **Agent reports are low-trust.** `agent.report` accepts only `check.alert`. The source is forced
   to `agent`, and the engine never lets that source resolve anything (principle 9).
-- **Terminal alerts.** With no GUI (M12), the daemon prints one line per new or escalated alert,
+- **An acknowledged condition stays in its alert.** The spec dedups only into open alerts, so a
+  condition check (NET-003, NET-004…) that is still present after its ack opened a new,
+  unacknowledged alert on the next evaluation, and unpanic could never succeed. An acknowledged
+  condition now absorbs its own recurrences until it resolves. A point check (NET-001…) that
+  recurs after its ack still opens a new alert.
+- **Report on disarm.** The daemon verifies its own journal with the baseline's log identity and
+  writes `report.md` (no sensitive fields) into the session directory. With institutional
+  `log_recipients` it cannot read the journal, so `lethe report` with that key produces the report.
+- **Terminal alerts.** With no GUI (M13), the daemon prints one line per new or escalated alert,
   with a bell for CRITICAL. Baseline values are redacted from it as a second line of defense.
 
 ## Consequences
 - `lethe run` needs root and a terminal (or `--passphrase-fd`). `lethe arm` works only against a
   freshly started service daemon.
 - In service mode, the agent comes from a user unit and cannot be recognized by PID. Until
-  packaging (M13) settles how it identifies itself, it is treated like any other operator client
+  packaging (M14) settles how it identifies itself, it is treated like any other operator client
   and cannot call `agent.report`.
 - `--tui` returns "not implemented" until M12. `--no-gui` and `--no-active` are accepted and
   change nothing yet.

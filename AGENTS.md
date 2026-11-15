@@ -9,8 +9,8 @@ Distribuição: binário estático + deb/rpm — ver `docs/adr/0002-distribuicao
 
 ## Estado
 
-- Marco atual: **M7** (M0–M6 concluídos). Plano em `spec.md` §24.
-- Pendências: `baseline create` online (IP público + ASN) depende da base geo (M11); `discover --learn` (M8); MACs permanentes na baseline chegam com a integração da descoberta no `baseline create`; sensores, checks e guarda existem, mas só o daemon (M7) os orquestra; NET-009 decodifica o hostname e compara com a baseline no M9; a parte TUN-001 do AC-04 chega com os checks de túnel (M8); `unpanic` com autorização e o AC-08 completo são do M7; `bridge lethe` e `socket cgroupv2` não rodam no kernel do WSL2 (SKIP/omitidos via `guard.Probe`).
+- Marco atual: **M8** (M0–M7 concluídos). Plano em `spec.md` §24.
+- Pendências: `baseline create` online (IP público + ASN) depende da base geo (M11); `discover --learn` (M8); MACs permanentes na baseline chegam com a integração da descoberta no `baseline create`; NET-009 decodifica o hostname e compara com a baseline no M9; a parte TUN-001 do AC-04 chega com os checks de túnel (M8); o re-check do unpanic cobre NET-003/004 e ganha DNS-002, TUN-001 e TUN-003 quando existirem; `run --tui` é do M12 e a GUI do M13 (`--no-gui`/`--no-active` ainda não mudam nada); no modo serviço o agente (unidade de usuário) não é reconhecido por PID até o M14; `bridge lethe` e `socket cgroupv2` não rodam no kernel do WSL2 (SKIP/omitidos via `guard.Probe`).
 
 ## Mapa
 
