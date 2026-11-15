@@ -101,21 +101,22 @@ func TestTemplate_IsValid(t *testing.T) {
 
 func TestParse_Rejects(t *testing.T) {
 	cases := map[string]struct{ from, to, want string }{
-		"unknown field":   {"ui:\n", "ui:\n  colour: red\n", "colour"},
-		"long comm":       {"value: Discord", "value: telegram-desktop", "truncates comm"},
-		"bad endpoint":    {"endpoints: []", `endpoints: ["203.0.113.10/udp"]`, "endpoints"},
-		"bad guard":       {"mode: strict", "mode: paranoid", "mode"},
-		"bad country":     {"expect_country: NL", "expect_country: nl", "expect_country"},
-		"relative path":   {"dir: /media/op/vault/lethe", "dir: data/lethe", "absolute"},
-		"bad interval":    {"interval: [180s, 600s]", "interval: [600s, 180s]", "interval"},
-		"tiny interval":   {"interval: [180s, 600s]", "interval: [5s, 10s]", "interval"},
-		"bad override id": {"NET-009:", "NET-9:", "overrides"},
-		"bad action":      {"actions: [alert_tray]", "actions: [reboot]", "actions"},
-		"bad recipient":   {"log_recipients: []", `log_recipients: ["age1xyz"]`, "log_recipients"},
-		"missing storage": {"  dir: /media/op/vault/lethe\n", "", "dir"},
-		"duplicate key":   {"  journald: minimal\n", "  journald: minimal\n  journald: none\n", "already defined"},
-		"bad version":     {"version: 1", "version: 2", "version"},
-		"not yaml":        {"version: 1", "version: [", "YAML"},
+		"unknown field":      {"ui:\n", "ui:\n  colour: red\n", "colour"},
+		"long comm":          {"value: Discord", "value: telegram-desktop", "truncates comm"},
+		"bad endpoint":       {"endpoints: []", `endpoints: ["203.0.113.10/udp"]`, "endpoints"},
+		"bad guard":          {"mode: strict", "mode: paranoid", "mode"},
+		"bad country":        {"expect_country: NL", "expect_country: nl", "expect_country"},
+		"relative path":      {"dir: /media/op/vault/lethe", "dir: data/lethe", "absolute"},
+		"bad interval":       {"interval: [180s, 600s]", "interval: [600s, 180s]", "interval"},
+		"tiny interval":      {"interval: [180s, 600s]", "interval: [5s, 10s]", "interval"},
+		"bad override id":    {"NET-009:", "NET-9:", "overrides"},
+		"bad action":         {"actions: [alert_tray]", "actions: [reboot]", "actions"},
+		"bad recipient":      {"log_recipients: []", `log_recipients: ["age1xyz"]`, "log_recipients"},
+		"missing storage":    {"  dir: /media/op/vault/lethe\n", "", "dir"},
+		"duplicate key":      {"  journald: minimal\n", "  journald: minimal\n  journald: none\n", "already defined"},
+		"remote tor control": {"tor_control: auto", "tor_control: 198.51.100.1:9051", "loopback"},
+		"bad version":        {"version: 1", "version: 2", "version"},
+		"not yaml":           {"version: 1", "version: [", "YAML"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

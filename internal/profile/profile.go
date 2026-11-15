@@ -249,6 +249,11 @@ func (p *Profile) check(home string) (warns, problems []string) {
 		}
 		p.Egress.ParsedEndpoints = append(p.Egress.ParsedEndpoints, Endpoint{Addr: ap, Proto: proto})
 	}
+	if c := p.Egress.TorControl; c != "auto" {
+		if ap, err := netip.ParseAddrPort(c); err != nil || !ap.Addr().Unmap().IsLoopback() {
+			bad("egress.tor_control: %q must be auto or a loopback IP:port", c)
+		}
+	}
 	var err error
 	if p.ActiveChecks.EgressIP.IntervalMin, err = time.ParseDuration(p.ActiveChecks.EgressIP.Interval[0]); err != nil {
 		bad("active_checks.egress_ip.interval: %v", err)

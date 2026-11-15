@@ -32,3 +32,14 @@ open.
   handles, so traffic alone never looks like a change. A table that is added, changed or removed is
   WARNING. A removed table with a drop (policy, drop or reject) in an output hook is CRITICAL. Only
   table names reach the events.
+- **Tor control client** (`internal/discovery/torctl`). Authentication is NULL or SAFECOOKIE only.
+  Plain COOKIE hands the cookie to whatever listens on the port, and the profile has no password
+  field, so neither is used. With `tor_cookie: auto` the cookie path comes from `PROTOCOLINFO`;
+  that is safe only because SAFECOOKIE checks the server's hash before sending anything derived
+  from the cookie. The cookie must be exactly 32 bytes, and it is read into locked memory and
+  wiped afterwards. `tor_control` must be `auto` or a loopback address, both in the profile and
+  in `Dial`, because a remote control port would itself be traffic outside the tunnel. Lines are
+  capped at 64 KiB and replies at 4 MiB. Events go to a 256-entry buffer, and an overflow marks
+  them as lost so that the caller does a full refresh. Guards are the first hops of BUILT or
+  EXTENDED circuits plus `entry-guards` marked `up`, resolved through `ns/id/<fp>`. A fingerprint
+  missing from the consensus (552), such as a bridge, is covered by the `Bridge` lines.
