@@ -30,8 +30,9 @@ import (
 
 // fakeKernel: wg0 (tunnel) carries the default route; eth0 is the egress device.
 type fakeKernel struct {
-	mu      sync.Mutex
-	probeV4 int // link index the probe route uses
+	mu       sync.Mutex
+	probeV4  int // link index the probe route uses
+	endpoint string
 }
 
 func (k *fakeKernel) Links() ([]discovery.KernelLink, error) {
@@ -61,8 +62,19 @@ func (k *fakeKernel) RouteGet(dst netip.Addr) (discovery.RawRoute, error) {
 func (k *fakeKernel) setProbe(idx int) { k.mu.Lock(); k.probeV4 = idx; k.mu.Unlock() }
 
 func (k *fakeKernel) WireGuard() ([]discovery.WGDevice, error) {
-	return []discovery.WGDevice{{Name: "wg0", Peers: []discovery.WGPeerRaw{{Endpoint: netip.MustParseAddrPort("198.51.100.7:51820")}}}}, nil
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	var peer discovery.WGPeerRaw
+	if k.endpoint != "none" {
+		peer.Endpoint = netip.MustParseAddrPort("198.51.100.7:51820")
+		if k.endpoint != "" {
+			peer.Endpoint = netip.MustParseAddrPort(k.endpoint)
+		}
+	}
+	return []discovery.WGDevice{{Name: "wg0", Peers: []discovery.WGPeerRaw{peer}}}, nil
 }
+
+func (k *fakeKernel) setEndpoint(e string)     { k.mu.Lock(); k.endpoint = e; k.mu.Unlock() }
 func (k *fakeKernel) IPv6Disabled(string) bool { return true }
 func (k *fakeKernel) LegacyIPTables() bool     { return false }
 
@@ -495,4 +507,29 @@ func TestM7_FiveBadProofsPanic(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("5 failed proofs must engage panic")
+}
+
+func TestM8_EndpointUnknownAndChanged(t *testing.T) {
+	f := newFixture(t)
+	f.k.setEndpoint("none")
+	res := f.arm(t, "off")
+	if st := f.d.Status(); st.Color != "GRAY" || len(st.Degraded) != 1 || st.Degraded[0] != "tunnel_unknown" {
+		t.Fatalf("a tunnel without a known endpoint must be GRAY: %+v", st)
+	}
+	f.k.setEndpoint("")
+	f.d.mu.Lock()
+	f.d.refreshLocked()
+	f.d.mu.Unlock()
+	if st := f.d.Status(); st.Color != "GREEN" {
+		t.Fatalf("endpoint found: %+v", st)
+	}
+	f.k.setEndpoint("198.51.100.8:51820")
+	f.d.mu.Lock()
+	f.d.refreshLocked()
+	f.d.mu.Unlock()
+	_, _ = f.d.Disarm()
+	got := strings.Join(types(f.events(t, res.Dir)), ",")
+	if strings.Count(got, "discovery.endpoint_changed") != 2 || !strings.Contains(got, "discovery.endpoint_unknown") {
+		t.Fatalf("journal: %s", got)
+	}
 }

@@ -158,6 +158,7 @@ func (d *Daemon) Arm(req ArmRequest) (ArmResult, preflight.Report, error) {
 	if d.cfg.Sensors {
 		d.startSensorsLocked(snap)
 	}
+	d.endpointEventsLocked(discovery.Snapshot{}, snap)
 	d.evaluateConditionsLocked(snap)
 	if len(d.cfg.Agent) > 0 && d.agent == nil {
 		if err := d.spawnAgentLocked(); err != nil {
@@ -324,6 +325,9 @@ func (d *Daemon) discoverLocked(prof *profile.Profile) discovery.Snapshot {
 		for _, e := range prof.Egress.ParsedEndpoints {
 			opt.ProfileEndpoints = append(opt.ProfileEndpoints, discovery.Endpoint{Addr: e.Addr, Proto: e.Proto})
 		}
+	}
+	if d.sess != nil {
+		opt.ProfileEndpoints = append(opt.ProfileEndpoints, d.sess.learned...)
 	}
 	return discovery.Discover(d.cfg.Kernel, opt)
 }

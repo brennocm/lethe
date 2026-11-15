@@ -361,3 +361,62 @@ func addAddrNoDAD(name, cidr string) error {
 	a.Flags = 0x02 // IFA_F_NODAD
 	return netlink.AddrAdd(l, a)
 }
+
+// SetEndpoint points the DUT's WireGuard peer at another server address (the VPN client
+// switching servers, AC-05). The server listens on every address of the vpn namespace.
+func (l *Lab) SetEndpoint(t testing.TB, ip string) {
+	t.Helper()
+	must(t, l.In(l.DUT, func() error {
+		c, err := wgctrl.New()
+		if err != nil {
+			return err
+		}
+		defer func() { _ = c.Close() }()
+		dev, err := c.Device(DUTTunnel)
+		if err != nil {
+			return err
+		}
+		if len(dev.Peers) != 1 {
+			return fmt.Errorf("want one peer, have %d", len(dev.Peers))
+		}
+		ep := &net.UDPAddr{IP: net.ParseIP(ip), Port: WGPort}
+		return c.ConfigureDevice(DUTTunnel, wgtypes.Config{Peers: []wgtypes.PeerConfig{{PublicKey: dev.Peers[0].PublicKey, UpdateOnly: true, Endpoint: ep}}})
+	}))
+}
+
+// TunnelEcho starts a UDP echo on the WireGuard server address (10.200.0.1:7, inside the vpn
+// namespace) and returns a probe that does one round trip from the DUT through the tunnel.
+func (l *Lab) TunnelEcho(t testing.TB) func() bool {
+	t.Helper()
+	var pc net.PacketConn
+	must(t, l.In(l.VPN, func() error {
+		var err error
+		pc, err = net.ListenPacket("udp4", "10.200.0.1:7")
+		return err
+	}))
+	t.Cleanup(func() { _ = pc.Close() })
+	go func() {
+		buf := make([]byte, 1500)
+		for {
+			n, from, err := pc.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			_, _ = pc.WriteTo(buf[:n], from)
+		}
+	}()
+	return func() bool {
+		c, err := net.Dial("udp4", "10.200.0.1:7")
+		if err != nil {
+			return false
+		}
+		defer func() { _ = c.Close() }()
+		_ = c.SetDeadline(time.Now().Add(500 * time.Millisecond))
+		if _, err := c.Write([]byte("echo")); err != nil {
+			return false
+		}
+		buf := make([]byte, 16)
+		n, err := c.Read(buf)
+		return err == nil && string(buf[:n]) == "echo"
+	}
+}

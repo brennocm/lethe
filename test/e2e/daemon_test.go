@@ -237,6 +237,53 @@ func TestE2E_AC04_DaemonTunnelDown(t *testing.T) {
 	}
 }
 
+// TestE2E_AC05_EndpointChange: strict; the client switches to the server's second address.
+// The allowlist follows within 1 s, the tunnel comes back, no CRITICAL and at most one NET-002.
+func TestE2E_AC05_EndpointChange(t *testing.T) {
+	lab := netlab.New(t, true)
+	lab.WaitHandshake(t, 10*time.Second)
+	echo := lab.TunnelEcho(t)
+	s := newSession(t)
+	d, _, _ := startArmed(t, s)
+	if !echo() {
+		t.Fatal("no round trip through the tunnel before the change: test is not measuring anything")
+	}
+	sn := lab.Sniff(t)
+	changed := time.Now()
+	lab.SetEndpoint(t, "198.18.0.3")
+	waitFor(t, "allowlist with the new endpoint", func() bool { return strings.Contains(dump(t), "c6120003") }) // 198.18.0.3 in the endpoint set
+	if dt := time.Since(changed); dt > time.Second+300*time.Millisecond {                                       // 1 s poll + dump latency
+		t.Fatalf("allowlist updated after %s (> 1 s)", dt)
+	}
+	waitFor(t, "tunnel traffic to the new endpoint", func() bool {
+		sendUDP(t, "10.200.0.1:9", false, []byte("via new endpoint"))
+		for _, f := range sn.Since(changed) {
+			if netlab.UDPTo(f.Data, net.ParseIP("198.18.0.3"), netlab.WGPort) {
+				return true
+			}
+		}
+		return false
+	})
+	waitFor(t, "round trip through the tunnel after the change", echo)
+	time.Sleep(time.Second)
+	st := d.Status()
+	blocked := 0
+	for _, a := range st.Alerts {
+		if a.Severity == "CRITICAL" {
+			t.Fatalf("CRITICAL during an endpoint change: %+v", a)
+		}
+		if a.Check == "NET-002" {
+			blocked += a.Count
+		}
+	}
+	if blocked > 1 {
+		t.Fatalf("%d NET-002 (want at most 1)", blocked)
+	}
+	if st.Color == "RED" || st.Color == "GRAY" {
+		t.Fatalf("status %+v", st)
+	}
+}
+
 // TestE2E_AC08_DaemonPanicUnpanic drives the real daemon (strict guard, live sensors) over IPC:
 // lethe panic blocks everything within 200 ms; unpanic is refused without the passphrase, with an
 // unacknowledged CRITICAL and with a failing re-check, and succeeds with everything.

@@ -80,27 +80,29 @@ type Daemon struct {
 
 // session is the state of one armed session.
 type session struct {
-	id         string
-	prof       *profile.Profile
-	base       *baseline.Baseline
-	guardMode  engine.GuardMode
-	features   guard.Features
-	gcfg       guard.Config
-	journal    *journal.Writer
-	exec       *response.Executor
-	auth       *ipc.Authenticator
-	salt       []byte
-	startedAt  time.Time
-	color      engine.Color
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
-	beats      map[string]time.Time // sensor source → last heartbeat
-	down       map[string]bool
-	conditions map[string]map[string]map[string]any // check → dedup key → data of the last finding
-	tunnels    map[string]bool                      // TUN-001: tunnels seen since arm (only grows)
-	critical   int
-	sensors    *sensorSet
-	protected  map[int]bool // pids never killed by responses (self, agent)
+	id              string
+	prof            *profile.Profile
+	base            *baseline.Baseline
+	guardMode       engine.GuardMode
+	features        guard.Features
+	gcfg            guard.Config
+	journal         *journal.Writer
+	exec            *response.Executor
+	auth            *ipc.Authenticator
+	salt            []byte
+	startedAt       time.Time
+	color           engine.Color
+	cancel          context.CancelFunc
+	wg              sync.WaitGroup
+	beats           map[string]time.Time // sensor source → last heartbeat
+	down            map[string]bool
+	conditions      map[string]map[string]map[string]any // check → dedup key → data of the last finding
+	tunnels         map[string]bool                      // TUN-001: tunnels seen since arm (only grows)
+	learned         []discovery.Endpoint                 // endpoints learned (NFLOG) or confirmed by the operator
+	endpointUnknown bool
+	critical        int
+	sensors         *sensorSet
+	protected       map[int]bool // pids never killed by responses (self, agent)
 }
 
 const recentMax = 2048

@@ -18,7 +18,10 @@ import (
 	"lethe/internal/sensors/sockdiag"
 )
 
-const sockScanEvery = 2 * time.Second
+const (
+	sockScanEvery = 2 * time.Second
+	wgPollEvery   = time.Second
+)
 
 // sensorSet is the running sensors of one session.
 type sensorSet struct {
@@ -84,6 +87,12 @@ func (d *Daemon) startSensorsLocked(snap discovery.Snapshot) {
 			}
 		}()
 	}
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		_ = d.pollWireGuard(ctx, s)
+	}()
 
 	s.beats[sockdiag.SourceID] = now
 	d.goSensor(s, sockdiag.SourceID, func() error { return d.scanSockets(ctx, s) })
@@ -277,6 +286,7 @@ func (d *Daemon) refreshLocked() {
 	old := d.snap
 	d.snap = snap
 	changed := !slices.Equal(old.Endpoints, snap.Endpoints) || !slices.Equal(old.CaptureIfaces, snap.CaptureIfaces) || len(old.Ifaces) != len(snap.Ifaces)
+	d.endpointEventsLocked(old, snap)
 	if changed {
 		oldEgress := s.gcfg.Egress
 		s.gcfg = guardConfig(snap, s.prof, s.features)
@@ -291,6 +301,87 @@ func (d *Daemon) refreshLocked() {
 		}
 	}
 	d.evaluateConditionsLocked(snap)
+}
+
+// endpointEventsLocked reports endpoint changes (INFO) and an unknown endpoint (GRAY, §7.3).
+func (d *Daemon) endpointEventsLocked(old, cur discovery.Snapshot) {
+	s := d.sess
+	added, removed := diff(old.Endpoints, cur.Endpoints)
+	if len(old.Endpoints) > 0 && (len(added) > 0 || len(removed) > 0) {
+		d.discoveryEventLocked(contracts.Event{Type: contracts.EvDiscoveryEndpointChanged, Severity: contracts.SeverityInfo,
+			Data: map[string]any{"added": toAny(added), "removed": toAny(removed)}})
+	}
+	unknown := len(cur.Tunnels) > 0 && len(cur.Endpoints) == 0
+	if unknown == s.endpointUnknown {
+		return
+	}
+	s.endpointUnknown = unknown
+	if unknown {
+		d.discoveryEventLocked(contracts.Event{Type: contracts.EvDiscoveryEndpointUnknown, Severity: contracts.SeverityWarning,
+			Data: map[string]any{"tunnels": len(cur.Tunnels)}})
+	} else if len(old.Endpoints) == 0 {
+		d.discoveryEventLocked(contracts.Event{Type: contracts.EvDiscoveryEndpointChanged, Severity: contracts.SeverityInfo,
+			Data: map[string]any{"added": toAny(cur.Endpoints), "removed": []any{}}})
+	}
+}
+
+// discoveryEventLocked feeds a discovery event to the engine (it drives the GRAY state) and
+// journals it.
+func (d *Daemon) discoveryEventLocked(ev contracts.Event) {
+	ev.Source = contracts.SourceDaemon
+	d.eng.Observe(ev)
+	d.appendLocked(ev)
+}
+
+func diff(old, cur []string) (added, removed []string) {
+	in := func(xs []string, x string) bool { return slices.Contains(xs, x) }
+	for _, x := range cur {
+		if !in(old, x) {
+			added = append(added, x)
+		}
+	}
+	for _, x := range old {
+		if !in(cur, x) {
+			removed = append(removed, x)
+		}
+	}
+	return added, removed
+}
+
+// pollWireGuard reads the WireGuard peers every second (spec §7.4): a new endpoint reaches the
+// allowlist and the guard sets within 1 s, before its first handshake completes.
+func (d *Daemon) pollWireGuard(ctx context.Context, s *session) error {
+	t := time.NewTicker(wgPollEvery)
+	defer t.Stop()
+	var last []string
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+		}
+		devs, err := d.cfg.Kernel.WireGuard()
+		if err != nil {
+			continue
+		}
+		var cur []string
+		for _, dev := range devs {
+			for _, p := range dev.Peers {
+				if p.Endpoint.IsValid() {
+					cur = append(cur, discovery.Endpoint{Addr: p.Endpoint, Proto: "udp"}.String())
+				}
+			}
+		}
+		slices.Sort(cur)
+		if last != nil && !slices.Equal(last, cur) {
+			d.mu.Lock()
+			if d.sess == s {
+				d.refreshLocked()
+			}
+			d.mu.Unlock()
+		}
+		last = append([]string{}, cur...)
+	}
 }
 
 // updateGuardLocked refreshes the strict sets, or the whole ruleset when the egress devices
