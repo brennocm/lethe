@@ -88,8 +88,14 @@ func Run(in Input) Report {
 		raise(c.Status)
 		r.Checks = append(r.Checks, c)
 	}
+	egressType := ""
+	if in.Profile != nil {
+		egressType = in.Profile.Egress.Type
+	}
 	add("NET-003", checks.NET003{}.Evaluate(in.Snapshot, expectV6))
 	add("NET-004", checks.NET004{}.Evaluate(in.Snapshot))
+	add("TUN-001", checks.TUN001{}.Evaluate(checks.TunnelExpect{Ifaces: TunnelIfaces(in.Snapshot), Require: checks.RequiresTunnel(egressType)}, in.Snapshot))
+	add("TUN-007", checks.TUN007{}.Evaluate(in.Snapshot))
 	for _, u := range in.Snapshot.Unavailable {
 		r.Warnings = append(r.Warnings, "source unavailable: "+u)
 	}
@@ -123,4 +129,13 @@ func rank(s string) int {
 		return 1
 	}
 	return 0
+}
+
+// TunnelIfaces lists the tunnel interfaces of a snapshot (the TUN-001 expectation at arm).
+func TunnelIfaces(s *discovery.Snapshot) []string {
+	var out []string
+	for _, t := range s.Tunnels {
+		out = append(out, t.Iface)
+	}
+	return out
 }

@@ -10,6 +10,7 @@ import (
 	"lethe/internal/contracts"
 	"lethe/internal/discovery"
 	"lethe/internal/engine"
+	"lethe/internal/preflight"
 	"lethe/internal/response"
 )
 
@@ -92,8 +93,21 @@ func (d *Daemon) conditionLocked(check string, fs []checks.Finding) {
 }
 
 func (d *Daemon) evaluateConditionsLocked(snap discovery.Snapshot) {
+	for _, n := range preflight.TunnelIfaces(&snap) {
+		d.sess.tunnels[n] = true
+	}
 	d.conditionLocked("NET-003", checks.NET003{}.Evaluate(&snap, d.sess.prof.Expect.IPv6))
 	d.conditionLocked("NET-004", checks.NET004{}.Evaluate(&snap))
+	d.conditionLocked("TUN-001", checks.TUN001{}.Evaluate(d.tunnelExpectLocked(), &snap))
+	d.conditionLocked("TUN-007", checks.TUN007{}.Evaluate(&snap))
+}
+
+func (d *Daemon) tunnelExpectLocked() checks.TunnelExpect {
+	want := checks.TunnelExpect{Require: checks.RequiresTunnel(d.sess.prof.Egress.Type)}
+	for n := range d.sess.tunnels {
+		want.Ifaces = append(want.Ifaces, n)
+	}
+	return want
 }
 
 // beat records a heartbeat of source for session s.

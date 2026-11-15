@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -159,17 +160,13 @@ func probeLeakRoute(t *testing.T, add bool) {
 	}
 }
 
-// TestE2E_AC08_DaemonPanicUnpanic drives the real daemon (strict guard, live sensors) over IPC:
-// lethe panic blocks everything within 200 ms; unpanic is refused without the passphrase, with an
-// unacknowledged CRITICAL and with a failing re-check, and succeeds with everything.
-func TestE2E_AC08_DaemonPanicUnpanic(t *testing.T) {
-	lab := netlab.New(t, true)
-	lab.WaitHandshake(t, 10*time.Second)
-	s := newSession(t)
-	var out bytes.Buffer
+// startArmed runs an in-process daemon with live sensors and arms it in strict mode over IPC.
+func startArmed(t *testing.T, s *session) (*daemon.Daemon, *ipc.Client, daemon.ArmResult) {
+	t.Helper()
+	out := &syncBuffer{}
 	d := daemon.New(daemon.Config{
 		Operator: platform.Operator{UID: os.Getuid(), GID: os.Getgid(), Home: s.dir}, SocketPath: s.socket,
-		ToolVersion: "e2e", Sensors: true, Out: &out, DiscoverEvery: 300 * time.Millisecond,
+		ToolVersion: "e2e", Sensors: true, Out: out, DiscoverEvery: 300 * time.Millisecond,
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -179,14 +176,75 @@ func TestE2E_AC08_DaemonPanicUnpanic(t *testing.T) {
 		<-done
 		c, _ := guardConn()
 		_, _ = guard.Cleanup(c)
+		if t.Failed() {
+			t.Logf("daemon output:\n%s", out.String())
+		}
 	})
 	c := dialWait(t, s.socket)
 	_ = c.SetDeadline(time.Now().Add(time.Minute))
-
 	var res daemon.ArmResult
 	if err := c.Call("session.arm", s.armRequest(t), nil, &res); err != nil {
 		t.Fatalf("arm: %v\n%s", err, out.String())
 	}
+	return d, c, res
+}
+
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+func (s *syncBuffer) String() string { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
+
+func alertOf(d *daemon.Daemon, check string) *daemon.AlertView {
+	for _, a := range d.Status().Alerts {
+		if a.Check == check {
+			return &a
+		}
+	}
+	return nil
+}
+
+// TestE2E_AC04_DaemonTunnelDown: strict; the tunnel goes down and traffic is generated:
+// TUN-001 CRITICAL, NET-002 journaled, and the ISP sees nothing but link control frames.
+func TestE2E_AC04_DaemonTunnelDown(t *testing.T) {
+	lab := netlab.New(t, true)
+	lab.WaitHandshake(t, 10*time.Second)
+	s := newSession(t)
+	d, _, _ := startArmed(t, s)
+	sn := lab.Sniff(t)
+	start := time.Now()
+	lab.SetTunnel(t, false)
+	for range 5 {
+		sendUDP(t, "192.0.2.1:9", false, []byte("tunnel is down"))
+		sendUDP(t, "192.0.2.1:9", true, []byte("bound to egress"))
+		time.Sleep(50 * time.Millisecond)
+	}
+	waitFor(t, "TUN-001 CRITICAL and NET-002", func() bool {
+		a, b := alertOf(d, "TUN-001"), alertOf(d, "NET-002")
+		return a != nil && a.Severity == "CRITICAL" && b != nil
+	})
+	time.Sleep(2500 * time.Millisecond)
+	for _, f := range sn.Since(start) {
+		if !netlab.IsLinkControl(f.Data) {
+			t.Fatalf("leaked frame % x", f.Data[:min(48, len(f.Data))])
+		}
+	}
+}
+
+// TestE2E_AC08_DaemonPanicUnpanic drives the real daemon (strict guard, live sensors) over IPC:
+// lethe panic blocks everything within 200 ms; unpanic is refused without the passphrase, with an
+// unacknowledged CRITICAL and with a failing re-check, and succeeds with everything.
+func TestE2E_AC08_DaemonPanicUnpanic(t *testing.T) {
+	lab := netlab.New(t, true)
+	lab.WaitHandshake(t, 10*time.Second)
+	s := newSession(t)
+	d, c, res := startArmed(t, s)
 	if res.Guard != "strict" || res.Preflight.Result == preflight.Fail {
 		t.Fatalf("arm result %+v", res)
 	}

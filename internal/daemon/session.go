@@ -203,7 +203,7 @@ func (d *Daemon) openSession(prof *profile.Profile, base *baseline.Baseline, mod
 		return nil, err
 	}
 	s := &session{id: id, prof: prof, base: base, guardMode: mode, startedAt: now,
-		beats: map[string]time.Time{}, down: map[string]bool{}, conditions: map[string]map[string]map[string]any{}}
+		beats: map[string]time.Time{}, down: map[string]bool{}, conditions: map[string]map[string]map[string]any{}, tunnels: map[string]bool{}}
 	recips, err := recipients(prof.Storage.LogRecipients, base)
 	if err != nil {
 		return nil, errParams(err)
@@ -524,7 +524,9 @@ func (d *Daemon) Unpanic() (map[string]any, error) {
 	}
 	snap := d.discoverLocked(d.sess.prof)
 	failed := []any{}
-	for _, f := range append(checks.NET003{}.Evaluate(&snap, d.sess.prof.Expect.IPv6), checks.NET004{}.Evaluate(&snap)...) {
+	recheck := append(checks.NET003{}.Evaluate(&snap, d.sess.prof.Expect.IPv6), checks.NET004{}.Evaluate(&snap)...)
+	recheck = append(recheck, checks.TUN001{}.Evaluate(d.tunnelExpectLocked(), &snap)...)
+	for _, f := range recheck {
 		if f.Severity == contracts.SeverityCritical {
 			failed = append(failed, f.Check)
 		}
@@ -538,7 +540,7 @@ func (d *Daemon) Unpanic() (map[string]any, error) {
 		_, _ = d.eng.Apply(engine.CmdPanic)
 		return nil, err
 	}
-	d.appendLocked(contracts.Event{Type: contracts.EvPanicReleased, Source: contracts.SourceOperator, Data: map[string]any{"recheck": []any{"NET-003", "NET-004"}}})
+	d.appendLocked(contracts.Event{Type: contracts.EvPanicReleased, Source: contracts.SourceOperator, Data: map[string]any{"recheck": []any{"NET-003", "NET-004", "TUN-001"}}})
 	d.stateChangedLocked("unpanic")
 	return map[string]any{"state": string(d.eng.Session())}, nil
 }

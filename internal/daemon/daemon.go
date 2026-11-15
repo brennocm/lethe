@@ -97,6 +97,7 @@ type session struct {
 	beats      map[string]time.Time // sensor source → last heartbeat
 	down       map[string]bool
 	conditions map[string]map[string]map[string]any // check → dedup key → data of the last finding
+	tunnels    map[string]bool                      // TUN-001: tunnels seen since arm (only grows)
 	critical   int
 	sensors    *sensorSet
 	protected  map[int]bool // pids never killed by responses (self, agent)
