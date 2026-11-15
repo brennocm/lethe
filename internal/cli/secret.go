@@ -8,9 +8,29 @@ import (
 	"io"
 	"os"
 	"strings"
+	"syscall"
 
 	"golang.org/x/term"
 )
+
+// borrowedFD reads a descriptor the caller owns. os.NewFile would take ownership and its
+// finalizer would close the number later, possibly after it was reused by another file.
+type borrowedFD int
+
+func (fd borrowedFD) Read(b []byte) (int, error) {
+	for {
+		n, err := syscall.Read(int(fd), b)
+		switch {
+		case errors.Is(err, syscall.EINTR):
+			continue
+		case err != nil:
+			return 0, err
+		case n == 0 && len(b) > 0:
+			return 0, io.EOF
+		}
+		return n, nil
+	}
+}
 
 // passphraseSource reads passphrases from --passphrase-fd or the controlling terminal.
 type passphraseSource struct {
@@ -22,7 +42,7 @@ type passphraseSource struct {
 func (p *passphraseSource) read(prompt string, confirm bool) ([]byte, error) {
 	if p.fd >= 0 {
 		if p.reader == nil {
-			p.reader = bufio.NewReader(os.NewFile(uintptr(p.fd), "passphrase-fd"))
+			p.reader = bufio.NewReader(borrowedFD(p.fd))
 		}
 		line, err := p.reader.ReadBytes('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
