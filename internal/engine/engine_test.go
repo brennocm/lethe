@@ -90,6 +90,26 @@ func TestObserve_AckedAlertRecurrenceOpensNew(t *testing.T) {
 	}
 }
 
+func TestObserve_AckedConditionStaysInItsAlert(t *testing.T) {
+	e, clk := newTestEngine(GuardStrict, StateArmed)
+	d1 := e.Observe(cond("NET-004", contracts.SeverityCritical, contracts.SourceDaemon))
+	if _, err := e.Ack(d1.Alert.ID, "fixing the route", true); err != nil {
+		t.Fatal(err)
+	}
+	d2 := e.Observe(cond("NET-004", contracts.SeverityCritical, contracts.SourceDaemon))
+	if d2.New || d2.Alert != d1.Alert || len(d2.Actions) != 0 {
+		t.Fatalf("a still-present condition must stay in its acknowledged alert: %+v", d2)
+	}
+	e.Observe(contracts.Event{Type: contracts.EvCheckResolved, Check: "NET-004", Source: contracts.SourceDaemon})
+	clk.Advance(11 * time.Second)
+	if r := e.Tick(); len(r) != 1 || r[0] != d1.Alert {
+		t.Fatalf("resolved %v", r)
+	}
+	if d3 := e.Observe(cond("NET-004", contracts.SeverityCritical, contracts.SourceDaemon)); !d3.New {
+		t.Fatal("the condition coming back after resolution is a new alert")
+	}
+}
+
 func TestObserve_EscalationOnlyUp_AgentCannotLower(t *testing.T) {
 	e, _ := newTestEngine(GuardOff, StateArmed)
 	d1 := e.Observe(cond("HOST-002", contracts.SeverityWarning, contracts.SourceAgent))

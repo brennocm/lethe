@@ -186,11 +186,17 @@ func without(acts []Action, drop Action) []Action {
 	return out
 }
 
-// findOpen returns the open (not acknowledged, not resolved) alert with this key. An acknowledged
-// alert that recurs opens a new alert: the operator must see a repeated leak again.
+// findOpen returns the alert that absorbs a new occurrence of key. A point check that recurs
+// after its ack opens a new alert: the operator must see a repeated leak again. A condition that
+// is still present after its ack is the same condition, so it stays in the acknowledged alert
+// until it resolves.
 func (e *Engine) findOpen(key string) *Alert {
 	for i := len(e.alerts) - 1; i >= 0; i-- {
-		if a := e.alerts[i]; a.Key == key && a.State == AlertOpen {
+		a := e.alerts[i]
+		if a.Key != key {
+			continue
+		}
+		if a.State == AlertOpen || (a.State == AlertAcknowledged && !IsPointCheck(a.Check)) {
 			return a
 		}
 	}
