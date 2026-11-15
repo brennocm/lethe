@@ -9,8 +9,8 @@ Distribuição: binário estático + deb/rpm — ver `docs/adr/0002-distribuicao
 
 ## Estado
 
-- Marco atual: **M6** (M0–M5 concluídos). Plano em `spec.md` §24.
-- Pendências: `baseline create` online (IP público + ASN) depende da base geo (M11); `discover --learn` (M8); MACs permanentes na baseline chegam com a integração da descoberta no `baseline create`; sensores (capture, sockdiag, netlinkmon) e checks existem, mas só o daemon (M7) os orquestra; NET-009 decodifica o hostname e compara com a baseline no M9.
+- Marco atual: **M7** (M0–M6 concluídos). Plano em `spec.md` §24.
+- Pendências: `baseline create` online (IP público + ASN) depende da base geo (M11); `discover --learn` (M8); MACs permanentes na baseline chegam com a integração da descoberta no `baseline create`; sensores, checks e guarda existem, mas só o daemon (M7) os orquestra; NET-009 decodifica o hostname e compara com a baseline no M9; a parte TUN-001 do AC-04 chega com os checks de túnel (M8); `unpanic` com autorização e o AC-08 completo são do M7; `bridge lethe` e `socket cgroupv2` não rodam no kernel do WSL2 (SKIP/omitidos via `guard.Probe`).
 
 ## Mapa
 

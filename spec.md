@@ -437,7 +437,7 @@ Convenções: **P** = passivo, **A** = ativo, **PF** = preflight (pontual). Seve
 | ID | Nome | Tipo | Método | Sev. |
 |---|---|---|---|---|
 | NET-001 | **Tráfego fora do túnel** | P | Sensor da §8. Todo pacote entregue pelo filtro é vazamento | C |
-| NET-002 | Vazamento bloqueado (tentativa) | P | No modo estrito, a regra final faz `log group 4242` (com limite de taxa) e `drop`. O daemon lê via NFLOG com as flags de UID/GID ligadas (`NFULNL_CFG_F_UID`/`F_GID`) e registra a tentativa, o UID e o destino | W |
+| NET-002 | Vazamento bloqueado (tentativa) | P | No modo estrito, a regra final faz `log group 4242` (com limite de taxa) e `drop`. O daemon lê via NFLOG (o kernel sempre inclui `NFULA_UID`/`NFULA_GID` quando o pacote pertence a um socket local; não existe flag para isso no NFLOG) e registra a tentativa, o UID e o destino | W |
 | NET-003 | IPv6 fora do túnel | P | **C:** rota default v6 numa interface `egress` quando `expect.ipv6: false` ou quando o túnel não tem rota default v6. **W:** só endereço global, sem rota | C/W |
 | NET-004 | Rota efetiva fora do túnel | P | `RTM_GETROUTE` para `192.0.2.1` e `2001:db8::1` sem marca: a interface de saída precisa ser `tunnel` | C |
 | NET-005 | Mudança de rota ou policy routing | P | `RTM_NEWROUTE`/`DELROUTE`/`NEWRULE`/`DELRULE` fora das tabelas do próprio túnel | W |
@@ -688,8 +688,13 @@ Sockets AF_PACKET não passam pelas hooks `inet`. Em kernels que têm a hook `eg
 table netdev lethe_l2 {
     chain egress_<if> {                         # uma por interface egress de hardware
         type filter hook egress device "<if>" priority -500; policy accept;
-        # strict: frames não-IP fora de ARP/EAPOL → drop; IP já passou pela inet lethe
-        meta protocol != { ip, ip6, arp, 0x888e } drop
+        # strict: ARP/EAPOL passam; IP só com o mesmo allowlist da inet lethe
+        # (endpoints, DHCP, NDP/MLD, LAN), porque o remetente AF_PACKET não passou por ela;
+        # o resto: log group 4242 prefix "LETHE-L2 " + drop (ADR 0005)
+        meta protocol arp accept
+        meta protocol 0x888e accept
+        …allowlist IP…
+        drop
     }
 }
 ```
