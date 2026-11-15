@@ -1,0 +1,47 @@
+[tools]
+go = "1.27.4"
+golangci-lint = "2.14.0"
+
+[env]
+CGO_ENABLED = "0"
+GOFLAGS = "-trimpath"
+
+[tasks.check]
+description = "Definition of done: format, lint, boundaries, vet, unit tests"
+run = [
+  "golangci-lint fmt --diff ./...",
+  "golangci-lint run ./...",
+  "go vet ./...",
+  "go test -race=false -count=1 ./...",
+]
+
+[tasks."check:all"]
+description = "Full: check + race tests + build + deadcode + vulncheck + trace matrix (CI)"
+run = [
+  "mise run check",
+  "CGO_ENABLED=1 go test -race -count=1 ./...",
+  "go build ./...",
+  "go run golang.org/x/tools/cmd/deadcode@v0.38.0 -test ./...",
+  "go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...",
+  "go run ./scripts/trace-matrix",
+]
+
+[tasks.fix]
+description = "Apply every auto-fix"
+run = ["golangci-lint run --fix ./...", "golangci-lint fmt ./..."]
+
+[tasks.test]
+description = "Unit tests; pass a package path to scope"
+run = "go test -count=1"
+
+[tasks.e2e]
+description = "Network-namespace tests (needs userns or sudo -E)"
+run = "./scripts/e2e.sh"
+
+[tasks.fuzz]
+description = "Fuzz every parser for FUZZTIME (default 60s)"
+run = "./scripts/fuzz.sh"
+
+[tasks.build]
+description = "Static release build of the lethe binary"
+run = "go build -ldflags='-s -w -buildid=' -o bin/lethe ./apps/lethe"

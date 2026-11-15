@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lethe:version",
+  "title": "lethe version --json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "commit", "modified", "go_version", "platform", "binary_sha256", "geo_db_date"],
+  "properties": {
+    "version": {"type": "string", "minLength": 1},
+    "commit": {"type": "string", "minLength": 1},
+    "modified": {"type": "boolean"},
+    "go_version": {"type": "string", "pattern": "^go"},
+    "platform": {"type": "string", "pattern": "^linux/(amd64|arm64)$"},
+    "binary_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "geo_db_date": {"type": "string"}
+  }
+}

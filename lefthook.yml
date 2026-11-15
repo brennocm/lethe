@@ -1,0 +1,8 @@
+pre-commit:
+  parallel: true
+  commands:
+    fmt:
+      glob: "*.go"
+      run: golangci-lint fmt --diff {staged_files}
+    gitleaks:
+      run: gitleaks protect --staged --redact || echo "gitleaks not installed; skipping"

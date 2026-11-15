@@ -1,0 +1,26 @@
+# build outputs
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+# fuzz crashers stay local until minimized into testdata/fuzz
+/testdata/fuzz-cache/
+# runtime data from manual runs
+/lethe-data/
+*.lseg
+*.age
+!**/testdata/**/*.age
+# logs and local state
+*.log
+.env
+.env.*
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+# agent tooling (kept local)
+CLAUDE.md
+.claude/
+.cursor/
+.aider*

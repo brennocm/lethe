@@ -1,0 +1,44 @@
+version: "2"
+run:
+  build-tags: [e2e]
+linters:
+  enable: [errcheck, govet, staticcheck, gosec, revive, depguard, unused, ineffassign, misspell, unconvert, errorlint, bodyclose]
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+    gosec:
+      excludes:
+        - G115 # integer conversions are checked explicitly where they matter
+    depguard:
+      rules:
+        engine-is-pure:
+          files: ["**/internal/engine/**"]
+          deny:
+            - { pkg: "net", desc: "engine is pure: no I/O (spec §5.3)" }
+            - { pkg: "os", desc: "engine is pure: no I/O (spec §5.3)" }
+            - { pkg: "syscall", desc: "engine is pure: no I/O (spec §5.3)" }
+            - { pkg: "golang.org/x/sys", desc: "engine is pure: no I/O (spec §5.3)" }
+            - { pkg: "lethe/internal/sensors", desc: "engine only depends on contracts" }
+            - { pkg: "lethe/internal/guard", desc: "engine only depends on contracts" }
+            - { pkg: "lethe/internal/response", desc: "engine only depends on contracts" }
+            - { pkg: "lethe/internal/journal", desc: "engine only depends on contracts" }
+        checks-do-not-act:
+          files: ["**/internal/checks/**"]
+          deny:
+            - { pkg: "lethe/internal/response", desc: "checks emit events; they never execute responses" }
+            - { pkg: "lethe/internal/guard", desc: "checks emit events; they never touch the guard" }
+        no-exec:
+          files: ["$all", "!**/internal/privsep/**", "!$test", "!**/test/**"]
+          deny:
+            - { pkg: "os/exec", desc: "no external commands (spec principle 10); use internal/privsep" }
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [gosec, errcheck]
+formatters:
+  enable: [gofmt, goimports]
+  settings:
+    goimports:
+      local-prefixes: [lethe]
