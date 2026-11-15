@@ -16,6 +16,7 @@ import (
 	"github.com/google/nftables"
 
 	"lethe/internal/baseline"
+	"lethe/internal/checks"
 	"lethe/internal/contracts"
 	"lethe/internal/discovery"
 	"lethe/internal/engine"
@@ -102,6 +103,7 @@ type session struct {
 	learned         []discovery.Endpoint                 // endpoints learned (NFLOG) or confirmed by the operator
 	endpointUnknown bool
 	nftArm          []nftmon.Table // TUN-004: third-party tables at arm (nil = not readable)
+	tx              *checks.TxTracker
 	critical        int
 	sensors         *sensorSet
 	protected       map[int]bool // pids never killed by responses (self, agent)

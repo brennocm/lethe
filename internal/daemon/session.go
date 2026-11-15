@@ -209,7 +209,7 @@ func (d *Daemon) openSession(prof *profile.Profile, base *baseline.Baseline, mod
 		return nil, err
 	}
 	s := &session{id: id, prof: prof, base: base, guardMode: mode, startedAt: now,
-		beats: map[string]time.Time{}, down: map[string]bool{}, conditions: map[string]map[string]map[string]any{}, tunnels: map[string]bool{}}
+		beats: map[string]time.Time{}, down: map[string]bool{}, conditions: map[string]map[string]map[string]any{}, tunnels: map[string]bool{}, tx: checks.NewTxTracker()}
 	recips, err := recipients(prof.Storage.LogRecipients, base)
 	if err != nil {
 		return nil, errParams(err)

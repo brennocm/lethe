@@ -108,6 +108,12 @@ func Discover(k Kernel, opt Options) Snapshot {
 			s.Routes.DefaultV6 = append(s.Routes.DefaultV6, route(r))
 		}
 	}
+	s.Routes.Rules = []Rule{}
+	if rs, err := k.Rules(); err == nil {
+		s.Routes.Rules = append(s.Routes.Rules, rs...)
+	} else {
+		gap("netlink:rules")
+	}
 	for _, p := range []struct {
 		dst netip.Addr
 		set **Route

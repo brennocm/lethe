@@ -50,6 +50,7 @@ type Kernel interface {
 	DefaultRoutes(family int) ([]RawRoute, error)
 	RouteGet(dst netip.Addr) (RawRoute, error)
 	WireGuard() ([]WGDevice, error)
+	Rules() ([]Rule, error)
 	IPv6Disabled(iface string) bool
 	LegacyIPTables() bool
 }
@@ -144,6 +145,24 @@ func toRaw(r netlink.Route) RawRoute {
 		rr.Gateway = g.Unmap()
 	}
 	return rr
+}
+
+// Rules lists the policy routing rules of both families.
+func (k NetlinkKernel) Rules() ([]Rule, error) {
+	var out []Rule
+	for _, fam := range []struct {
+		f    int
+		name string
+	}{{unix.AF_INET, "ipv4"}, {unix.AF_INET6, "ipv6"}} {
+		rs, err := netlink.RuleList(fam.f)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rs {
+			out = append(out, Rule{Family: fam.name, Priority: r.Priority, Table: r.Table, Mark: r.Mark, Invert: r.Invert, UIDRange: r.UIDRange != nil})
+		}
+	}
+	return out, nil
 }
 
 // RouteGet asks the kernel which route a packet to dst would take (ip route get).

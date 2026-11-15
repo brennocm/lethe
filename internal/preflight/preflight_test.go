@@ -79,7 +79,15 @@ func TestTUN001_PreflightNeedsATunnel(t *testing.T) {
 func TestTUN007_PreflightWarns(t *testing.T) {
 	s := tunnelSnap()
 	s.LegacyIPTables = true
-	if r := Run(Input{Snapshot: s, Manual: allYes()}); r.Result != Warn || r.Checks[3].Status != Warn {
+	if r := Run(Input{Snapshot: s, Manual: allYes()}); r.Result != Warn || r.Checks[4].Status != Warn {
+		t.Fatalf("got %+v", r)
+	}
+}
+
+func TestTUN005_PreflightWarns(t *testing.T) {
+	s := tunnelSnap()
+	s.Routes.Rules = []discovery.Rule{{Family: "ipv4", Priority: 100, Table: 254, Mark: 0x6d6f6c65}}
+	if r := Run(Input{Snapshot: s, Manual: allYes()}); r.Result != Warn || r.Checks[3].ID != "TUN-005" || r.Checks[3].Status != Warn {
 		t.Fatalf("got %+v", r)
 	}
 }

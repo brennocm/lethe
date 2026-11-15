@@ -21,6 +21,7 @@ type fakeKernel struct {
 	wg      []WGDevice
 	wgErr   error
 	legacy  bool
+	rules   []Rule
 }
 
 func (f fakeKernel) Links() ([]KernelLink, error) { return f.links, nil }
@@ -43,6 +44,7 @@ func (f fakeKernel) WireGuard() ([]WGDevice, error) {
 	return f.wg, nil
 }
 func (f fakeKernel) IPv6Disabled(string) bool { return false }
+func (f fakeKernel) Rules() ([]Rule, error)   { return f.rules, nil }
 func (f fakeKernel) LegacyIPTables() bool     { return f.legacy }
 
 type fakeResolved struct{ err error }

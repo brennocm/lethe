@@ -2,6 +2,7 @@ package checks
 
 import (
 	"testing"
+	"time"
 
 	"lethe/internal/discovery"
 	"lethe/internal/sensors/nftmon"
@@ -78,5 +79,43 @@ func TestTUN004_Evaluate(t *testing.T) {
 	}
 	if fs := (TUN004{}).Evaluate([]nftmon.Table{{Name: "inet fw"}}, nil); len(fs) != 1 || fs[0].Severity != "WARNING" {
 		t.Fatalf("removing a table without output drop is WARNING: %v", fs)
+	}
+}
+
+func TestTUN002_Evaluate(t *testing.T) {
+	now := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	s := snap()
+	s.Tunnels[0].Peers = []discovery.WGPeer{{Endpoint: "198.51.100.7:51820", TxBytes: 100, LastHandshake: now.Add(-200 * time.Second)}}
+	tr := NewTxTracker()
+	if fs := (TUN002{}).Evaluate(tr, s, now); len(fs) != 0 {
+		t.Fatal("first sample has no tx history")
+	}
+	s.Tunnels[0].Peers[0].TxBytes = 200
+	if fs := (TUN002{}).Evaluate(tr, s, now.Add(time.Second)); len(fs) != 1 {
+		t.Fatalf("tx grew with a 200 s old handshake: %v", fs)
+	}
+	if fs := (TUN002{}).Evaluate(tr, s, now.Add(12*time.Second)); len(fs) != 0 {
+		t.Fatalf("no tx in the last 10 s: %v", fs)
+	}
+	s.Tunnels[0].Peers[0].TxBytes = 300
+	s.Tunnels[0].Peers[0].LastHandshake = now
+	if fs := (TUN002{}).Evaluate(tr, s, now.Add(13*time.Second)); len(fs) != 0 {
+		t.Fatalf("fresh handshake: %v", fs)
+	}
+}
+
+func TestTUN005_Evaluate(t *testing.T) {
+	s := snap()
+	s.Routes.Rules = []discovery.Rule{
+		{Family: "ipv4", Priority: 32764, Table: 254},                              // main: plain
+		{Family: "ipv4", Priority: 32765, Table: 51820, Mark: 51820, Invert: true}, // wg-quick
+		{Family: "ipv4", Priority: 100, Table: 254, Mark: 51820},                   // tunnel's own transport mark
+		{Family: "ipv4", Priority: 200, Table: 254, Mark: 0x6d6f6c65},              // excluded app
+		{Family: "ipv6", Priority: 300, Table: 254, UIDRange: true},                // excluded user
+		{Family: "ipv4", Priority: 400, Table: 51820, Mark: 7},                     // into the tunnel table
+	}
+	got := reasons((TUN005{}).Evaluate(s))
+	if len(got) != 2 || got[0] != "fwmark_exclusion" || got[1] != "uid_exclusion" {
+		t.Fatalf("got %v", got)
 	}
 }

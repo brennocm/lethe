@@ -76,7 +76,10 @@ func (k *fakeKernel) WireGuard() ([]discovery.WGDevice, error) {
 
 func (k *fakeKernel) setEndpoint(e string)     { k.mu.Lock(); k.endpoint = e; k.mu.Unlock() }
 func (k *fakeKernel) IPv6Disabled(string) bool { return true }
-func (k *fakeKernel) LegacyIPTables() bool     { return false }
+func (k *fakeKernel) Rules() ([]discovery.Rule, error) {
+	return []discovery.Rule{{Family: "ipv4", Priority: 0, Table: 255}, {Family: "ipv4", Priority: 32766, Table: 254}}, nil
+}
+func (k *fakeKernel) LegacyIPTables() bool { return false }
 
 // fakeNFT records the tables present after each flush.
 type fakeNFT struct {

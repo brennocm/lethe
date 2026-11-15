@@ -53,6 +53,7 @@ type WGPeer struct {
 type Routes struct {
 	DefaultV4 []Route `json:"default_v4"`
 	DefaultV6 []Route `json:"default_v6"`
+	Rules     []Rule  `json:"rules"`              // policy routing (TUN-005)
 	ProbeV4   *Route  `json:"probe_v4,omitempty"` // route to 192.0.2.1
 	ProbeV6   *Route  `json:"probe_v6,omitempty"` // route to 2001:db8::1
 }
@@ -64,6 +65,16 @@ type Route struct {
 	Iface   string `json:"iface"`
 	Class   Class  `json:"class"`
 	Table   int    `json:"table"`
+}
+
+// Rule is one policy routing rule (ip rule).
+type Rule struct {
+	Family   string `json:"family"` // ipv4 | ipv6
+	Priority int    `json:"priority"`
+	Table    int    `json:"table"`
+	Mark     uint32 `json:"mark,omitempty"`
+	Invert   bool   `json:"invert,omitempty"` // "not" rule
+	UIDRange bool   `json:"uid_range,omitempty"`
 }
 
 // Probe destinations for NET-004 (RFC 5737 / RFC 3849: never routed on the internet).

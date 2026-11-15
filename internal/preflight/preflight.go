@@ -95,6 +95,7 @@ func Run(in Input) Report {
 	add("NET-003", checks.NET003{}.Evaluate(in.Snapshot, expectV6))
 	add("NET-004", checks.NET004{}.Evaluate(in.Snapshot))
 	add("TUN-001", checks.TUN001{}.Evaluate(checks.TunnelExpect{Ifaces: TunnelIfaces(in.Snapshot), Require: checks.RequiresTunnel(egressType)}, in.Snapshot))
+	add("TUN-005", checks.TUN005{}.Evaluate(in.Snapshot))
 	add("TUN-007", checks.TUN007{}.Evaluate(in.Snapshot))
 	for _, u := range in.Snapshot.Unavailable {
 		r.Warnings = append(r.Warnings, "source unavailable: "+u)

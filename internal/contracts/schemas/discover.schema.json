@@ -165,7 +165,8 @@
       "additionalProperties": false,
       "required": [
         "default_v4",
-        "default_v6"
+        "default_v6",
+        "rules"
       ],
       "properties": {
         "default_v4": {
@@ -307,6 +308,42 @@
             },
             "table": {
               "type": "integer"
+            }
+          }
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "family",
+              "priority",
+              "table"
+            ],
+            "properties": {
+              "family": {
+                "enum": [
+                  "ipv4",
+                  "ipv6"
+                ]
+              },
+              "priority": {
+                "type": "integer"
+              },
+              "table": {
+                "type": "integer"
+              },
+              "mark": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "invert": {
+                "type": "boolean"
+              },
+              "uid_range": {
+                "type": "boolean"
+              }
             }
           }
         }

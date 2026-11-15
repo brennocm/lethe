@@ -4,7 +4,7 @@ package checks
 func Registry() []Check {
 	return []Check{
 		NET001{}, NET002{}, NET003{}, NET004{}, NET005{}, NET006{}, NET009{}, NET010{}, NET012{}, DNS001{},
-		TUN001{}, TUN004{}, TUN007{},
+		TUN001{}, TUN002{}, TUN004{}, TUN005{}, TUN007{},
 	}
 }
 
