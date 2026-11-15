@@ -246,6 +246,10 @@ func TestM7_ArmObserveDisarm(t *testing.T) {
 	if st, _ := f.d.State(); st != engine.StateReady {
 		t.Fatalf("after disarm: %s", st)
 	}
+	rep, err := os.ReadFile(filepath.Join(res.Dir, "report.md"))
+	if err != nil || !strings.Contains(string(rep), "NET-001") {
+		t.Fatalf("report.md: %v\n%s", err, rep)
+	}
 }
 
 func TestM7_WrongPassphraseLocksArm(t *testing.T) {

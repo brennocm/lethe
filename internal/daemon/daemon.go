@@ -147,9 +147,6 @@ type clock struct{ now func() time.Time }
 
 func (c clock) Now() time.Time { return c.now() }
 
-// Server exposes the IPC server (tests and the CLI's run command serve it).
-func (d *Daemon) Server() *ipc.Server { return d.srv }
-
 // Run serves IPC on cfg.SocketPath and runs housekeeping until ctx ends; then it disarms.
 func (d *Daemon) Run(ctx context.Context) error {
 	l, err := ipc.Listen(d.cfg.SocketPath, d.cfg.Operator.UID, d.cfg.Operator.GID)

@@ -26,6 +26,7 @@ import (
 	"lethe/internal/preflight"
 	"lethe/internal/privsep"
 	"lethe/internal/profile"
+	"lethe/internal/report"
 	"lethe/internal/response"
 	"lethe/internal/sensors/procscan"
 )
@@ -445,6 +446,7 @@ func (d *Daemon) endLocked(reason string, keepGuard bool) {
 		}
 	}
 	_ = s.journal.Close(map[string]any{"reason": reason, "alerts": len(d.eng.Alerts()), "critical": s.critical, "unacked_critical": unacked, "guard_kept": keepGuard})
+	d.writeReport(s)
 	s.auth.Close()
 	d.srv.SetAuthenticator(nil)
 	d.sess = nil
@@ -613,4 +615,46 @@ func toAny(xs []string) []any {
 		out = append(out, x)
 	}
 	return out
+}
+
+// writeReport verifies the closed journal and writes report.md next to it (spec §6.2, step 7).
+// With institutional log_recipients the daemon cannot read the journal: `lethe report` with
+// that key produces the report instead.
+func (d *Daemon) writeReport(s *session) {
+	if len(s.prof.Storage.LogRecipients) > 0 {
+		return
+	}
+	fail := func(err error) { _, _ = fmt.Fprintf(d.cfg.Out, "lethe: report: %v (use lethe report)\n", err) }
+	id, err := s.base.Identity()
+	if err != nil {
+		fail(err)
+		return
+	}
+	js, err := journal.Read(s.dir(), []age.Identity{id})
+	if err != nil {
+		fail(err)
+		return
+	}
+	res, err := journal.Verify(js, s.journal.Fingerprint())
+	if err != nil {
+		fail(err)
+		return
+	}
+	r, err := report.Build(js, res, report.Options{})
+	if err != nil {
+		fail(err)
+		return
+	}
+	f, err := os.OpenFile(filepath.Join(s.dir(), "report.md"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640) // #nosec G302 G304 -- operator group reads it
+	if err != nil {
+		fail(err)
+		return
+	}
+	err = report.WriteMarkdown(f, r)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		fail(err)
+	}
 }
