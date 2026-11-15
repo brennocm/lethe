@@ -191,7 +191,7 @@ func newRunCmd() *cobra.Command {
 			if tui {
 				return fmt.Errorf("%w: the TUI arrives with M12", ErrNotImplemented)
 			}
-			_ = noGUI    // the GUI (M12) is never started yet
+			_ = noGUI    // the GUI (M13) is never started yet
 			_ = noActive // active checks (M11) are not wired yet
 			if os.Geteuid() != 0 {
 				return WithCode(ExitPrivileges, errors.New("run needs root (sudo lethe run ...)"))
@@ -214,11 +214,14 @@ func newRunCmd() *cobra.Command {
 			defer d.Close()
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
+			// The daemon has its own context: a signal disarms first, then stops it.
+			runCtx, stopDaemon := context.WithCancel(context.Background())
+			defer stopDaemon()
 			errc := make(chan error, 1)
-			go func() { errc <- d.Run(ctx) }()
+			go func() { errc <- d.Run(runCtx) }()
 			res, rep, err := d.Arm(req)
 			if err != nil {
-				stop()
+				stopDaemon()
 				<-errc
 				if rep.Result == preflight.Fail && !f.force {
 					printPreflight(cmd.ErrOrStderr(), rep)
@@ -237,7 +240,7 @@ func newRunCmd() *cobra.Command {
 			if st.State == "ARMED" {
 				dr, err = d.Disarm()
 			}
-			stop()
+			stopDaemon()
 			if rerr := <-errc; err == nil {
 				err = rerr
 			}
