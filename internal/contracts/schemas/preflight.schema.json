@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lethe:preflight",
+  "title": "lethe preflight --json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["result", "checks", "warnings", "manual", "manual_skipped"],
+  "properties": {
+    "result": { "enum": ["PASS", "WARN", "FAIL"] },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "findings"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{3}$" },
+          "status": { "enum": ["PASS", "WARN", "FAIL"] },
+          "findings": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "manual": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "ok"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^MAN-[0-9]+$" },
+          "ok": { "type": "boolean" }
+        }
+      }
+    },
+    "manual_skipped": { "type": "boolean" }
+  }
+}
