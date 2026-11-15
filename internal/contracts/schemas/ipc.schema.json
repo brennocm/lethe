@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lethe:ipc",
+  "title": "lethe IPC message (JSON-RPC 2.0, one per line, at most 64 KiB; spec §17.2)",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/response" },
+    { "$ref": "#/$defs/notification" }
+  ],
+  "$defs": {
+    "method": {
+      "enum": [
+        "auth.challenge", "status.get", "events.subscribe", "events.query", "discovery.get", "heartbeat",
+        "panic.engage", "selftest.run", "agent.report", "alert.ack",
+        "session.arm", "session.disarm", "panic.release", "discovery.confirm_endpoint"
+      ]
+    },
+    "auth": {
+      "type": "object",
+      "required": ["nonce", "mac"],
+      "additionalProperties": false,
+      "properties": {
+        "nonce": { "type": "string", "contentEncoding": "base64", "minLength": 44, "maxLength": 44 },
+        "mac": { "type": "string", "contentEncoding": "base64", "minLength": 44, "maxLength": 44 }
+      }
+    },
+    "request": {
+      "type": "object",
+      "required": ["jsonrpc", "id", "method"],
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": { "type": "integer", "minimum": 0 },
+        "method": { "$ref": "#/$defs/method" },
+        "params": { "type": "object" },
+        "auth": { "$ref": "#/$defs/auth" }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": ["jsonrpc", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": { "type": ["integer", "null"] },
+        "result": {},
+        "error": {
+          "type": "object",
+          "required": ["code", "message"],
+          "additionalProperties": false,
+          "properties": { "code": { "type": "integer" }, "message": { "type": "string" } }
+        }
+      },
+      "oneOf": [{ "required": ["result"] }, { "required": ["error"] }]
+    },
+    "notification": {
+      "type": "object",
+      "required": ["jsonrpc", "method", "params"],
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "method": { "const": "event" },
+        "params": { "type": "object" }
+      }
+    }
+  }
+}
