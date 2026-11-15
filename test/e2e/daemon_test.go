@@ -1,0 +1,371 @@
+//go:build e2e
+
+package e2e
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"filippo.io/age"
+	"github.com/google/nftables"
+	"github.com/vishvananda/netlink"
+
+	"lethe/internal/baseline"
+	"lethe/internal/cli"
+	"lethe/internal/contracts"
+	"lethe/internal/daemon"
+	"lethe/internal/guard"
+	"lethe/internal/ipc"
+	"lethe/internal/journal"
+	"lethe/internal/platform"
+	"lethe/internal/preflight"
+	"lethe/internal/privsep"
+	"lethe/internal/profile"
+	"lethe/test/netlab"
+)
+
+// TestMain lets the test binary act as the lethe CLI when the daemon re-executes
+// /proc/self/exe (agent) or when a test runs `lethe run` in a child process.
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == "agent" {
+		os.Exit(cli.Execute(os.Args[1:], os.Stdout, os.Stderr))
+	}
+	if args := os.Getenv("LETHE_E2E_CLI"); args != "" {
+		os.Exit(cli.Execute(strings.Split(args, "\x1f"), os.Stdout, os.Stderr))
+	}
+	os.Exit(m.Run())
+}
+
+type session struct {
+	dir, profile, baseline, socket string
+	pass                           []byte
+	ident                          *age.X25519Identity
+}
+
+// newSession writes a strict profile for the lab and an encrypted baseline.
+func newSession(t *testing.T) *session {
+	t.Helper()
+	home := t.TempDir()
+	s := &session{dir: home, profile: filepath.Join(home, "op.yaml"), baseline: filepath.Join(home, "baseline.age"),
+		socket: filepath.Join(home, "run", "lethe.sock"), pass: []byte("lab passphrase")}
+	b, err := baseline.New(time.Now(), "e2e")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.ident, _ = b.Identity()
+	ct, err := baseline.Encrypt(b, s.pass, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prof := strings.NewReplacer(
+		"egress_ifaces: []", "egress_ifaces: ["+netlab.DUTEgress+"]",
+		"file: ~/lethe/baseline.age", "file: "+s.baseline,
+		"dir: ~/lethe/data", "dir: "+filepath.Join(home, "data"),
+	).Replace(string(profile.Template))
+	if err := os.WriteFile(s.profile, []byte(prof), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(s.baseline, ct, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func (s *session) armRequest(t *testing.T) daemon.ArmRequest {
+	t.Helper()
+	raw, _ := os.ReadFile(s.profile)
+	base, _ := os.ReadFile(s.baseline)
+	var man []preflight.Answer
+	for _, it := range preflight.Manual {
+		man = append(man, preflight.Answer{ID: it.ID, OK: true})
+	}
+	return daemon.ArmRequest{Profile: raw, Baseline: base, Passphrase: append([]byte(nil), s.pass...), Manual: man}
+}
+
+func dialWait(t *testing.T, path string) *ipc.Client {
+	t.Helper()
+	for range 300 {
+		if c, err := ipc.Dial(path, time.Second); err == nil {
+			t.Cleanup(func() { _ = c.Close() })
+			return c
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("socket %s did not come up", path)
+	return nil
+}
+
+func proof(t *testing.T, c *ipc.Client, pass []byte, method string, params any) *ipc.Auth {
+	t.Helper()
+	var st daemon.Status
+	if err := c.Call("status.get", nil, nil, &st); err != nil {
+		t.Fatal(err)
+	}
+	key, err := ipc.DeriveKey(pass, st.AuthSalt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := c.Prove(key, method, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func ipcCode(err error) int {
+	var ie *ipc.Error
+	if errors.As(err, &ie) {
+		return ie.Code
+	}
+	return 0
+}
+
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+		if cond() {
+			return
+		}
+	}
+	t.Fatalf("timeout waiting for %s", what)
+}
+
+// probeLeakRoute sends 192.0.2.0/24 out of the egress link: NET-004 becomes CRITICAL.
+func probeLeakRoute(t *testing.T, add bool) {
+	t.Helper()
+	eg, err := netlink.LinkByName(netlab.DUTEgress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, dst, _ := net.ParseCIDR("192.0.2.0/24")
+	r := &netlink.Route{LinkIndex: eg.Attrs().Index, Dst: dst, Gw: net.ParseIP("10.0.0.1")}
+	if add {
+		err = netlink.RouteAdd(r)
+	} else {
+		err = netlink.RouteDel(r)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestE2E_AC08_DaemonPanicUnpanic drives the real daemon (strict guard, live sensors) over IPC:
+// lethe panic blocks everything within 200 ms; unpanic is refused without the passphrase, with an
+// unacknowledged CRITICAL and with a failing re-check, and succeeds with everything.
+func TestE2E_AC08_DaemonPanicUnpanic(t *testing.T) {
+	lab := netlab.New(t, true)
+	lab.WaitHandshake(t, 10*time.Second)
+	s := newSession(t)
+	var out bytes.Buffer
+	d := daemon.New(daemon.Config{
+		Operator: platform.Operator{UID: os.Getuid(), GID: os.Getgid(), Home: s.dir}, SocketPath: s.socket,
+		ToolVersion: "e2e", Sensors: true, Out: &out, DiscoverEvery: 300 * time.Millisecond,
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- d.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+		c, _ := guardConn()
+		_, _ = guard.Cleanup(c)
+	})
+	c := dialWait(t, s.socket)
+	_ = c.SetDeadline(time.Now().Add(time.Minute))
+
+	var res daemon.ArmResult
+	if err := c.Call("session.arm", s.armRequest(t), nil, &res); err != nil {
+		t.Fatalf("arm: %v\n%s", err, out.String())
+	}
+	if res.Guard != "strict" || res.Preflight.Result == preflight.Fail {
+		t.Fatalf("arm result %+v", res)
+	}
+	if !strings.Contains(dump(t), "table inet lethe ") {
+		t.Fatalf("strict table not applied:\n%s", dump(t))
+	}
+
+	sn := lab.Sniff(t)
+	t0 := time.Now()
+	if err := c.Call("panic.engage", nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	applied := time.Now()
+	if dt := applied.Sub(t0); dt > 200*time.Millisecond {
+		t.Fatalf("lethe panic took %s (> 200 ms)", dt)
+	}
+	for range 5 {
+		sendUDP(t, "10.200.0.1:9", false, []byte("tunnel during panic"))
+		sendUDP(t, "192.0.2.1:9", true, []byte("egress during panic"))
+		time.Sleep(50 * time.Millisecond)
+	}
+	time.Sleep(2500 * time.Millisecond) // a WireGuard keepalive (2 s) would show up here
+	if fs := sn.Since(applied); len(fs) != 0 {
+		t.Fatalf("%d frames left during panic", len(fs))
+	}
+
+	// A CRITICAL while in PANIC: the route to the probe address now leaves via the egress link.
+	probeLeakRoute(t, true)
+	var alertID string
+	waitFor(t, "NET-004 alert", func() bool {
+		st := d.Status()
+		for _, a := range st.Alerts {
+			if a.Check == "NET-004" {
+				alertID = a.ID
+				return true
+			}
+		}
+		return false
+	})
+	if err := c.Call("panic.release", nil, nil, nil); ipcCode(err) != ipc.CodeAuth {
+		t.Fatalf("unpanic without passphrase: %v", err)
+	}
+	if err := c.Call("panic.release", nil, proof(t, c, s.pass, "panic.release", nil), nil); err == nil || !strings.Contains(err.Error(), "unacknowledged") {
+		t.Fatalf("unpanic with an unacked CRITICAL: %v", err)
+	}
+	ack := map[string]string{"id": alertID, "reason": "lab"}
+	if err := c.Call("alert.ack", ack, nil, nil); ipcCode(err) != ipc.CodeAuth {
+		t.Fatalf("CRITICAL ack without passphrase: %v", err)
+	}
+	if err := c.Call("alert.ack", ack, proof(t, c, s.pass, "alert.ack", ack), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Call("panic.release", nil, proof(t, c, s.pass, "panic.release", nil), nil); err == nil || !strings.Contains(err.Error(), "re-check") {
+		t.Fatalf("unpanic with NET-004 failing: %v", err)
+	}
+	probeLeakRoute(t, false)
+	if err := c.Call("panic.release", nil, proof(t, c, s.pass, "panic.release", nil), nil); err != nil {
+		t.Fatalf("unpanic: %v", err)
+	}
+	if dm := dump(t); strings.Contains(dm, guard.TablePanic) || !strings.Contains(dm, "table inet lethe ") {
+		t.Fatalf("after unpanic:\n%s", dm)
+	}
+	released := time.Now()
+	sendUDP(t, "10.200.0.1:9", false, []byte("after"))
+	waitFor(t, "tunnel traffic after unpanic", func() bool {
+		for _, f := range sn.Since(released) {
+			if netlab.UDPTo(f.Data, net.ParseIP("198.18.0.2"), netlab.WGPort) {
+				return true
+			}
+		}
+		return false
+	})
+
+	var dr daemon.DisarmResult
+	if err := c.Call("session.disarm", nil, proof(t, c, s.pass, "session.disarm", nil), &dr); err != nil {
+		t.Fatal(err)
+	}
+	if dm := dump(t); strings.Contains(dm, "lethe") {
+		t.Fatalf("tables left after disarm:\n%s", dm)
+	}
+	js, err := journal.Read(res.Dir, []age.Identity{s.ident})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := journal.Verify(js, res.Fingerprint); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	var seen []string
+	for _, ev := range js.Events {
+		seen = append(seen, string(ev.Type))
+	}
+	all := strings.Join(seen, ",")
+	for _, want := range []contracts.EventType{contracts.EvGuardApplied, contracts.EvPanicEngaged, contracts.EvIPCDenied,
+		contracts.EvAlertAck, contracts.EvPanicReleased, contracts.EvGuardRemoved, contracts.EvSessionEnd} {
+		if !strings.Contains(all, string(want)) {
+			t.Fatalf("journal lacks %s: %s", want, all)
+		}
+	}
+}
+
+// TestE2E_M7_RunCLI runs `lethe run` in a child process: it arms in strict mode, spawns the
+// agent, drops the capabilities on every thread and disarms cleanly on SIGTERM.
+func TestE2E_M7_RunCLI(t *testing.T) {
+	netlab.New(t, true)
+	s := newSession(t)
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = pw.Write(append(append([]byte(nil), s.pass...), '\n'))
+	_ = pw.Close()
+	var out bytes.Buffer
+	cmd := exec.Command(os.Args[0])
+	cmd.Env = append(os.Environ(), "LETHE_SOCKET="+s.socket,
+		"LETHE_E2E_CLI="+strings.Join([]string{"run", "-p", s.profile, "--no-manual", "--passphrase-fd", "3"}, "\x1f"))
+	cmd.ExtraFiles = []*os.File{pr}
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	_ = pr.Close()
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		c, _ := guardConn()
+		_, _ = guard.Cleanup(c)
+	})
+	c := dialWait(t, s.socket)
+	var st daemon.Status
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("status %+v caps %v\n%s", st, hardened(cmd.Process.Pid), out.String())
+		}
+	})
+	waitFor(t, "ARMED with agent and dropped capabilities", func() bool {
+		if err := c.Call("status.get", nil, nil, &st); err != nil {
+			return false
+		}
+		return st.State == "ARMED" && st.Agent && hardened(cmd.Process.Pid) == nil
+	})
+	if err := hardened(cmd.Process.Pid); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Impressão digital") {
+		t.Fatalf("fingerprint not shown:\n%s", out.String())
+	}
+	_ = cmd.Process.Signal(os.Interrupt)
+	errc := make(chan error, 1)
+	go func() { errc <- cmd.Wait() }()
+	select {
+	case err := <-errc:
+		if err != nil {
+			t.Fatalf("run exited with %v:\n%s", err, out.String())
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatalf("run did not exit:\n%s", out.String())
+	}
+	if dm := dump(t); strings.Contains(dm, "lethe") {
+		t.Fatalf("tables left after run:\n%s", dm)
+	}
+}
+
+// hardened checks the §19.3 capability sets on every thread of pid.
+func hardened(pid int) error {
+	tasks, _ := filepath.Glob(filepath.Join("/proc", strconv.Itoa(pid), "task", "*", "status"))
+	if len(tasks) == 0 {
+		return errors.New("no threads")
+	}
+	for _, p := range tasks {
+		st, err := privsep.ReadStatus(p)
+		if err != nil {
+			continue
+		}
+		if st.Eff != privsep.KeepMask() || st.Prm != privsep.KeepMask() || st.Bnd != privsep.KeepMask() || st.Inh != 0 || st.Amb != 0 || !st.NoNewPrivs {
+			return fmt.Errorf("%s: %+v", p, st)
+		}
+	}
+	return nil
+}
+
+func guardConn() (guard.Conn, error) { return nftConn() }
+
+func nftConn() (guard.Conn, error) { return nftables.New() }
