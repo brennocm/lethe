@@ -135,3 +135,21 @@ func TestNET009_LANBroadcastIsWarning(t *testing.T) {
 		t.Fatalf("got %s", l.Check)
 	}
 }
+
+func TestNET002_ClassifyIPPayload(t *testing.T) {
+	f := ip4(me4, "192.0.2.53", protoUDP, l4(protoUDP, 40000, 53, dnsQuery("blocked.example.test")))
+	l := ClassifyIP(f[14:], len(f)-14)
+	if l.Check != CheckDNS001 || l.QName != "blocked.example.test" || l.Dst.String() != "192.0.2.53" {
+		t.Fatalf("%+v", l)
+	}
+	f6 := ip6(me6, "2001:db8::1", protoUDP, l4(protoUDP, 1, 9, nil))
+	if l := ClassifyIP(f6[14:], len(f6)-14); l.Subtype != "ipv6" || l.Dport != 9 {
+		t.Fatalf("%+v", l)
+	}
+	if l := ClassifyIP([]byte{0x10}, 1); l.Proto != "ip:?" || l.Check != CheckNET001 {
+		t.Fatalf("%+v", l)
+	}
+	if l := ClassifyIP(nil, 0); l.Proto != "ip:?" {
+		t.Fatalf("%+v", l)
+	}
+}

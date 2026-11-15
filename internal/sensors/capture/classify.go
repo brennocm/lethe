@@ -71,8 +71,28 @@ func Classify(frame []byte, wireLen int) Leak {
 		l.Proto, l.Subtype = "ether:?", "l2"
 		return l
 	}
-	l.EtherType = binary.BigEndian.Uint16(frame[12:14])
-	p := frame[14:]
+	return classifyL3(binary.BigEndian.Uint16(frame[12:14]), frame[14:], wireLen)
+}
+
+// ClassifyIP classifies a packet that starts at the IP header (NFLOG payloads, NET-002).
+func ClassifyIP(pkt []byte, wireLen int) Leak {
+	et := uint16(0)
+	if len(pkt) > 0 {
+		switch pkt[0] >> 4 {
+		case 4:
+			et = etherIPv4
+		case 6:
+			et = etherIPv6
+		}
+	}
+	if et == 0 {
+		return Leak{Check: CheckNET001, Severity: contracts.SeverityCritical, Len: wireLen, Proto: "ip:?"}
+	}
+	return classifyL3(et, pkt, wireLen)
+}
+
+func classifyL3(etherType uint16, p []byte, wireLen int) Leak {
+	l := Leak{Check: CheckNET001, Severity: contracts.SeverityCritical, Len: wireLen, EtherType: etherType}
 	var (
 		proto   uint8
 		l4      []byte
