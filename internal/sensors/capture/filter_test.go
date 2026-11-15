@@ -73,6 +73,10 @@ func TestNET001_FilterAllowlist(t *testing.T) {
 		{"ndp ns", ip6("fe80::1", "ff02::1:ff00:1", protoICMPv6, icmp6(135)), false},
 		{"ndp na", ip6("fe80::1", "fe80::2", protoICMPv6, icmp6(136)), false},
 		{"mldv2", ip6("fe80::1", "ff02::16", protoICMPv6, icmp6(143)), false},
+		{"mldv2 report (hop-by-hop)", ip6("fe80::1", "ff02::16", 0, hbh(protoICMPv6, icmp6(143))), false},
+		{"mldv1 report (hop-by-hop)", ip6("fe80::1", "ff02::1:3", 0, hbh(protoICMPv6, icmp6(131))), false},
+		{"mld-shaped to a global address", ip6(me6, "2001:db8::1", 0, hbh(protoICMPv6, icmp6(143))), true},
+		{"hop-by-hop then udp", ip6("fe80::1", "ff02::16", 0, hbh(protoUDP, l4(protoUDP, 40000, 9, nil))), true},
 		{"icmpv6 echo delivered", ip6(me6, "2001:db8::1", protoICMPv6, icmp6(128)), true},
 		{"dhcpv6", ip6("fe80::1", "ff02::1:2", protoUDP, l4(protoUDP, 546, 547, nil)), false},
 		{"v6 wg endpoint", ip6(me6, "2001:db8:ffff::2", protoUDP, l4(protoUDP, 40000, 51820, nil)), false},
@@ -148,4 +152,9 @@ func TestNET001_FilterPktTypePrefix(t *testing.T) {
 	if _, err := bpf.Assemble(DropAll()); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// hbh prefixes payload with an 8-byte Hop-by-Hop header carrying a Router Alert option.
+func hbh(next byte, payload []byte) []byte {
+	return append([]byte{next, 0, 5, 2, 0, 0, 1, 0}, payload...)
 }

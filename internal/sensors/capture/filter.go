@@ -158,6 +158,23 @@ func Build(al Allowlist, withPktType bool) ([]bpf.Instruction, error) {
 	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: 136, SkipTrue: 1})
 	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: 143, SkipFalse: 1})
 	a.drop()
+	// MLD (RFC 2710/3810) always carries a Hop-by-Hop header with Router Alert. Only this exact
+	// shape is dropped: 8-byte HBH, then ICMPv6 130/131/132/143, to link-local multicast
+	// (ff02::/16, never routed). Any other extension-header chain is delivered.
+	a.add(bpf.LoadAbsolute{Off: ip6Base + 6, Size: 1})
+	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0, SkipFalse: 12})
+	a.add(bpf.LoadAbsolute{Off: ip6Base + 41, Size: 1}) // HBH length in 8-byte units, minus one
+	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0, SkipFalse: 10})
+	a.add(bpf.LoadAbsolute{Off: ip6Base + 40, Size: 1}) // HBH next header
+	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: protoICMPv6, SkipFalse: 8})
+	a.add(bpf.LoadAbsolute{Off: ip6Base + 24, Size: 2}) // destination scope
+	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xff02, SkipFalse: 6})
+	a.add(bpf.LoadAbsolute{Off: ip6Base + 48, Size: 1}) // ICMPv6 type
+	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: 143, SkipTrue: 3})
+	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: 130, SkipTrue: 2})
+	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: 131, SkipTrue: 1})
+	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: 132, SkipFalse: 1})
+	a.drop()
 	// DHCPv6 client → server (udp 546 → 547)
 	a.add(bpf.LoadAbsolute{Off: ip6Base + 6, Size: 1})
 	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: protoUDP, SkipFalse: 5})
