@@ -45,6 +45,8 @@ const (
 	WGClient    = "10.200.0.2/24"
 	WGServer    = "10.200.0.1/24"
 	WGPort      = 51820
+	// EgressMetric is the metric of the egress default route while the tunnel is up.
+	EgressMetric = 1000
 )
 
 // Lab is one topology. Close releases the namespaces.
@@ -230,8 +232,13 @@ func (l *Lab) wireguard() error {
 		if err != nil {
 			return err
 		}
+		// Like NetworkManager with a VPN up: the egress default stays, with a worse metric, so a
+		// socket bound to the egress (SO_BINDTODEVICE) still leaks, which is what the sensor sees.
 		if err := netlink.RouteDel(&netlink.Route{Dst: nil, Gw: net.ParseIP("10.0.0.1"), LinkIndex: eg.Attrs().Index}); err != nil {
 			return fmt.Errorf("drop egress default: %w", err)
+		}
+		if err := netlink.RouteAdd(&netlink.Route{LinkIndex: eg.Attrs().Index, Gw: net.ParseIP("10.0.0.1"), Priority: EgressMetric}); err != nil {
+			return fmt.Errorf("egress default with metric: %w", err)
 		}
 		_, def4, _ := net.ParseCIDR("0.0.0.0/0")
 		return netlink.RouteAdd(&netlink.Route{LinkIndex: wg.Attrs().Index, Dst: def4, Scope: netlink.SCOPE_LINK})
@@ -306,4 +313,43 @@ func (l *Lab) WaitHandshake(t testing.TB, timeout time.Duration) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	t.Fatal("netlab: WireGuard handshake did not complete")
+}
+
+// IPv6 plan for EgressIPv6 (inside 2001:db8::/32, blackholed beyond the isp namespace).
+const (
+	DUTAddr6 = "2001:db8:1::2/64"
+	ISPAddr6 = "2001:db8:1::1/64"
+)
+
+// EgressIPv6 gives the egress link a global IPv6 address and a default v6 route through it,
+// while the tunnel stays v4-only (AC-03, ST-NET-003). Addresses skip DAD (IFA_F_NODAD).
+func (l *Lab) EgressIPv6(t testing.TB) {
+	t.Helper()
+	must(t, l.In(l.ISP, func() error {
+		return errors.Join(addAddrNoDAD(ISPDown, ISPAddr6), sysctl("net/ipv6/conf/all/forwarding", "1"))
+	}))
+	must(t, l.In(l.DUT, func() error {
+		if err := addAddrNoDAD(DUTEgress, DUTAddr6); err != nil {
+			return err
+		}
+		eg, err := netlink.LinkByName(DUTEgress)
+		if err != nil {
+			return err
+		}
+		_, def6, _ := net.ParseCIDR("::/0")
+		return netlink.RouteAdd(&netlink.Route{LinkIndex: eg.Attrs().Index, Dst: def6, Gw: net.ParseIP("2001:db8:1::1")})
+	}))
+}
+
+func addAddrNoDAD(name, cidr string) error {
+	l, err := netlink.LinkByName(name)
+	if err != nil {
+		return err
+	}
+	a, err := netlink.ParseAddr(cidr)
+	if err != nil {
+		return err
+	}
+	a.Flags = 0x02 // IFA_F_NODAD
+	return netlink.AddrAdd(l, a)
 }
