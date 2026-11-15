@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lethe:event",
+  "title": "Journal event (spec §14.1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "seq",
+    "ts",
+    "mono_ns",
+    "session",
+    "type",
+    "source"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "mono_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "session": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "type": {
+      "enum": [
+        "session.start",
+        "session.end",
+        "session.checkpoint",
+        "state.changed",
+        "discovery.changed",
+        "discovery.endpoint_changed",
+        "discovery.endpoint_learned",
+        "discovery.endpoint_unknown",
+        "discovery.endpoint_confirmed",
+        "preflight.result",
+        "preflight.manual_item",
+        "check.alert",
+        "check.resolved",
+        "alert.ack",
+        "response.executed",
+        "guard.applied",
+        "guard.removed",
+        "guard.bypass_detected",
+        "panic.engaged",
+        "panic.released",
+        "selftest.result",
+        "operator.force",
+        "sensor.down",
+        "sensor.up",
+        "clock.jump",
+        "ipc.denied"
+      ]
+    },
+    "check": {
+      "type": "string",
+      "pattern": "^(NET|DNS|TUN|HOST|PER|SELF|IDN)-[0-9]{3}$"
+    },
+    "severity": {
+      "enum": [
+        "INFO",
+        "WARNING",
+        "CRITICAL"
+      ]
+    },
+    "source": {
+      "enum": [
+        "daemon",
+        "agent",
+        "operator",
+        "selftest"
+      ]
+    },
+    "selftest": {
+      "type": "boolean"
+    },
+    "data": {
+      "type": "object"
+    },
+    "alert_id": {
+      "type": "string",
+      "pattern": "^A-[0-9]{4,}$"
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "alert_tray",
+          "alert_sound",
+          "alert_fullscreen",
+          "block_all",
+          "kill_processes",
+          "kill_offender",
+          "link_down",
+          "lock_screen"
+        ]
+      }
+    },
+    "prev": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "enum": [
+              "check.alert",
+              "check.resolved"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "check",
+          "severity"
+        ]
+      }
+    }
+  ]
+}

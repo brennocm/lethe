@@ -2,8 +2,12 @@ version: "2"
 run:
   build-tags: [e2e]
 linters:
-  enable: [errcheck, govet, staticcheck, gosec, revive, depguard, unused, ineffassign, misspell, unconvert, errorlint, bodyclose]
+  enable: [errcheck, govet, staticcheck, gosec, revive, depguard, unused, ineffassign, misspell, unconvert, errorlint, bodyclose, forbidigo]
   settings:
+    forbidigo:
+      forbid:
+        - pattern: '^time\.(Now|Since|Until|Sleep|After|Tick|NewTimer|NewTicker)$'
+          msg: 'engine is pure: take time from the injected Clock (spec §5.3)'
     revive:
       rules:
         - name: exported
@@ -35,6 +39,8 @@ linters:
             - { pkg: "os/exec", desc: "no external commands (spec principle 10); use internal/privsep" }
   exclusions:
     rules:
+      - path-except: internal/engine/
+        linters: [forbidigo]
       - path: _test\.go
         linters: [gosec, errcheck]
 formatters:
