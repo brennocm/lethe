@@ -5,12 +5,14 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"golang.org/x/sys/unix"
 
 	"lethe/internal/contracts"
+	"lethe/internal/discovery/torctl"
 )
 
 type fakeKernel struct {
@@ -162,4 +164,51 @@ func mustIface(t *testing.T, s Snapshot, name string) Iface {
 		t.Fatalf("no iface %s", name)
 	}
 	return i
+}
+
+type fakeTor struct {
+	st  torctl.Status
+	err error
+}
+
+func (f fakeTor) Status() (torctl.Status, error) { return f.st, f.err }
+
+func TestDiscover_TorGuardsAndBridges(t *testing.T) {
+	rc := writeResolv(t, "nameserver 127.0.0.53\n")
+	st := torctl.Status{Version: "0.4.8.13", Bootstrap: 100, CircuitEstablished: true, UseBridges: true,
+		Guards: []netip.AddrPort{netip.MustParseAddrPort("203.0.113.9:9001")},
+		Bridges: []torctl.Bridge{
+			{Transport: "obfs4", Addr: netip.MustParseAddrPort("198.51.100.4:443")},
+			{Transport: "snowflake"},
+		}}
+	s := Discover(wgLaptop(), Options{ResolvConfPath: rc, Resolved: fakeResolved{}, Tor: fakeTor{st: st}, TorRequired: true})
+	want := []string{"198.51.100.4:443/tcp", "203.0.113.10:51820/udp", "203.0.113.9:9001/tcp"}
+	if strings.Join(s.Endpoints, " ") != strings.Join(want, " ") {
+		t.Fatalf("endpoints %v", s.Endpoints)
+	}
+	if s.Tor == nil || !s.Tor.Reachable || len(s.Tor.Transports) != 2 || s.Tor.Bridges[1].Addr != "" || len(s.Unavailable) != 0 {
+		t.Fatalf("tor %+v gaps %v", s.Tor, s.Unavailable)
+	}
+	if err := contracts.Validate("discover", s); err != nil {
+		t.Fatal(err)
+	}
+	// Bridges configured but UseBridges off: their addresses are not endpoints.
+	st.UseBridges = false
+	s = Discover(wgLaptop(), Options{ResolvConfPath: rc, Resolved: fakeResolved{}, Tor: fakeTor{st: st}})
+	if len(s.Endpoints) != 2 || len(s.Tor.Transports) != 0 {
+		t.Fatalf("endpoints %v tor %+v", s.Endpoints, s.Tor)
+	}
+}
+
+func TestDiscover_TorUnreachable(t *testing.T) {
+	rc := writeResolv(t, "nameserver 127.0.0.53\n")
+	down := fakeTor{err: errors.New("connection refused")}
+	s := Discover(wgLaptop(), Options{ResolvConfPath: rc, Resolved: fakeResolved{}, Tor: down, TorRequired: true})
+	if s.Tor == nil || s.Tor.Reachable || len(s.Unavailable) != 1 || s.Unavailable[0] != "torctl" {
+		t.Fatalf("tor %+v gaps %v", s.Tor, s.Unavailable)
+	}
+	s = Discover(wgLaptop(), Options{ResolvConfPath: rc, Resolved: fakeResolved{}, Tor: down})
+	if len(s.Unavailable) != 0 {
+		t.Fatalf("egress auto without tor is not a gap: %v", s.Unavailable)
+	}
 }

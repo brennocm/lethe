@@ -27,6 +27,7 @@ const (
 	SrcSockdiag SourceID = "sockdiag"
 	SrcWgctrl   SourceID = "wgctrl"
 	SrcNFTMon   SourceID = "nftmon"
+	SrcTorctl   SourceID = "torctl"
 )
 
 // Check is the static metadata every check exposes. Behaviour lives in per-check functions,

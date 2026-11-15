@@ -58,6 +58,7 @@ type Report struct {
 type Input struct {
 	Snapshot *discovery.Snapshot
 	Profile  *profile.Profile
+	Guard    string   // effective guard mode ("" = the profile's)
 	Warnings []string // profile.Load warnings
 	Manual   []Answer // nil = not asked
 }
@@ -88,15 +89,21 @@ func Run(in Input) Report {
 		raise(c.Status)
 		r.Checks = append(r.Checks, c)
 	}
-	egressType := ""
+	egressType, guardMode := "", in.Guard
 	if in.Profile != nil {
 		egressType = in.Profile.Egress.Type
+		if guardMode == "" {
+			guardMode = in.Profile.Guard.Mode
+		}
 	}
+	torInUse := checks.TorExpected(egressType, in.Snapshot)
 	add("NET-003", checks.NET003{}.Evaluate(in.Snapshot, expectV6))
 	add("NET-004", checks.NET004{}.Evaluate(in.Snapshot))
-	add("TUN-001", checks.TUN001{}.Evaluate(checks.TunnelExpect{Ifaces: TunnelIfaces(in.Snapshot), Require: checks.RequiresTunnel(egressType)}, in.Snapshot))
+	add("TUN-001", checks.TUN001{}.Evaluate(checks.TunnelExpect{Ifaces: TunnelIfaces(in.Snapshot), Require: checks.RequiresTunnel(egressType, torInUse)}, in.Snapshot))
+	add("TUN-003", checks.TUN003{}.Evaluate(torInUse, in.Snapshot))
 	add("TUN-005", checks.TUN005{}.Evaluate(in.Snapshot))
 	add("TUN-007", checks.TUN007{}.Evaluate(in.Snapshot))
+	add("TUN-008", checks.TUN008{}.Evaluate(guardMode, in.Snapshot))
 	for _, u := range in.Snapshot.Unavailable {
 		r.Warnings = append(r.Warnings, "source unavailable: "+u)
 	}

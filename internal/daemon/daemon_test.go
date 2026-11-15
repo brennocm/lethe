@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"lethe/internal/checks"
 	"lethe/internal/contracts"
 	"lethe/internal/discovery"
+	"lethe/internal/discovery/torctl"
 	"lethe/internal/engine"
 	"lethe/internal/guard"
 	"lethe/internal/ipc"
@@ -127,7 +129,37 @@ func (f *fakeNFT) has(name string) bool {
 	return ok
 }
 
+// fakeTor is a tor control port; the zero value does not answer.
+type fakeTor struct {
+	mu      sync.Mutex
+	st      torctl.Status
+	up      bool
+	changed chan struct{}
+}
+
+func (t *fakeTor) Status() (torctl.Status, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.up {
+		return torctl.Status{}, errors.New("connection refused")
+	}
+	return t.st, nil
+}
+
+func (t *fakeTor) Changed() <-chan struct{} { return t.changed }
+
+func (t *fakeTor) set(up bool, st torctl.Status) {
+	t.mu.Lock()
+	t.up, t.st = up, st
+	t.mu.Unlock()
+	select {
+	case t.changed <- struct{}{}:
+	default:
+	}
+}
+
 type fixture struct {
+	tor     *fakeTor
 	d       *Daemon
 	k       *fakeKernel
 	nft     *fakeNFT
@@ -164,7 +196,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	id, _ := b.Identity()
 	f := &fixture{k: &fakeKernel{probeV4: 3}, nft: &fakeNFT{tables: map[string]*nftables.Table{}}, clock: clk, home: home,
-		pass: pass, base: ct, prof: profile.Template, ident: id, out: &syncBuf{}}
+		pass: pass, base: ct, prof: profile.Template, ident: id, out: &syncBuf{}, tor: &fakeTor{changed: make(chan struct{}, 1)}}
 	f.sockDir = filepath.Join(home, "run")
 	var mono int64
 	f.d = New(Config{
@@ -176,6 +208,7 @@ func newFixture(t *testing.T) *fixture {
 		NFT:        func() (guard.Conn, error) { return f.nft, nil },
 		ProcRoot:   t.TempDir(),
 		Out:        f.out,
+		Tor:        func(string, string) discovery.TorSource { return f.tor },
 	})
 	return f
 }
@@ -535,4 +568,52 @@ func TestM8_EndpointUnknownAndChanged(t *testing.T) {
 	if strings.Count(got, "discovery.endpoint_changed") != 2 || !strings.Contains(got, "discovery.endpoint_unknown") {
 		t.Fatalf("journal: %s", got)
 	}
+}
+
+func healthyTor() torctl.Status {
+	return torctl.Status{Bootstrap: 100, CircuitEstablished: true, Guards: []netip.AddrPort{netip.MustParseAddrPort("203.0.113.9:9001")}}
+}
+
+func TestTUN003_TorStopsDuringSession(t *testing.T) {
+	f := newFixture(t)
+	f.prof = regexp.MustCompile(`(?m)^(\s+type:) auto`).ReplaceAll(f.prof, []byte("$1 tor"))
+	f.tor.up, f.tor.st = true, healthyTor()
+	res := f.arm(t, "off")
+	if st := f.d.Status(); st.Color != "GREEN" {
+		t.Fatalf("healthy tor: %+v", st)
+	}
+	f.tor.set(false, torctl.Status{})
+	f.d.mu.Lock()
+	f.d.refreshLocked()
+	f.d.mu.Unlock()
+	st := f.d.Status()
+	if st.Color != "RED" || len(st.Alerts) != 1 || st.Alerts[0].Check != "TUN-003" {
+		t.Fatalf("tor stopped: %+v", st)
+	}
+	_, _ = f.d.Disarm()
+	evs := f.events(t, res.Dir)
+	found := false
+	for _, e := range evs {
+		if e.Check == "TUN-003" && e.Data["reason"] == "control_unreachable" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("journal: %v", types(evs))
+	}
+}
+
+func TestTUN008_StrictArmRefusedWithSnowflake(t *testing.T) {
+	f := newFixture(t)
+	f.prof = regexp.MustCompile(`(?m)^(\s+type:) auto`).ReplaceAll(f.prof, []byte("$1 tor"))
+	st := healthyTor()
+	st.UseBridges, st.Bridges = true, []torctl.Bridge{{Transport: "snowflake", Addr: netip.MustParseAddrPort("192.0.2.3:80")}}
+	f.tor.up, f.tor.st = true, st
+	req := f.armReq("strict")
+	req.Force, req.Reason = true, "test"
+	if _, _, err := f.d.Arm(req); err == nil || !strings.Contains(err.Error(), "TUN-008") {
+		t.Fatalf("strict arm with snowflake: %v", err)
+	}
+	f.arm(t, "off")
+	_, _ = f.d.Disarm()
 }

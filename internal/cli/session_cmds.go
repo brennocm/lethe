@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"lethe/internal/buildinfo"
+	"lethe/internal/checks"
 	"lethe/internal/contracts"
 	"lethe/internal/daemon"
 	"lethe/internal/discovery"
@@ -633,6 +634,11 @@ func newPreflightCmd() *cobra.Command {
 			}
 			if r := resolved(); r != nil {
 				opt.Resolved = r
+			}
+			if checks.TorQueried(p.Egress.Type) {
+				tc := discovery.NewTorControl(p.Egress.TorControl, p.Egress.TorCookie)
+				defer func() { _ = tc.Close() }()
+				opt.Tor, opt.TorRequired = tc, checks.TorRequired(p.Egress.Type)
 			}
 			snap := discovery.Discover(discovery.NetlinkKernel{}, opt)
 			in := preflight.Input{Snapshot: &snap, Profile: p, Warnings: warns}

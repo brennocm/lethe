@@ -14,6 +14,8 @@ type Options struct {
 	ProfileEndpoints []Endpoint // profile egress.endpoints
 	ResolvConfPath   string     // default /etc/resolv.conf
 	Resolved         ResolvedClient
+	Tor              TorSource // nil = tor not queried
+	TorRequired      bool      // an unreachable tor is a visibility gap (egress.type tor, vpn+tor)
 	Now              time.Time
 }
 
@@ -79,6 +81,12 @@ func Discover(k Kernel, opt Options) Snapshot {
 		}
 	}
 	sort.Slice(s.Tunnels, func(i, j int) bool { return s.Tunnels[i].Iface < s.Tunnels[j].Iface })
+	if opt.Tor != nil {
+		var ok bool
+		if s.Tor, ok = torState(opt.Tor, endpoints); !ok && opt.TorRequired {
+			gap("torctl")
+		}
+	}
 	for e := range endpoints {
 		s.Endpoints = append(s.Endpoints, e)
 	}

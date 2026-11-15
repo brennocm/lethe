@@ -94,6 +94,26 @@ func (d *Daemon) startSensorsLocked(snap discovery.Snapshot) {
 		_ = d.pollWireGuard(ctx, s)
 	}()
 
+	if n, ok := d.tor.(interface{ Changed() <-chan struct{} }); ok {
+		ch := n.Changed()
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ch:
+				}
+				d.mu.Lock()
+				if d.sess == s {
+					d.refreshLocked()
+				}
+				d.mu.Unlock()
+			}
+		}()
+	}
+
 	s.beats[sockdiag.SourceID] = now
 	d.goSensor(s, sockdiag.SourceID, func() error { return d.scanSockets(ctx, s) })
 

@@ -43,3 +43,15 @@ open.
   them as lost so that the caller does a full refresh. Guards are the first hops of BUILT or
   EXTENDED circuits plus `entry-guards` marked `up`, resolved through `ns/id/<fp>`. A fingerprint
   missing from the consensus (552), such as a bridge, is covered by the `Bridge` lines.
+- **Tor in discovery.** Tor is queried for `egress.type` `tor`, `vpn+tor` and `auto`. An
+  unreachable control port is a visibility gap (`torctl`) only for `tor` and `vpn+tor`. With
+  `auto`, Tor is part of the session when its control port answered at arm. In that case TUN-003
+  applies, and no tunnel interface is required (TUN-001 `no_tunnel` fires only when there is
+  neither a tunnel nor Tor). Guards and, with `UseBridges 1`, the addresses on the `Bridge` lines
+  become `/tcp` endpoints. Every CIRC, STATUS_CLIENT or GUARD event triggers a discovery pass, and
+  the 5 s refresh covers the rest. The daemon builds one control client per arm from the profile.
+- **TUN-003** is a CRITICAL condition while armed (`control_unreachable`, `bootstrap`,
+  `no_circuit`), is in the preflight, and is part of the unpanic re-check.
+- **TUN-008.** `snowflake`, `meek` and `meek_lite` with the strict guard are a preflight FAIL, and
+  the daemon refuses that arm even with `--force`: the guard cannot follow those destinations, and
+  spec §7.5 leaves only observer mode for them.

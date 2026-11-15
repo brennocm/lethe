@@ -25,8 +25,11 @@ type TunnelExpect struct {
 	Require bool     // egress.type needs a tunnel interface (everything but tor)
 }
 
-// RequiresTunnel reports whether egress.type needs a tunnel interface.
-func RequiresTunnel(egressType string) bool { return egressType != "tor" }
+// RequiresTunnel reports whether egress.type needs a tunnel interface: everything but tor, and
+// "auto" only when tor is not in use.
+func RequiresTunnel(egressType string, torInUse bool) bool {
+	return egressType != "tor" && (egressType != "auto" || !torInUse)
+}
 
 // Evaluate: CRITICAL for every expected tunnel that is gone, down or without carrier, and for a
 // session that needs a tunnel and has none.

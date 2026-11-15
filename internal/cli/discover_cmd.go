@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"lethe/internal/checks"
 	"lethe/internal/contracts"
 	"lethe/internal/discovery"
 	"lethe/internal/platform"
@@ -29,6 +30,7 @@ func newDiscoverCmd() *cobra.Command {
 				return fmt.Errorf("%w: --learn needs the capture sensor (M8)", ErrNotImplemented)
 			}
 			opt := discovery.Options{Now: time.Now()}
+			torAddr, torCookie, queryTor := "auto", "auto", true
 			if profilePath != "" {
 				op, err := platform.CurrentOperator(os.Getenv)
 				if err != nil {
@@ -42,6 +44,13 @@ func newDiscoverCmd() *cobra.Command {
 				for _, e := range p.Egress.ParsedEndpoints {
 					opt.ProfileEndpoints = append(opt.ProfileEndpoints, discovery.Endpoint{Addr: e.Addr, Proto: e.Proto})
 				}
+				torAddr, torCookie, queryTor = p.Egress.TorControl, p.Egress.TorCookie, checks.TorQueried(p.Egress.Type)
+				opt.TorRequired = checks.TorRequired(p.Egress.Type)
+			}
+			if queryTor {
+				tc := discovery.NewTorControl(torAddr, torCookie)
+				defer func() { _ = tc.Close() }()
+				opt.Tor = tc
 			}
 			if r, err := discovery.NewDBusResolved(); err == nil {
 				defer func() { _ = r.Close() }()
@@ -85,6 +94,17 @@ func printSnapshot(w io.Writer, s discovery.Snapshot) error {
 		_, _ = fmt.Fprintln(w)
 	}
 	_, _ = fmt.Fprintf(w, "endpoints: %s\n", orNone(s.Endpoints))
+	if t := s.Tor; t != nil {
+		if t.Reachable {
+			_, _ = fmt.Fprintf(w, "tor %s: bootstrap %d%%, circuit %v, guards %s", t.Version, t.Bootstrap, t.CircuitEstablished, orNone(t.Guards))
+			if t.UseBridges {
+				_, _ = fmt.Fprintf(w, ", bridges %d (transports %s)", len(t.Bridges), orNone(t.Transports))
+			}
+			_, _ = fmt.Fprintln(w)
+		} else {
+			_, _ = fmt.Fprintln(w, "tor: control port not reachable")
+		}
+	}
 	if r := s.Routes.ProbeV4; r != nil {
 		_, _ = fmt.Fprintf(w, "route to %s: via %s (%s)\n", r.Dst, r.Iface, r.Class)
 	}

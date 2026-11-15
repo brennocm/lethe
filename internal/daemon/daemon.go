@@ -36,10 +36,13 @@ type Config struct {
 	ToolVersion string
 	Now         func() time.Time
 	Mono        func() int64
-	Kernel      discovery.Kernel           // nil = discovery.NetlinkKernel{}
-	Resolved    discovery.ResolvedClient   // optional (systemd-resolved over D-Bus)
-	NFT         func() (guard.Conn, error) // nil = nftables.New
-	ProcRoot    string                     // default /proc
+	Kernel      discovery.Kernel         // nil = discovery.NetlinkKernel{}
+	Resolved    discovery.ResolvedClient // optional (systemd-resolved over D-Bus)
+	// Tor builds the tor control client for a profile's egress.tor_control and tor_cookie
+	// (nil = discovery.NewTorControl).
+	Tor      func(addr, cookie string) discovery.TorSource
+	NFT      func() (guard.Conn, error) // nil = nftables.New
+	ProcRoot string                     // default /proc
 	// Sensors starts the live sensors (capture, nflog, netlink, sock_diag) when armed.
 	Sensors bool
 	// Agent, when set, is the argument list for the session agent spawned at arm (portable mode).
@@ -66,7 +69,8 @@ type Daemon struct {
 
 	mu       sync.Mutex
 	eng      *engine.Engine
-	sess     *session // nil when not armed
+	sess     *session            // nil when not armed
+	tor      discovery.TorSource // control client of the current arm (nil = tor not queried)
 	state    engine.SessionState
 	snap     discovery.Snapshot
 	subs     map[int]chan contracts.Event
@@ -104,6 +108,7 @@ type session struct {
 	endpointUnknown bool
 	nftArm          []nftmon.Table // TUN-004: third-party tables at arm (nil = not readable)
 	tx              *checks.TxTracker
+	torExpected     bool // TUN-003: the session depends on tor (checks.TorExpected at arm)
 	critical        int
 	sensors         *sensorSet
 	protected       map[int]bool // pids never killed by responses (self, agent)

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"lethe/internal/contracts"
 	"lethe/internal/discovery"
 	"lethe/internal/sensors/nftmon"
 )
@@ -41,7 +42,7 @@ func TestTUN001_Evaluate(t *testing.T) {
 	if fs := (TUN001{}).Evaluate(TunnelExpect{}, s); len(fs) != 0 {
 		t.Fatalf("tor sessions need no tunnel interface: %v", fs)
 	}
-	if RequiresTunnel("tor") || !RequiresTunnel("auto") || !RequiresTunnel("vpn+tor") {
+	if RequiresTunnel("tor", false) || !RequiresTunnel("auto", false) || RequiresTunnel("auto", true) || !RequiresTunnel("vpn+tor", true) {
 		t.Fatal("RequiresTunnel")
 	}
 }
@@ -117,5 +118,51 @@ func TestTUN005_Evaluate(t *testing.T) {
 	got := reasons((TUN005{}).Evaluate(s))
 	if len(got) != 2 || got[0] != "fwmark_exclusion" || got[1] != "uid_exclusion" {
 		t.Fatalf("got %v", got)
+	}
+}
+
+func TestTUN003_Evaluate(t *testing.T) {
+	s := snap()
+	if fs := (TUN003{}).Evaluate(false, s); len(fs) != 0 {
+		t.Fatal("tor not expected")
+	}
+	cases := []struct {
+		tor  *discovery.TorState
+		want string
+	}{
+		{nil, "control_unreachable"},
+		{&discovery.TorState{}, "control_unreachable"},
+		{&discovery.TorState{Reachable: true, Bootstrap: 85}, "bootstrap"},
+		{&discovery.TorState{Reachable: true, Bootstrap: 100}, "no_circuit"},
+	}
+	for _, c := range cases {
+		s.Tor = c.tor
+		f := onlyFinding(t, (TUN003{}).Evaluate(true, s), "TUN-003", contracts.SeverityCritical)
+		if f.Data["reason"] != c.want {
+			t.Errorf("%+v: got %v", c.tor, f.Data)
+		}
+	}
+	s.Tor = &discovery.TorState{Reachable: true, Bootstrap: 100, CircuitEstablished: true}
+	if fs := (TUN003{}).Evaluate(true, s); len(fs) != 0 {
+		t.Fatalf("healthy tor: %v", fs)
+	}
+	if !TorRequired("vpn+tor") || TorRequired("auto") || !TorQueried("auto") || TorQueried("wireguard") {
+		t.Fatal("egress.type mapping")
+	}
+}
+
+func TestTUN008_Evaluate(t *testing.T) {
+	s := snap()
+	s.Tor = &discovery.TorState{Reachable: true, UseBridges: true, Transports: []string{"obfs4", "snowflake", "webtunnel"}}
+	f := onlyFinding(t, (TUN008{}).Evaluate("strict", s), "TUN-008", contracts.SeverityCritical)
+	if f.Data["transport"] != "snowflake" {
+		t.Fatalf("%v", f.Data)
+	}
+	if fs := (TUN008{}).Evaluate("reactive", s); len(fs) != 0 {
+		t.Fatal("only the strict guard cannot follow dynamic transports")
+	}
+	s.Tor.UseBridges = false
+	if fs := (TUN008{}).Evaluate("strict", s); len(fs) != 0 {
+		t.Fatal("bridges configured but not in use")
 	}
 }

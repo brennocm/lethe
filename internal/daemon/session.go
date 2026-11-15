@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -104,14 +105,20 @@ func (d *Daemon) Arm(req ArmRequest) (ArmResult, preflight.Report, error) {
 	}
 	d.armFails = nil
 
+	d.closeTorLocked() // a new profile may name another control port
 	snap := d.discoverLocked(prof)
-	rep = preflight.Run(preflight.Input{Snapshot: &snap, Profile: prof, Warnings: warns, Manual: req.Manual})
+	rep = preflight.Run(preflight.Input{Snapshot: &snap, Profile: prof, Guard: string(mode), Warnings: warns, Manual: req.Manual})
+	if mode == engine.GuardStrict && len(checks.TUN008{}.Evaluate(string(mode), &snap)) > 0 {
+		d.closeTorLocked()
+		return ArmResult{}, rep, errParams(errors.New("TUN-008: snowflake and meek bridges cannot be followed by the strict guard; arm with --guard off (observer)"))
+	}
 	cmd := engine.CmdArm
 	if rep.Result == preflight.Fail {
 		if _, err := d.eng.Apply(engine.CmdPreflightFail); err != nil {
 			return ArmResult{}, rep, errState(err)
 		}
 		if !req.Force {
+			d.closeTorLocked()
 			return ArmResult{}, rep, errState(ErrPreflight)
 		}
 		cmd = engine.CmdArmForce
@@ -128,6 +135,7 @@ func (d *Daemon) Arm(req ArmRequest) (ArmResult, preflight.Report, error) {
 	}
 	d.sess = s
 	d.snap = snap
+	s.torExpected = checks.TorExpected(prof.Egress.Type, &snap)
 	ov := map[string]engine.Override{}
 	for id, o := range prof.Overrides {
 		e := engine.Override{Severity: contracts.Severity(o.Severity)}
@@ -325,6 +333,16 @@ func (d *Daemon) executorEnv(s *session) response.Env {
 
 func (d *Daemon) discoverLocked(prof *profile.Profile) discovery.Snapshot {
 	opt := discovery.Options{Now: d.cfg.Now(), Resolved: d.cfg.Resolved}
+	if prof != nil && checks.TorQueried(prof.Egress.Type) {
+		if d.tor == nil {
+			newTor := d.cfg.Tor
+			if newTor == nil {
+				newTor = func(addr, cookie string) discovery.TorSource { return discovery.NewTorControl(addr, cookie) }
+			}
+			d.tor = newTor(prof.Egress.TorControl, prof.Egress.TorCookie)
+		}
+		opt.Tor, opt.TorRequired = d.tor, checks.TorRequired(prof.Egress.Type)
+	}
 	if prof != nil {
 		opt.Overrides = discovery.Overrides{Egress: prof.Network.EgressIfaces, Internal: prof.Network.InternalIfaces}
 		for _, e := range prof.Egress.ParsedEndpoints {
@@ -458,6 +476,7 @@ func (d *Daemon) endLocked(reason string, keepGuard bool) {
 	d.writeReport(s)
 	s.auth.Close()
 	d.srv.SetAuthenticator(nil)
+	d.closeTorLocked()
 	d.sess = nil
 	if d.cfg.ExitAfterSession {
 		d.endOnce.Do(func() { close(d.ended) })
@@ -535,6 +554,7 @@ func (d *Daemon) Unpanic() (map[string]any, error) {
 	failed := []any{}
 	recheck := append(checks.NET003{}.Evaluate(&snap, d.sess.prof.Expect.IPv6), checks.NET004{}.Evaluate(&snap)...)
 	recheck = append(recheck, checks.TUN001{}.Evaluate(d.tunnelExpectLocked(), &snap)...)
+	recheck = append(recheck, checks.TUN003{}.Evaluate(d.sess.torExpected, &snap)...)
 	for _, f := range recheck {
 		if f.Severity == contracts.SeverityCritical {
 			failed = append(failed, f.Check)
@@ -668,4 +688,12 @@ func (d *Daemon) writeReport(s *session) {
 	if err != nil {
 		fail(err)
 	}
+}
+
+// closeTorLocked drops the tor control client (it is rebuilt from the next profile).
+func (d *Daemon) closeTorLocked() {
+	if c, ok := d.tor.(io.Closer); ok {
+		_ = c.Close()
+	}
+	d.tor = nil
 }

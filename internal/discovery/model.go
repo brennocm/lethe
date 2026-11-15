@@ -17,7 +17,8 @@ type Snapshot struct {
 	Routes         Routes    `json:"routes"`
 	DNS            DNS       `json:"dns"`
 	LegacyIPTables bool      `json:"legacy_iptables"`
-	Unavailable    []string  `json:"unavailable"` // sources that could not be read (visibility gaps)
+	Tor            *TorState `json:"tor,omitempty"` // only when the profile involves tor
+	Unavailable    []string  `json:"unavailable"`   // sources that could not be read (visibility gaps)
 }
 
 // Iface is one interface with its class.

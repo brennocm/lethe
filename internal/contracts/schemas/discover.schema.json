@@ -439,6 +439,65 @@
       "items": {
         "type": "string"
       }
+    },
+    "tor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reachable",
+        "bootstrap",
+        "circuit_established",
+        "use_bridges",
+        "transports",
+        "guards",
+        "bridges"
+      ],
+      "properties": {
+        "reachable": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string"
+        },
+        "bootstrap": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "circuit_established": {
+          "type": "boolean"
+        },
+        "use_bridges": {
+          "type": "boolean"
+        },
+        "transports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "guards": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bridges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "transport": {
+                "type": "string"
+              },
+              "addr": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

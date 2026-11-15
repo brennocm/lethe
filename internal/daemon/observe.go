@@ -102,6 +102,7 @@ func (d *Daemon) evaluateConditionsLocked(snap discovery.Snapshot) {
 	d.conditionLocked("NET-004", checks.NET004{}.Evaluate(&snap))
 	d.conditionLocked("TUN-001", checks.TUN001{}.Evaluate(d.tunnelExpectLocked(), &snap))
 	d.conditionLocked("TUN-002", checks.TUN002{}.Evaluate(d.sess.tx, &snap, d.cfg.Now()))
+	d.conditionLocked("TUN-003", checks.TUN003{}.Evaluate(d.sess.torExpected, &snap))
 	d.conditionLocked("TUN-005", checks.TUN005{}.Evaluate(&snap))
 	d.conditionLocked("TUN-007", checks.TUN007{}.Evaluate(&snap))
 	if d.sess.nftArm != nil {
@@ -129,7 +130,7 @@ func (d *Daemon) nftTables() ([]nftmon.Table, error) {
 }
 
 func (d *Daemon) tunnelExpectLocked() checks.TunnelExpect {
-	want := checks.TunnelExpect{Require: checks.RequiresTunnel(d.sess.prof.Egress.Type)}
+	want := checks.TunnelExpect{Require: checks.RequiresTunnel(d.sess.prof.Egress.Type, d.sess.torExpected)}
 	for n := range d.sess.tunnels {
 		want.Ifaces = append(want.Ifaces, n)
 	}
