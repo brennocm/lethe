@@ -1,0 +1,22 @@
+table inet lethe_panic {
+	chain output {
+		type filter hook output priority -20; policy drop;
+		oifname "lo" accept
+	}
+	chain forward {
+		type filter hook forward priority -20; policy drop;
+	}
+	chain input {
+		type filter hook input priority -20; policy drop;
+		iifname "lo" accept
+	}
+}
+
+table netdev lethe_l2 {
+	chain egress_enp0s31f6 {
+		type filter hook egress device "enp0s31f6" priority -500; policy drop;
+	}
+	chain egress_wlp2s0 {
+		type filter hook egress device "wlp2s0" priority -500; policy drop;
+	}
+}

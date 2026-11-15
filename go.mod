@@ -5,8 +5,10 @@ go 1.27.4
 require (
 	antrea.io/packet v0.0.0-20260515064457-4eaabd67893f
 	filippo.io/age v1.3.2
+	github.com/florianl/go-nflog/v2 v2.3.0
 	github.com/goccy/go-yaml v1.19.2
 	github.com/godbus/dbus/v5 v5.2.4
+	github.com/google/nftables v0.3.0
 	github.com/gopacket/gopacket v1.7.7
 	github.com/gowebpki/jcs v1.0.2
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
@@ -26,7 +28,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/native v1.1.0 // indirect
 	github.com/mdlayher/genetlink v1.3.2 // indirect
-	github.com/mdlayher/netlink v1.7.2 // indirect
+	github.com/mdlayher/netlink v1.9.1-0.20260312172110-2a932c0fc1ae // indirect
 	github.com/mdlayher/socket v0.7.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	golang.org/x/sync v0.25.0 // indirect

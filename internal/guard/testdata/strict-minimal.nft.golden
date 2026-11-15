@@ -1,0 +1,39 @@
+table inet lethe {
+	set tunnel_ifaces {
+		type ifname;
+		elements = { "wg0" };
+	}
+	set internal_ifaces {
+		type ifname;
+	}
+	set endpoints4 {
+		type ipv4_addr . inet_proto . inet_service;
+		elements = { 198.51.100.7 . udp . 51820 };
+	}
+	set endpoints6 {
+		type ipv6_addr . inet_proto . inet_service;
+	}
+	chain output {
+		type filter hook output priority -10; policy drop;
+		oifname "lo" accept
+		oifname @tunnel_ifaces accept
+		oifname @internal_ifaces accept
+		ip daddr . meta l4proto . th dport @endpoints4 accept
+		ip6 daddr . meta l4proto . th dport @endpoints6 accept
+		udp sport 68 udp dport 67 accept
+		udp sport 546 udp dport 547 accept
+		icmpv6 type nd-router-solicit accept
+		icmpv6 type nd-neighbor-solicit accept
+		icmpv6 type nd-neighbor-advert accept
+		icmpv6 type mld2-listener-report accept
+		limit rate 100/second burst 200 packets log group 4242 prefix "LETHE-BLOCK "
+		drop
+	}
+	chain forward {
+		type filter hook forward priority -10; policy accept;
+		oifname @tunnel_ifaces accept
+		oifname @internal_ifaces accept
+		limit rate 100/second burst 200 packets log group 4242 prefix "LETHE-FWD "
+		drop
+	}
+}
