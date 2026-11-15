@@ -9,6 +9,7 @@ import (
 	"lethe/internal/contracts"
 	"lethe/internal/discovery"
 	"lethe/internal/sensors/capture"
+	"lethe/internal/sensors/nflog"
 	"lethe/internal/sensors/sockdiag"
 )
 
@@ -225,5 +226,22 @@ func TestDNS001_SealedAlert(t *testing.T) {
 	plain := Finding{Check: "NET-001", Severity: contracts.SeverityCritical, Data: map[string]any{"iface": "eth0"}}
 	if ev, err := plain.SealedAlert(nil); err != nil || ev.Data["iface"] != "eth0" {
 		t.Fatal(err)
+	}
+}
+
+func TestNET002_FromBlocked(t *testing.T) {
+	b := nflog.Blocked{Prefix: "LETHE-BLOCK ", UID: 1000, OutIface: "eth0",
+		Leak: capture.Leak{Check: "DNS-001", Severity: contracts.SeverityCritical, Proto: "udp", QName: "b.example.test"}}
+	f := FromBlocked(b, contracts.Proc{})
+	if f.Check != "NET-002" || f.Severity != contracts.SeverityWarning || f.Data["uid"] != 1000 || f.Data["class"] != "DNS-001" || f.Sensitive["qname"] != "b.example.test" {
+		t.Fatalf("%+v", f)
+	}
+	if _, ok := f.Data["proc"]; ok {
+		t.Fatal("no proc without attribution")
+	}
+	b.Leak = capture.Leak{Check: "NET-001", Severity: contracts.SeverityCritical, Proto: "tcp"}
+	f = FromBlocked(b, contracts.Proc{PID: 1, Confidence: contracts.ConfidenceHigh})
+	if _, ok := f.Data["class"]; ok || f.Sensitive != nil || f.Data["proc"] == nil {
+		t.Fatalf("%+v", f)
 	}
 }
