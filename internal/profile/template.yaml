@@ -1,0 +1,74 @@
+# Perfil de operação do lethe (spec §13). Valide com: lethe profile validate <arquivo>
+version: 1
+
+operation:
+  id: "OP-0000-000"              # identificador interno da operação
+  persona: "persona"             # nome da persona usada nesta operação
+  operator: ""                   # pseudônimo do operador (opcional)
+
+egress:
+  type: auto                     # wireguard | openvpn | tor | vpn+tor | auto
+  expect_country: NL             # país esperado do IP de saída (ISO 3166-1 alfa-2)
+  expect_asn: []                 # ASNs aceitos para o IP de saída (opcional)
+  endpoints: []                  # "203.0.113.10:51820/udp" quando a descoberta não resolver
+  tor_control: auto              # auto | "127.0.0.1:9151"
+  tor_cookie: auto               # auto | caminho do control_auth_cookie
+  tor_pt_dns_allow: []           # domínios que um PT webtunnel pode resolver fora do túnel
+  allow_vpn_client_dns: false    # deixa o cliente VPN resolver o servidor fora do túnel (evite)
+
+expect:
+  timezone: UTC
+  locale: en_US.UTF-8
+  keyboard: us
+  ipv6: false
+
+network:
+  allow_lan: false               # liberar a LAN fora do túnel (evite)
+  allow_dhcp: true
+  egress_ifaces: []              # força interfaces como "de saída" (testes, casos exóticos)
+  internal_ifaces: []            # força interfaces como internas
+
+baseline:
+  file: ~/lethe/baseline.age     # gerada por: lethe baseline create
+
+guard:
+  mode: strict                   # off | reactive | strict (recomendado)
+  panic:
+    keep_tunnel: false           # true: o pânico mantém só o túnel
+    link_down: auto              # auto | always | never
+
+active_checks:
+  enabled: true
+  egress_ip:
+    interval: [180s, 600s]       # intervalo aleatório entre verificações
+    endpoints:
+      - https://check.torproject.org/api/ip
+      - https://am.i.mullvad.net/json
+
+processes:
+  deny:                          # processos que revelam identidade
+    - { match: exe, value: onedrive, severity: CRITICAL }
+    - { match: exe, value: dropbox, severity: CRITICAL }
+    - { match: exe, value: telegram-desktop, severity: WARNING }
+  kill_on_panic:                 # encerrados no pânico (match: exe | comm | cgroup)
+    - { match: exe, value: firefox }
+    - { match: exe, value: chromium }
+    - { match: exe, value: chrome }
+
+browsers:
+  persona_profiles: []           # ex.: ~/.mozilla/firefox/xxxx.persona
+
+overrides: {}                    # ex.: NET-009: { severity: WARNING, actions: [alert_tray] }
+overrides_allow_downgrade: false
+
+storage:
+  dir: ~/lethe/data              # logs, relatórios e estado (de preferência num volume cifrado)
+  log_recipients: []             # chaves públicas age da instituição; vazio = log_identity da baseline
+  sensitive_recipients: []       # quem lê campos sensíveis; vazio = os mesmos de log_recipients
+  journald: minimal              # minimal | none
+
+ui:
+  language: pt-BR                # pt-BR | en-US
+  fullscreen_alerts: true
+  sound: true
+  sound_repeat: 10s

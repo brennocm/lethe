@@ -726,7 +726,8 @@ O arquivo `baseline.age` é um JSON cifrado com **age**. Dentro dele, os valores
 - `lethe baseline create`: precisa rodar **sem túnel**, numa rede conhecida. Ela detecta túnel ativo e se recusa sem `--allow-tunnel`. Consulta o IP público em ≥ 2 endpoints (a mesma lista dos checks ativos) e mostra o que coletou antes de cifrar.
 - `lethe baseline create --manual`: nenhuma consulta de rede; o operador informa ASN, provedor, SSIDs e resolvedores.
 - `lethe baseline add-network [--manual]`: adiciona outra rede conhecida.
-- Cifra: passphrase (scrypt do age) **e**, opcionalmente, um destinatário X25519 da instituição (`--recipient`), para recuperação.
+- Cifra: passphrase (scrypt do age). O age não permite misturar passphrase com outros destinatários no mesmo arquivo; por isso, com `--recipient` (destinatário X25519 da instituição), é gerada uma **cópia de recuperação separada**, `baseline.age.recovery`, cifrada só para a instituição.
+- Entrada não interativa: `--passphrase-fd N` lê a passphrase de um descritor de arquivo (para automação e testes); sem ele, a leitura é feita no terminal, sem eco.
 
 ### 12.3 Uso
 

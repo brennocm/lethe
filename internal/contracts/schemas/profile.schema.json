@@ -1,0 +1,386 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lethe:profile",
+  "title": "lethe operation profile (spec §13)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "operation",
+    "egress",
+    "baseline",
+    "guard",
+    "storage"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "persona": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "operator": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "id",
+        "persona"
+      ]
+    },
+    "egress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "wireguard",
+            "openvpn",
+            "tor",
+            "vpn+tor",
+            "auto"
+          ]
+        },
+        "expect_country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$"
+        },
+        "expect_asn": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        },
+        "endpoints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(\\[[0-9A-Fa-f:.]+\\]|[0-9.]+):[0-9]{1,5}/(udp|tcp)$"
+          }
+        },
+        "tor_control": {
+          "type": "string",
+          "pattern": "^(auto|(\\[[0-9A-Fa-f:]+\\]|[0-9.]+):[0-9]{1,5})$"
+        },
+        "tor_cookie": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tor_pt_dns_allow": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allow_vpn_client_dns": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "expect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timezone": {
+          "type": "string"
+        },
+        "locale": {
+          "type": "string"
+        },
+        "keyboard": {
+          "type": "string"
+        },
+        "ipv6": {
+          "type": "boolean"
+        }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allow_lan": {
+          "type": "boolean"
+        },
+        "allow_dhcp": {
+          "type": "boolean"
+        },
+        "egress_ifaces": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:@-]{1,15}$"
+          }
+        },
+        "internal_ifaces": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:@-]{1,15}$"
+          }
+        }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "file"
+      ]
+    },
+    "guard": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "off",
+            "reactive",
+            "strict"
+          ]
+        },
+        "panic": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "keep_tunnel": {
+              "type": "boolean"
+            },
+            "link_down": {
+              "enum": [
+                "auto",
+                "always",
+                "never"
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "mode"
+      ]
+    },
+    "active_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "egress_ip": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "interval": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9]+(ms|s|m|h)$"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "endpoints": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^https://[^\\s]+$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "processes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "match": {
+                "enum": [
+                  "exe",
+                  "comm",
+                  "cgroup"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1
+              },
+              "severity": {
+                "enum": [
+                  "INFO",
+                  "WARNING",
+                  "CRITICAL"
+                ]
+              }
+            },
+            "required": [
+              "match",
+              "value",
+              "severity"
+            ]
+          }
+        },
+        "kill_on_panic": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "match": {
+                "enum": [
+                  "exe",
+                  "comm",
+                  "cgroup"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "match",
+              "value"
+            ]
+          }
+        }
+      }
+    },
+    "browsers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "persona_profiles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "overrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(NET|DNS|TUN|HOST|PER|SELF)-[0-9]{3}$": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "severity": {
+              "enum": [
+                "INFO",
+                "WARNING",
+                "CRITICAL"
+              ]
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "alert_tray",
+                  "alert_sound",
+                  "alert_fullscreen",
+                  "block_all",
+                  "kill_processes",
+                  "kill_offender",
+                  "link_down",
+                  "lock_screen"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "overrides_allow_downgrade": {
+      "type": "boolean"
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "log_recipients": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^age1[02-9ac-hj-np-z]{58}$"
+          }
+        },
+        "sensitive_recipients": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^age1[02-9ac-hj-np-z]{58}$"
+          }
+        },
+        "journald": {
+          "enum": [
+            "minimal",
+            "none"
+          ]
+        }
+      },
+      "required": [
+        "dir"
+      ]
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "enum": [
+            "pt-BR",
+            "en-US"
+          ]
+        },
+        "fullscreen_alerts": {
+          "type": "boolean"
+        },
+        "sound": {
+          "type": "boolean"
+        },
+        "sound_repeat": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m|h)$"
+        }
+      }
+    }
+  }
+}
