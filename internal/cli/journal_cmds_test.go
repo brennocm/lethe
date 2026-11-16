@@ -10,6 +10,7 @@ import (
 
 	"filippo.io/age"
 
+	"lethe/internal/baseline"
 	"lethe/internal/contracts"
 	"lethe/internal/journal"
 )
@@ -92,5 +93,44 @@ func TestReportCmd_Formats(t *testing.T) {
 	_ = os.WriteFile(otherFile, []byte(other.String()+"\n"), 0o600)
 	if code, _, _ := run("report", dir, "--identity", idFile, "--include-sensitive", "--sensitive-identity", otherFile); code != ExitAuth {
 		t.Fatalf("wrong sensitive identity exit %d", code)
+	}
+}
+
+// The operator opens their own report with the baseline, without a second key (spec §10.6 item 9).
+func TestM81_ReportAndVerifyWithBaseline(t *testing.T) {
+	now := time.Date(2026, 11, 15, 14, 0, 0, 0, time.UTC)
+	b, err := baseline.New(now, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ct, err := baseline.Encrypt(b, []byte("pw-certa"), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bf := filepath.Join(t.TempDir(), "baseline.age")
+	if err := os.WriteFile(bf, ct, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := b.Identity()
+	dir := filepath.Join(t.TempDir(), "sess")
+	w, err := journal.Open(journal.Config{Dir: dir, Session: "5f0c9e2a-7b1d-4c3e-9a8f-2d6b1e0c4a77", Recipients: []age.Recipient{id.Recipient()},
+		Now: func() time.Time { return now }, Mono: func() int64 { return 1 }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(nil); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, errs := runIn(t, "", []string{"pw-certa"}, "verify", dir, "--baseline", bf); code != ExitOK || !strings.HasPrefix(out, "OK") {
+		t.Fatalf("verify: %d %q %q", code, out, errs)
+	}
+	if code, out, errs := runIn(t, "", []string{"pw-certa"}, "report", dir, "--baseline", bf, "--include-sensitive"); code != ExitOK || !strings.Contains(out, "5f0c9e2a") {
+		t.Fatalf("report: %d %q %q", code, out, errs)
+	}
+	if code, _, _ := runIn(t, "", []string{"errada"}, "report", dir, "--baseline", bf); code != ExitAuth {
+		t.Fatalf("wrong passphrase exit %d", code)
+	}
+	if code, _, errs := run("report", dir); code == ExitOK || !strings.Contains(errs, "--baseline") {
+		t.Fatalf("no key: %d %q", code, errs)
 	}
 }
