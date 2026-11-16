@@ -156,9 +156,11 @@ func (b *Baseline) Values() []string {
 
 // Redact replaces every baseline value in s with "[baseline]" (defense in depth for messages).
 func (b *Baseline) Redact(s string) string {
-	for _, v := range b.Values() {
-		if len(v) >= 3 {
-			s = strings.ReplaceAll(s, v, "[baseline]")
+	matched := map[string]bool{}
+	for _, f := range b.fields() {
+		if len(f.value) >= 3 {
+			f.exact = false
+			s = replaceFold(s, f, matched)
 		}
 	}
 	return s

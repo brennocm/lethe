@@ -217,6 +217,15 @@ func (d *Daemon) appendLocked(ev contracts.Event) contracts.Event {
 	if d.sess == nil {
 		return ev
 	}
+	if ev.Type == contracts.EvCheckAlert && d.sess.base != nil {
+		// No baseline value leaves the daemon (spec §12.1): the journal, IPC and report get a
+		// scrubbed copy; responses already ran on the original. On failure the data is dropped.
+		data, err := d.sess.base.Scrub(ev.Data)
+		if err != nil {
+			data = map[string]any{"redacted": true}
+		}
+		ev.Data = data
+	}
 	out, err := d.sess.journal.Append(ev)
 	if err != nil {
 		// A journal that cannot write is a visibility loss: say so on the terminal (no values).

@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/netip"
 	"os"
@@ -646,5 +647,43 @@ func TestM8_SessionsSymlinkRefused(t *testing.T) {
 	entries, _ := os.ReadDir(target)
 	if fi, _ := os.Stat(target); fi.Mode().Perm() != 0o755 || len(entries) != 0 {
 		t.Fatalf("target touched: mode %v, %d entries", fi.Mode().Perm(), len(entries))
+	}
+}
+
+// A leak to a baseline resolver (the home router) and an exe under the operator's home must reach
+// the journal by field name only (spec §12.1).
+func TestM8_AlertDataScrubbedOfBaselineValues(t *testing.T) {
+	f := newFixture(t)
+	b, err := baseline.New(f.clock.T, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Username = "operador"
+	b.Networks = []baseline.Network{{Name: "casa", Resolvers: []string{"192.168.1.1"}}}
+	if f.base, err = baseline.Encrypt(b, f.pass, 10); err != nil {
+		t.Fatal(err)
+	}
+	if f.ident, err = b.Identity(); err != nil {
+		t.Fatal(err)
+	}
+	res := f.arm(t, "off")
+	f.d.deliver(f.d.sess, checks.Finding{Check: "DNS-001", Severity: contracts.SeverityCritical, Data: map[string]any{
+		"iface": "eth0", "proto": "udp", "dst": "192.168.1.1", "dport": 53,
+		"proc": contracts.Proc{PID: 42, Exe: "/home/operador/bin/dig", Confidence: contracts.ConfidenceHigh},
+	}})
+	_, _ = f.d.Disarm()
+	found := false
+	for _, ev := range f.events(t, res.Dir) {
+		found = found || ev.Check == "DNS-001"
+		raw, _ := json.Marshal(ev)
+		if strings.Contains(string(raw), "192.168.1.1") || strings.Contains(string(raw), "operador") {
+			t.Fatalf("baseline value in the journal: %s", raw)
+		}
+		if ev.Check == "DNS-001" && ev.Data["matched"] != "baseline.networks[0].resolvers,baseline.username" {
+			t.Fatalf("matched = %v", ev.Data["matched"])
+		}
+	}
+	if !found {
+		t.Fatal("the alert was not journaled")
 	}
 }
