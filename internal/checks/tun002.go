@@ -39,9 +39,19 @@ func NewTxTracker() *TxTracker {
 // 180 s (or never happened): packets go into a tunnel that no longer answers.
 func (TUN002) Evaluate(tr *TxTracker, s *discovery.Snapshot, now time.Time) []Finding {
 	var out []Finding
+	seenNow := map[string]bool{}
+	defer func() { // forget peers that are gone (endpoint changes would otherwise pile up)
+		for k := range tr.last {
+			if !seenNow[k] {
+				delete(tr.last, k)
+				delete(tr.grew, k)
+			}
+		}
+	}()
 	for _, t := range s.Tunnels {
 		for _, p := range t.Peers {
 			key := t.Iface + "|" + p.Endpoint
+			seenNow[key] = true
 			prev, seen := tr.last[key]
 			if seen && p.TxBytes > prev {
 				tr.grew[key] = now

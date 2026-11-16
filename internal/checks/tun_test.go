@@ -1,6 +1,7 @@
 package checks
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -164,5 +165,18 @@ func TestTUN008_Evaluate(t *testing.T) {
 	s.Tor.UseBridges = false
 	if fs := (TUN008{}).Evaluate("strict", s); len(fs) != 0 {
 		t.Fatal("bridges configured but not in use")
+	}
+}
+
+func TestTUN002_TrackerForgetsGonePeers(t *testing.T) {
+	now := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	s := snap()
+	tr := NewTxTracker()
+	for i := range 50 {
+		s.Tunnels[0].Peers = []discovery.WGPeer{{Endpoint: fmt.Sprintf("198.51.100.%d:51820", i), TxBytes: int64(i)}}
+		(TUN002{}).Evaluate(tr, s, now)
+	}
+	if len(tr.last) != 1 || len(tr.grew) > 1 {
+		t.Fatalf("tracker keeps %d peers", len(tr.last))
 	}
 }
