@@ -5,12 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"time"
 
 	"lethe/internal/contracts"
 	"lethe/internal/ipc"
 	"lethe/internal/privsep"
+
+	"golang.org/x/sys/unix"
 )
 
 // Status is status.get and `lethe status --json` (schema: status).
@@ -239,10 +243,29 @@ type agentProc struct {
 	proc *os.Process
 }
 
+// isAgent tells whether the peer pid is the session agent. The agent is lethe itself run as the
+// operator, so its executable must be the daemon's own file. In portable mode it must also be the
+// child the daemon spawned and still alive; in service mode (no spawned agent, a user unit) the
+// executable is the identity. The agent is a low-trust source either way (principle 9): a copy of
+// lethe started by the operator's other processes gains nothing beyond what the agent may do.
 func (d *Daemon) isAgent(pid int) bool {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.agent != nil && d.agent.pid == pid
+	a, spawned := d.agent, d.cfg.Agent != nil
+	d.mu.Unlock()
+	if spawned && (a == nil || a.pid != pid) {
+		return false
+	}
+	return sameExe(d.cfg.ProcRoot, pid)
+}
+
+// sameExe reports whether /proc/<pid>/exe is the same file as the running daemon.
+func sameExe(procRoot string, pid int) bool {
+	peer, err := os.Stat(filepath.Join(procRoot, strconv.Itoa(pid), "exe"))
+	if err != nil {
+		return false
+	}
+	self, err := os.Stat("/proc/self/exe")
+	return err == nil && os.SameFile(peer, self)
 }
 
 // spawnAgentLocked starts the agent as the operator (setuid before the capabilities drop).
@@ -262,12 +285,20 @@ func (d *Daemon) spawnAgentLocked() error {
 		d.sess.protected[a.pid] = true
 	}
 	go func() {
-		_ = cmd.Wait()
+		// Wait for the exit without reaping it: while the zombie exists, its PID cannot be reused,
+		// so the agent role and the kill protection go away before another process can take it.
+		var info unix.Siginfo
+		for unix.Waitid(unix.P_PID, a.pid, &info, unix.WEXITED|unix.WNOWAIT, nil) == unix.EINTR {
+		}
 		d.mu.Lock()
 		if d.agent == a {
 			d.agent = nil
 		}
+		if d.sess != nil {
+			delete(d.sess.protected, a.pid)
+		}
 		d.mu.Unlock()
+		_ = cmd.Wait()
 	}()
 	return nil
 }

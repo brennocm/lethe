@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -685,5 +686,46 @@ func TestM8_AlertDataScrubbedOfBaselineValues(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("the alert was not journaled")
+	}
+}
+
+// The agent role follows the executable, not only the PID: a process of the operator that is not
+// lethe never becomes the agent, even if it inherits a PID the daemon once knew.
+func TestSELF003_AgentIdentifiedByExecutable(t *testing.T) {
+	f := newFixture(t)
+	proc := f.d.cfg.ProcRoot
+	link := func(pid int, target string) {
+		dir := filepath.Join(proc, strconv.Itoa(pid))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(dir, "exe")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	self, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	link(4100, self)
+	link(4200, "/bin/sh")
+
+	// service mode: no spawned agent, the executable is the identity
+	if !f.d.isAgent(4100) || f.d.isAgent(4200) || f.d.isAgent(4300) {
+		t.Fatal("service mode: identity must follow the executable")
+	}
+	// portable mode: only the spawned child, and only with the daemon's executable
+	f.d.cfg.Agent = []string{"agent"}
+	f.d.agent = &agentProc{pid: 4200}
+	if f.d.isAgent(4200) || f.d.isAgent(4100) {
+		t.Fatal("portable mode: a different executable or PID must not be the agent")
+	}
+	f.d.agent = &agentProc{pid: 4100}
+	if !f.d.isAgent(4100) {
+		t.Fatal("portable mode: the spawned lethe child is the agent")
+	}
+	f.d.agent = nil
+	if f.d.isAgent(4100) {
+		t.Fatal("portable mode: a dead agent's PID must not keep the role")
 	}
 }
