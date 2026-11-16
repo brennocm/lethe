@@ -636,7 +636,7 @@ func newPreflightCmd() *cobra.Command {
 				opt.Resolved = r
 			}
 			if checks.TorQueried(p.Egress.Type) {
-				tc := discovery.NewTorControl(p.Egress.TorControl, p.Egress.TorCookie)
+				tc := discovery.NewTorControl(p.Egress.TorControl, p.Egress.TorCookie, op.UID)
 				defer func() { _ = tc.Close() }()
 				opt.Tor, opt.TorRequired = tc, checks.TorRequired(p.Egress.Type)
 			}

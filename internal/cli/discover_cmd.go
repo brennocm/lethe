@@ -31,11 +31,11 @@ func newDiscoverCmd() *cobra.Command {
 			}
 			opt := discovery.Options{Now: time.Now()}
 			torAddr, torCookie, queryTor := "auto", "auto", true
+			op, err := platform.CurrentOperator(os.Getenv)
+			if err != nil {
+				return err
+			}
 			if profilePath != "" {
-				op, err := platform.CurrentOperator(os.Getenv)
-				if err != nil {
-					return err
-				}
 				p, _, err := profile.Load(profilePath, op.Home)
 				if err != nil {
 					return err
@@ -48,7 +48,7 @@ func newDiscoverCmd() *cobra.Command {
 				opt.TorRequired = checks.TorRequired(p.Egress.Type)
 			}
 			if queryTor {
-				tc := discovery.NewTorControl(torAddr, torCookie)
+				tc := discovery.NewTorControl(torAddr, torCookie, op.UID)
 				defer func() { _ = tc.Close() }()
 				opt.Tor = tc
 			}

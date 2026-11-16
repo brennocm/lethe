@@ -32,12 +32,18 @@ open.
   handles, so traffic alone never looks like a change. A table that is added, changed or removed is
   WARNING. A removed table with a drop (policy, drop or reject) in an output hook is CRITICAL. Only
   table names reach the events.
-- **Tor control client** (`internal/discovery/torctl`). Authentication is NULL or SAFECOOKIE only.
-  Plain COOKIE hands the cookie to whatever listens on the port, and the profile has no password
-  field, so neither is used. With `tor_cookie: auto` the cookie path comes from `PROTOCOLINFO`;
-  that is safe only because SAFECOOKIE checks the server's hash before sending anything derived
-  from the cookie. The cookie must be exactly 32 bytes, and it is read into locked memory and
-  wiped afterwards. `tor_control` must be `auto` or a loopback address, both in the profile and
+- **Tor control client** (`internal/discovery/torctl`). Whatever answers on the control port
+  decides which addresses the strict guard and the capture filter let through, and any local user
+  can listen on 127.0.0.1:9051 while tor is not running. Authentication is therefore SAFECOOKIE
+  only. NULL would believe whoever holds the port, plain COOKIE hands the cookie over, and the
+  profile has no password field. Before `PROTOCOLINFO`, sock_diag and `/proc` identify the process
+  holding the server end of the connection. Its executable must be named `tor`, and it must run as
+  the operator (Tor Browser) or as a system user (uid ≤ 999); otherwise nothing is sent. The cookie
+  (from the profile, or from `PROTOCOLINFO` with `tor_cookie: auto`) must be a regular file owned
+  by that same uid, not writable by group or others, and exactly 32 bytes. Only then is it read,
+  into locked memory that is wiped afterwards. A server that wrote its own cookie therefore fails
+  unless it is a trusted tor. SAFECOOKIE then checks the server's hash before sending anything
+  derived from the cookie. `tor_control` must be `auto` or a loopback address, both in the profile and
   in `Dial`, because a remote control port would itself be traffic outside the tunnel. Lines are
   capped at 64 KiB and replies at 4 MiB. Events go to a 256-entry buffer, and an overflow marks
   them as lost so that the caller does a full refresh. Guards are the first hops of BUILT or
@@ -50,6 +56,10 @@ open.
   neither a tunnel nor Tor). Guards and, with `UseBridges 1`, the addresses on the `Bridge` lines
   become `/tcp` endpoints. Every CIRC, STATUS_CLIENT or GUARD event triggers a discovery pass, and
   the 5 s refresh covers the rest. The daemon builds one control client per arm from the profile.
+  Discovery passes run under the daemon lock, and a slow control port must not delay panic
+  (≤ 200 ms). The daemon therefore queries tor synchronously only at arm. Later passes read a cache
+  that is refreshed in the background (single flight, on every pass and on tor events), and a
+  changed answer triggers another pass. A stop is seen one refresh later.
 - **TUN-003** is a CRITICAL condition while armed (`control_unreachable`, `bootstrap`,
   `no_circuit`), is in the preflight, and is part of the unpanic re-check.
 - **TUN-008.** `snowflake`, `meek` and `meek_lite` with the strict guard are a preflight FAIL, and

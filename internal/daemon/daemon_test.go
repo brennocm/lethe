@@ -583,10 +583,17 @@ func TestTUN003_TorStopsDuringSession(t *testing.T) {
 		t.Fatalf("healthy tor: %+v", st)
 	}
 	f.tor.set(false, torctl.Status{})
-	f.d.mu.Lock()
-	f.d.refreshLocked()
-	f.d.mu.Unlock()
-	st := f.d.Status()
+	// Tor is read from a cache refreshed in the background (discovery never waits on the control
+	// port under d.mu): the stop shows up on a pass after the refresh.
+	var st Status
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		f.d.mu.Lock()
+		f.d.refreshLocked()
+		f.d.mu.Unlock()
+		if st = f.d.Status(); st.Color == "RED" {
+			break
+		}
+	}
 	if st.Color != "RED" || len(st.Alerts) != 1 || st.Alerts[0].Check != "TUN-003" {
 		t.Fatalf("tor stopped: %+v", st)
 	}

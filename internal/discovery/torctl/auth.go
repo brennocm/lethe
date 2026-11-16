@@ -22,9 +22,10 @@ const (
 	clientKey = "Tor safe cookie authentication controller-to-server hash"
 )
 
-// ErrNoUsableAuth: the server offers no method lethe accepts. Plain COOKIE (which hands the cookie
-// to whoever listens on the port) and passwords are not used (ADR 0007).
-var ErrNoUsableAuth = errors.New("tor control: no supported authentication method (want SAFECOOKIE or NULL)")
+// ErrNoUsableAuth: the server offers no method lethe accepts. NULL (anyone holding the port would
+// be believed), plain COOKIE (hands the cookie to whoever listens) and passwords are not used
+// (ADR 0007).
+var ErrNoUsableAuth = errors.New("tor control: no supported authentication method (want SAFECOOKIE)")
 
 // ErrServerHash: the server could not prove it knows the cookie. Nothing derived from the cookie
 // was sent.
@@ -62,10 +63,12 @@ func (c *Conn) ProtocolInfo(ctx context.Context) (ProtocolInfo, error) {
 	return pi, nil
 }
 
-// Authenticate runs PROTOCOLINFO and then NULL or SAFECOOKIE authentication. cookiePath "auto"
-// (or "") uses the COOKIEFILE the server announces; that path is safe to follow only because
-// SAFECOOKIE never reveals the file to a server that does not already know it.
-func (c *Conn) Authenticate(ctx context.Context, cookiePath string) error {
+// Authenticate runs PROTOCOLINFO and SAFECOOKIE authentication. cookiePath "auto" (or "") uses the
+// COOKIEFILE the server announces. SAFECOOKIE never reveals the file to a server that does not
+// already know it, but a server that wrote its own cookie would pass: the file must therefore be
+// owned by cookieUID (the uid holding the control port, checked by the caller) and must not be
+// writable by group or others.
+func (c *Conn) Authenticate(ctx context.Context, cookiePath string, cookieUID uint32) error {
 	pi, err := c.ProtocolInfo(ctx)
 	if err != nil {
 		return err
@@ -75,8 +78,6 @@ func (c *Conn) Authenticate(ctx context.Context, cookiePath string) error {
 		has[m] = true
 	}
 	switch {
-	case has["NULL"]:
-		return c.ok(ctx, "AUTHENTICATE")
 	case has["SAFECOOKIE"]:
 		if cookiePath == "" || cookiePath == "auto" {
 			cookiePath = pi.CookieFile
@@ -84,7 +85,7 @@ func (c *Conn) Authenticate(ctx context.Context, cookiePath string) error {
 		if cookiePath == "" {
 			return errors.New("tor control: SAFECOOKIE without a cookie file")
 		}
-		cookie, err := readCookie(cookiePath)
+		cookie, err := readCookie(cookiePath, cookieUID)
 		if err != nil {
 			return err
 		}
@@ -140,13 +141,24 @@ func mac(key string, msg []byte) []byte {
 	return h.Sum(nil)
 }
 
-// readCookie reads the 32-byte cookie into locked memory. A file of any other size is refused.
-func readCookie(path string) ([]byte, error) {
+// ErrCookieOwner: the cookie file is not owned by the control port's uid, or others may write it.
+var ErrCookieOwner = errors.New("tor control: cookie file not owned by the control port's user, or writable by others")
+
+// readCookie reads the 32-byte cookie into locked memory. A file of any other size, not regular,
+// not owned by uid or writable by group/others is refused.
+func readCookie(path string, uid uint32) ([]byte, error) {
 	f, err := os.Open(path) // #nosec G304 -- profile or PROTOCOLINFO path; see Authenticate
 	if err != nil {
 		return nil, fmt.Errorf("tor control: cookie: %w", err)
 	}
 	defer func() { _ = f.Close() }()
+	var st unix.Stat_t
+	if err := unix.Fstat(int(f.Fd()), &st); err != nil {
+		return nil, fmt.Errorf("tor control: cookie: %w", err)
+	}
+	if st.Mode&unix.S_IFMT != unix.S_IFREG || st.Uid != uid || st.Mode&0o022 != 0 {
+		return nil, ErrCookieOwner
+	}
 	buf := make([]byte, cookieLen+1)
 	_ = unix.Mlock(buf) // best effort (§19.3)
 	n, err := io.ReadFull(f, buf)

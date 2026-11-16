@@ -337,9 +337,11 @@ func (d *Daemon) discoverLocked(prof *profile.Profile) discovery.Snapshot {
 		if d.tor == nil {
 			newTor := d.cfg.Tor
 			if newTor == nil {
-				newTor = func(addr, cookie string) discovery.TorSource { return discovery.NewTorControl(addr, cookie) }
+				newTor = func(addr, cookie string) discovery.TorSource {
+					return discovery.NewTorControl(addr, cookie, d.cfg.Operator.UID)
+				}
 			}
-			d.tor = newTor(prof.Egress.TorControl, prof.Egress.TorCookie)
+			d.tor = newAsyncTor(newTor(prof.Egress.TorControl, prof.Egress.TorCookie))
 		}
 		opt.Tor, opt.TorRequired = d.tor, checks.TorRequired(prof.Egress.Type)
 	}

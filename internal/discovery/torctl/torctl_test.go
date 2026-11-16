@@ -136,7 +136,7 @@ func TestTorctl_SafeCookie(t *testing.T) {
 	path, cookie := writeCookie(t, cookieLen)
 	var authed bool
 	c, _ := newFake(t, safeCookieServer(path, cookie, false, &authed))
-	if err := c.Authenticate(ctx(t), "auto"); err != nil || !authed {
+	if err := c.Authenticate(ctx(t), "auto", me()); err != nil || !authed {
 		t.Fatalf("auth: %v authed=%v", err, authed)
 	}
 }
@@ -145,7 +145,7 @@ func TestTorctl_SafeCookieServerMustProveCookie(t *testing.T) {
 	path, cookie := writeCookie(t, cookieLen)
 	var authed bool
 	c, f := newFake(t, safeCookieServer(path, cookie, true, &authed))
-	if err := c.Authenticate(ctx(t), path); !errors.Is(err, ErrServerHash) {
+	if err := c.Authenticate(ctx(t), path, me()); !errors.Is(err, ErrServerHash) {
 		t.Fatalf("got %v", err)
 	}
 	close(f.gotCmds)
@@ -160,33 +160,48 @@ func TestTorctl_CookieSizeAndMethods(t *testing.T) {
 	path, cookie := writeCookie(t, cookieLen+1)
 	var authed bool
 	c, _ := newFake(t, safeCookieServer(path, cookie, false, &authed))
-	if err := c.Authenticate(ctx(t), path); err == nil || !strings.Contains(err.Error(), "32 bytes") {
+	if err := c.Authenticate(ctx(t), path, me()); err == nil || !strings.Contains(err.Error(), "32 bytes") {
 		t.Fatalf("33-byte cookie: %v", err)
 	}
 	for _, methods := range []string{"COOKIE", "HASHEDPASSWORD", ""} {
 		c, _ := newFake(t, func(string) string {
 			return "250-PROTOCOLINFO 1\r\n250-AUTH METHODS=" + methods + "\r\n250 OK\r\n"
 		})
-		if err := c.Authenticate(ctx(t), "auto"); !errors.Is(err, ErrNoUsableAuth) {
+		if err := c.Authenticate(ctx(t), "auto", me()); !errors.Is(err, ErrNoUsableAuth) {
 			t.Errorf("methods %q: %v", methods, err)
 		}
 	}
 }
 
-func TestTorctl_NullAuth(t *testing.T) {
+func TestTorctl_NullAuthRefused(t *testing.T) {
 	c, _ := newFake(t, func(cmd string) string {
 		if cmd == "PROTOCOLINFO 1" {
 			return "250-PROTOCOLINFO 1\r\n250-AUTH METHODS=NULL\r\n250 OK\r\n"
 		}
-		if cmd == "AUTHENTICATE" {
-			return "250 OK\r\n"
-		}
-		return "510 x\r\n"
+		return "250 OK\r\n"
 	})
-	if err := c.Authenticate(ctx(t), "auto"); err != nil {
-		t.Fatal(err)
+	if err := c.Authenticate(ctx(t), "auto", me()); !errors.Is(err, ErrNoUsableAuth) {
+		t.Fatalf("NULL auth would trust whoever holds the port: %v", err)
 	}
 }
+
+func TestTorctl_CookieOwnership(t *testing.T) {
+	path, cookie := writeCookie(t, cookieLen)
+	var authed bool
+	c, _ := newFake(t, safeCookieServer(path, cookie, false, &authed))
+	if err := c.Authenticate(ctx(t), path, me()+1); !errors.Is(err, ErrCookieOwner) {
+		t.Fatalf("cookie of another uid: %v", err)
+	}
+	if err := os.Chmod(path, 0o620); err != nil {
+		t.Fatal(err)
+	}
+	c, _ = newFake(t, safeCookieServer(path, cookie, false, &authed))
+	if err := c.Authenticate(ctx(t), path, me()); !errors.Is(err, ErrCookieOwner) || authed {
+		t.Fatalf("group-writable cookie: %v", err)
+	}
+}
+
+func me() uint32 { return uint32(os.Getuid()) }
 
 const (
 	fpA = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"

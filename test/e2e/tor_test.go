@@ -55,7 +55,7 @@ Log notice stderr
 		}
 	})
 
-	tc := discovery.NewTorControl("127.0.0.1:9051", cookie)
+	tc := discovery.NewTorControl("127.0.0.1:9051", cookie, 0)
 	defer func() { _ = tc.Close() }()
 	discover := func() discovery.Snapshot {
 		var s discovery.Snapshot

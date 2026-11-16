@@ -136,6 +136,10 @@ func (c *Conn) Err() error {
 // Close ends the connection.
 func (c *Conn) Close() error { return c.c.Close() }
 
+// LocalAddr and RemoteAddr are the connection's endpoints (the caller identifies the server).
+func (c *Conn) LocalAddr() net.Addr  { return c.c.LocalAddr() }
+func (c *Conn) RemoteAddr() net.Addr { return c.c.RemoteAddr() }
+
 func (c *Conn) fail(err error) {
 	c.errMu.Lock()
 	if c.err == nil {
