@@ -5,8 +5,14 @@ package response
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"lethe/internal/contracts"
 	"lethe/internal/engine"
@@ -48,9 +54,10 @@ type Env struct {
 	Egress      func() []string
 	LinkDown    func(iface string) error
 	LockScreen  func() error
-	Kill        func(pid int) error // default: SIGKILL
-	Protected   map[int]bool        // never killed (self, agent, pid 1)
-	Now         func() time.Time
+	// Kill sends SIGKILL to pid if it still runs exe ("" = no check). Default: KillVerified.
+	Kill      func(pid int, exe string) error
+	Protected map[int]bool // never killed (self, agent, pid 1)
+	Now       func() time.Time
 	// LinkDownMode is guard.panic.link_down: auto | always | never.
 	LinkDownMode string
 }
@@ -61,7 +68,11 @@ type Executor struct{ env Env }
 // New builds an executor.
 func New(env Env) *Executor {
 	if env.Kill == nil {
-		env.Kill = func(pid int) error { return syscall.Kill(pid, syscall.SIGKILL) }
+		procRoot := env.ProcRoot
+		if procRoot == "" {
+			procRoot = "/proc"
+		}
+		env.Kill = func(pid int, exe string) error { return KillVerified(procRoot, pid, exe) }
 	}
 	if env.Now == nil {
 		env.Now = time.Now
@@ -142,7 +153,7 @@ func (x *Executor) killMatching() (int, error) {
 		}
 		for _, m := range x.env.KillOnPanic {
 			if m.Matches(p) {
-				if err := x.env.Kill(p.PID); err != nil && !errors.Is(err, syscall.ESRCH) {
+				if err := x.env.Kill(p.PID, p.Exe); err != nil && !errors.Is(err, syscall.ESRCH) && !errors.Is(err, ErrPIDReused) {
 					errs = append(errs, fmt.Errorf("pid %d: %w", p.PID, err))
 				} else {
 					n++
@@ -170,7 +181,7 @@ func (x *Executor) killOffender(ev contracts.Event) (int, error) {
 	if x.env.Protected[p.PID] {
 		return 0, fmt.Errorf("pid %d is protected", p.PID)
 	}
-	if err := x.env.Kill(p.PID); err != nil {
+	if err := x.env.Kill(p.PID, p.Exe); err != nil {
 		return 0, err
 	}
 	return 1, nil
@@ -190,4 +201,28 @@ func (x *Executor) linkDown() (int, error) {
 		n++
 	}
 	return n, errors.Join(errs...)
+}
+
+// ErrPIDReused: the pid now runs another executable than the one attributed or matched.
+var ErrPIDReused = errors.New("pid now belongs to another executable; not killed")
+
+// KillVerified kills pid only if it still runs exe. Between the attribution (or the /proc scan)
+// and the kill the process may have exited and its pid been reused; the root daemon must not
+// SIGKILL a bystander. A pidfd pins the process, so the check and the signal see the same one.
+func KillVerified(procRoot string, pid int, exe string) error {
+	fd, err := unix.PidfdOpen(pid, 0)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = unix.Close(fd) }()
+	if exe != "" {
+		cur, err := os.Readlink(filepath.Join(procRoot, strconv.Itoa(pid), "exe"))
+		if err != nil {
+			return err
+		}
+		if strings.TrimSuffix(cur, " (deleted)") != strings.TrimSuffix(exe, " (deleted)") {
+			return ErrPIDReused
+		}
+	}
+	return unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0)
 }

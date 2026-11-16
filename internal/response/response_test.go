@@ -2,7 +2,9 @@ package response
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"syscall"
@@ -93,7 +95,7 @@ func TestRESP_KillProcesses(t *testing.T) {
 	var killed []int
 	x := New(Env{ProcRoot: root, KillOnPanic: []procscan.Matcher{{Match: "exe", Value: "firefox"}, {Match: "exe", Value: "chromium"}, {Match: "exe", Value: "systemd"}},
 		Protected: map[int]bool{103: true},
-		Kill: func(pid int) error {
+		Kill: func(pid int, _ string) error {
 			if pid == 102 {
 				return syscall.ESRCH // already gone: not an error
 			}
@@ -104,7 +106,7 @@ func TestRESP_KillProcesses(t *testing.T) {
 	if !r.OK || r.Count != 2 || len(killed) != 1 || killed[0] != 100 {
 		t.Fatalf("%+v killed=%v", r, killed)
 	}
-	x.env.Kill = func(int) error { return syscall.EPERM }
+	x.env.Kill = func(int, string) error { return syscall.EPERM }
 	if r := x.Run(engine.ActKillProcesses, contracts.Event{}); r.OK {
 		t.Fatal("EPERM must fail")
 	}
@@ -115,7 +117,7 @@ func TestRESP_KillProcesses(t *testing.T) {
 
 func TestRESP_KillOffenderOnlyWithHighConfidence(t *testing.T) {
 	var killed []int
-	x := New(Env{Kill: func(pid int) error { killed = append(killed, pid); return nil }, Protected: map[int]bool{77: true}})
+	x := New(Env{Kill: func(pid int, _ string) error { killed = append(killed, pid); return nil }, Protected: map[int]bool{77: true}})
 	ev := func(p contracts.Proc) contracts.Event { return contracts.Event{Data: map[string]any{"proc": p}} }
 	if r := x.Run(engine.ActKillOffender, ev(contracts.Proc{PID: 50, Confidence: contracts.ConfidenceLow})); r.OK {
 		t.Fatal("low confidence must not kill")
@@ -174,5 +176,29 @@ func TestRESP_LockScreenAndDelegation(t *testing.T) {
 	}})
 	if r := x.Run(engine.ActLinkDown, contracts.Event{}); r.OK || r.Count != 1 {
 		t.Fatalf("%+v", r)
+	}
+}
+
+// KillVerified refuses a pid whose executable is not the one attributed (pid reuse) and kills it
+// when it matches.
+func TestResponse_KillVerifiedChecksExe(t *testing.T) {
+	cmd := exec.Command("sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Skip("no sleep binary")
+	}
+	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+	pid := cmd.Process.Pid
+	if err := KillVerified("/proc", pid, "/usr/bin/not-sleep"); !errors.Is(err, ErrPIDReused) {
+		t.Fatalf("mismatched exe: %v", err)
+	}
+	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := KillVerified("/proc", pid, exe); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Wait(); err == nil {
+		t.Fatal("process survived")
 	}
 }
