@@ -144,10 +144,19 @@ func ruleSkuidEndpointsAccept(f l3, uid uint32, s *Set, v6 bool) Rule {
 	return r
 }
 
-func ruleCgroupAccept(id uint64, level uint32, path string) Rule {
-	return Rule{Text: fmt.Sprintf("socket cgroupv2 level %d %q accept # id %d", level, path, id), Exprs: []expr.Any{
-		&expr.Socket{Key: expr.SocketKeyCgroupv2, Level: level, Register: reg1},
-		&expr.Cmp{Op: expr.CmpOpEq, Register: reg1, Data: binaryutil.NativeEndian.PutUint64(id)},
+// ruleCgroupDNSAccept lets the VPN client's cgroup resolve names outside the tunnel (port 53 only).
+func ruleCgroupDNSAccept(c Cgroup, proto uint8) Rule {
+	name := "udp"
+	if proto == unix.IPPROTO_TCP {
+		name = "tcp"
+	}
+	return Rule{Text: fmt.Sprintf("socket cgroupv2 level %d %q meta l4proto %s th dport 53 accept # id %d", c.Level, c.Path, name, c.ID), Exprs: []expr.Any{
+		&expr.Socket{Key: expr.SocketKeyCgroupv2, Level: c.Level, Register: reg1},
+		&expr.Cmp{Op: expr.CmpOpEq, Register: reg1, Data: binaryutil.NativeEndian.PutUint64(c.ID)},
+		&expr.Meta{Key: expr.MetaKeyL4PROTO, Register: reg1},
+		&expr.Cmp{Op: expr.CmpOpEq, Register: reg1, Data: []byte{proto}},
+		&expr.Payload{DestRegister: reg1, Base: expr.PayloadBaseTransportHeader, Offset: 2, Len: 2},
+		&expr.Cmp{Op: expr.CmpOpEq, Register: reg1, Data: binaryutil.BigEndian.PutUint16(53)},
 		accept(),
 	}}
 }

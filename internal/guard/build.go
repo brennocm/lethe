@@ -18,10 +18,17 @@ type Endpoint struct {
 }
 
 // Cgroup is the VPN client's cgroup (spec §11.2). ID changes when the service restarts.
+//
+// The cgroup is never accepted as a whole: with NetworkManager the client runs in
+// NetworkManager.service, whose own traffic (the connectivity check, for one) would then leave
+// outside the tunnel. The client reaches its servers through the endpoint sets like everyone
+// else (learned through NFLOG, spec §7.4); the cgroup only opens DNS, and only with
+// egress.allow_vpn_client_dns.
 type Cgroup struct {
 	Path  string
 	Level uint32
 	ID    uint64
+	DNS   bool // egress.allow_vpn_client_dns
 }
 
 // Config is everything the generator needs (from discovery and the profile).
@@ -141,8 +148,8 @@ func allowRules(f l3, cfg Config, sets map[string]*Set, withLAN bool) []Rule {
 	if cfg.WGMark != 0 {
 		rs = append(rs, ruleMarkAccept(cfg.WGMark))
 	}
-	if cfg.VPN != nil && f.family == nftables.TableFamilyINet {
-		rs = append(rs, ruleCgroupAccept(cfg.VPN.ID, cfg.VPN.Level, cfg.VPN.Path))
+	if cfg.VPN != nil && cfg.VPN.DNS && f.family == nftables.TableFamilyINet {
+		rs = append(rs, ruleCgroupDNSAccept(*cfg.VPN, unix.IPPROTO_UDP), ruleCgroupDNSAccept(*cfg.VPN, unix.IPPROTO_TCP))
 	}
 	if cfg.TorUID != nil {
 		rs = append(rs, ruleSkuidEndpointsAccept(f, *cfg.TorUID, sets["endpoints4"], false),

@@ -33,7 +33,7 @@ func fullConfig() Config {
 		},
 		LAN:     []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24"), netip.MustParsePrefix("fd00:1::/64")},
 		WGMark:  0xca6c,
-		VPN:     &Cgroup{Path: "system.slice/openvpn-client@work.service", Level: 2, ID: 4242},
+		VPN:     &Cgroup{Path: "system.slice/openvpn-client@work.service", Level: 2, ID: 4242, DNS: true},
 		TorUID:  &tor,
 		Bridges: map[string][]string{"br0": {"enp0s31f6"}},
 		L2:      true,
