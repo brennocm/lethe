@@ -52,8 +52,10 @@ type Engine struct {
 	session SessionState
 	alerts  []*Alert
 	nextID  int
-	down    map[string]bool // sensor sources currently down
-	degrade map[string]bool // other visibility gaps (e.g. "tunnel_unknown")
+	// compacted counts resolved alerts dropped to keep the list bounded (MaxAlerts)
+	compacted int
+	down      map[string]bool // sensor sources currently down
+	degrade   map[string]bool // other visibility gaps (e.g. "tunnel_unknown")
 }
 
 // New creates an engine in the given initial session state.
@@ -77,7 +79,8 @@ func (e *Engine) Apply(cmd Command) (SessionState, error) {
 		return e.session, err
 	}
 	if cmd == CmdArm || cmd == CmdArmForce {
-		e.alerts, e.nextID = nil, 1 // a new session starts with a clean alert list
+		e.alerts, e.nextID, e.compacted = nil, 1, 0 // a new session starts with a clean alert list
+		delete(e.degrade, "alert_overflow")
 	}
 	e.session = to
 	return to, nil
@@ -148,6 +151,21 @@ func (e *Engine) observeAlert(ev contracts.Event) Decision {
 		return e.withActions(Decision{Alert: a, Escalated: true}, sev, ov)
 	}
 
+	if !e.makeRoom() {
+		// Full of alerts that still matter: every new key of this check joins one overflow
+		// alert, so a flood of distinct destinations still counts and still raises the color.
+		key = ev.Check + "|overflow"
+		e.degrade["alert_overflow"] = true
+		if a := e.findOpen(key); a != nil {
+			a.Count++
+			a.LastSeen = now
+			if sev.Rank() <= a.Severity.Rank() {
+				return Decision{Alert: a}
+			}
+			a.Severity = sev
+			return e.withActions(Decision{Alert: a, Escalated: true}, sev, ov)
+		}
+	}
 	a := &Alert{
 		ID: formatAlertID(e.nextID), Check: ev.Check, Severity: sev, Key: key, State: AlertOpen,
 		Count: 1, FirstSeen: now, LastSeen: now, Source: ev.Source,
@@ -156,6 +174,38 @@ func (e *Engine) observeAlert(ev contracts.Event) Decision {
 	e.alerts = append(e.alerts, a)
 	return e.withActions(Decision{Alert: a, New: true}, sev, ov)
 }
+
+// MaxAlerts bounds the alert list of one session. Distinct destinations each open an alert, so
+// without a bound a long session could grow without limit. Past the cap, each check gets at most
+// one overflow alert, so the list never exceeds MaxAlerts plus the number of checks.
+const MaxAlerts = 1024
+
+// makeRoom keeps the list under MaxAlerts by dropping the oldest alerts that no longer matter:
+// resolved and either acknowledged or below CRITICAL. A resolved CRITICAL that was never
+// acknowledged still blocks unpanic, so it is kept. It reports whether a new alert fits.
+func (e *Engine) makeRoom() bool {
+	if len(e.alerts) < MaxAlerts {
+		return true
+	}
+	kept := e.alerts[:0]
+	excess := len(e.alerts) - MaxAlerts + 1
+	for _, a := range e.alerts {
+		if excess > 0 && a.State == AlertResolved && (a.Acked || a.Severity != contracts.SeverityCritical) {
+			excess--
+			e.compacted++
+			continue
+		}
+		kept = append(kept, a)
+	}
+	for i := len(kept); i < len(e.alerts); i++ {
+		e.alerts[i] = nil
+	}
+	e.alerts = kept
+	return len(e.alerts) < MaxAlerts
+}
+
+// Compacted is the number of resolved alerts dropped from the list by makeRoom.
+func (e *Engine) Compacted() int { return e.compacted }
 
 func (e *Engine) withActions(d Decision, sev contracts.Severity, ov Override) Decision {
 	acts := planFor(sev, e.cfg.Guard, ov)

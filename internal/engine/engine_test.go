@@ -2,6 +2,7 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -319,5 +320,52 @@ func TestIgnoredEvents(t *testing.T) {
 	}
 	if IsPointCheck("TUN-001") || !IsPointCheck("DNS-001") {
 		t.Fatal("point check table broken")
+	}
+}
+
+func dstN(i int) string { return fmt.Sprintf("198.51.%d.%d", i/256%256, i%256) }
+
+// A long session with many distinct destinations must not grow the alert list without bound.
+// Resolved alerts that no longer matter are dropped; an unacknowledged CRITICAL never is.
+func TestEngine_AlertListIsBounded(t *testing.T) {
+	e, clk := newTestEngine(GuardOff, StateArmed)
+	first := e.Observe(leak("NET-001", contracts.SeverityCritical, "192.0.2.1")).Alert
+	for i := range 3 * MaxAlerts {
+		e.Observe(leak("NET-009", contracts.SeverityWarning, dstN(i)))
+		if i%100 == 0 {
+			clk.Advance(11 * time.Second)
+			e.Tick()
+		}
+	}
+	if n := len(e.Alerts()); n > MaxAlerts {
+		t.Fatalf("%d alerts kept, cap %d", n, MaxAlerts)
+	}
+	if e.Compacted() == 0 {
+		t.Fatal("nothing compacted")
+	}
+	if e.Alert(first.ID) == nil {
+		t.Fatal("an unacknowledged CRITICAL was dropped")
+	}
+}
+
+// When every alert still matters, new keys fold into one overflow alert per check: the leak is
+// still counted, the color stays RED and the state turns GRAY-worthy (alert_overflow).
+func TestEngine_AlertOverflowFoldsIntoOneAlert(t *testing.T) {
+	e, _ := newTestEngine(GuardOff, StateArmed)
+	for i := range MaxAlerts + 50 {
+		e.Observe(leak("NET-001", contracts.SeverityCritical, dstN(i)))
+	}
+	if n := len(e.Alerts()); n != MaxAlerts+1 {
+		t.Fatalf("%d alerts, want the cap plus one overflow alert", n)
+	}
+	last := e.Alerts()[MaxAlerts]
+	if last.Key != "NET-001|overflow" || last.Count != 50 {
+		t.Fatalf("overflow alert %q count %d", last.Key, last.Count)
+	}
+	if e.Color() != ColorRed {
+		t.Fatalf("color %s", e.Color())
+	}
+	if !reflect.DeepEqual(e.Degraded(), []string{"alert_overflow"}) {
+		t.Fatalf("degraded %v", e.Degraded())
 	}
 }
