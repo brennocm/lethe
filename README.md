@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/lethe-logo.webp" alt="lethe" width="520">
+</p>
+
 # lethe
 
 Local OpSec leak monitor for Linux. While you work behind a VPN and/or Tor, lethe discovers the
