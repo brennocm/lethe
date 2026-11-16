@@ -373,3 +373,20 @@ func FuzzDecodeRequest(f *testing.F) {
 		}
 	})
 }
+
+// Requests are capped at 64 KiB, but answers grow with the session (every alert, the recent
+// events): a busy session must not break status.get or events.query on the client.
+func TestIPC_LargeResponsesReachTheClient(t *testing.T) {
+	f := newFixture(t, os.Getuid())
+	big := strings.Repeat("x", 3*MaxMessage)
+	f.srv.Handle("events.query", func(*Call) (any, error) { return []string{big}, nil })
+	c := f.dial(t)
+	var out []string
+	if err := c.Call("events.query", nil, nil, &out); err != nil || len(out) != 1 || len(out[0]) != len(big) {
+		t.Fatalf("err=%v len=%d", err, len(out))
+	}
+	var st map[string]int
+	if err := c.Call("status.get", nil, nil, &st); err != nil {
+		t.Fatalf("connection unusable after a large answer: %v", err)
+	}
+}

@@ -52,7 +52,7 @@ func (c *Client) Call(method string, params any, auth *Auth, out any) error {
 		return err
 	}
 	for {
-		line, err := c.r.ReadSlice('\n')
+		line, err := c.readLine()
 		if err != nil {
 			return fmt.Errorf("ipc: read: %w", err)
 		}
@@ -91,7 +91,7 @@ func (c *Client) Call(method string, params any, auth *Auth, out any) error {
 func (c *Client) ReadNotification() (json.RawMessage, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	line, err := c.r.ReadSlice('\n')
+	line, err := c.readLine()
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +102,28 @@ func (c *Client) ReadNotification() (json.RawMessage, error) {
 		return nil, err
 	}
 	return n.Params, nil
+}
+
+// MaxResponse bounds one line from the daemon. Requests stay under MaxMessage, but answers grow
+// with the session (every alert, up to 2048 recent events).
+const MaxResponse = 32 << 20
+
+// readLine returns one newline-terminated line as a fresh slice (callers may keep it).
+func (c *Client) readLine() ([]byte, error) {
+	var line []byte
+	for {
+		chunk, err := c.r.ReadSlice('\n')
+		if len(line)+len(chunk) > MaxResponse {
+			return nil, ErrTooLarge
+		}
+		line = append(line, chunk...)
+		if err == nil {
+			return line, nil
+		}
+		if !errors.Is(err, bufio.ErrBufferFull) {
+			return nil, err
+		}
+	}
 }
 
 // SetDeadline bounds the next operations.
