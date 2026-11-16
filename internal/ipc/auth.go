@@ -105,14 +105,15 @@ func (a *Authenticator) Verify(method string, params json.RawMessage, p *Auth) e
 	a.mu.Lock()
 	issued, ok := a.nonces[string(p.Nonce)]
 	delete(a.nonces, string(p.Nonce))
-	key := a.key
 	now := a.now()
-	a.mu.Unlock()
-	if !ok || now.Sub(issued) > nonceTTL || key == nil {
+	if !ok || now.Sub(issued) > nonceTTL || a.key == nil {
+		a.mu.Unlock()
 		a.fail()
 		return ErrUnknownNonce
 	}
-	want, err := MAC(key, p.Nonce, method, params)
+	// Under the lock: Close wipes the key in place.
+	want, err := MAC(a.key, p.Nonce, method, params)
+	a.mu.Unlock()
 	if err != nil || !hmac.Equal(want, p.MAC) {
 		a.fail()
 		return ErrBadProof
