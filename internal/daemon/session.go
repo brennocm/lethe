@@ -24,6 +24,7 @@ import (
 	"lethe/internal/guard"
 	"lethe/internal/ipc"
 	"lethe/internal/journal"
+	"lethe/internal/platform"
 	"lethe/internal/preflight"
 	"lethe/internal/privsep"
 	"lethe/internal/profile"
@@ -208,7 +209,13 @@ func preflightData(r preflight.Report) map[string]any {
 	return map[string]any{"result": r.Result, "checks": cs, "warnings": len(r.Warnings), "manual_skipped": r.ManualSkipped}
 }
 
+// dir is the session directory as the operator sees it (results, messages).
 func (s *session) dir() string { return filepath.Join(s.prof.Storage.Dir, "sessions", s.id) }
+
+// ioDir is the same directory through its open descriptor: every read and write of the daemon
+// goes through it, so swapping a path component (the operator owns storage.dir) cannot redirect
+// what root writes.
+func (s *session) ioDir() string { return platform.FDPath(s.dirF) }
 
 // openSession derives the IPC key, opens the journal and builds the executor.
 func (d *Daemon) openSession(prof *profile.Profile, base *baseline.Baseline, mode engine.GuardMode, pass []byte, now time.Time) (*session, error) {
@@ -236,7 +243,7 @@ func (d *Daemon) openSession(prof *profile.Profile, base *baseline.Baseline, mod
 	if err != nil {
 		return nil, err
 	}
-	if err := d.sessionsDir(prof.Storage.Dir); err != nil {
+	if s.dirF, err = d.sessionDir(prof.Storage.Dir, id); err != nil {
 		wipe(key)
 		return nil, err
 	}
@@ -245,7 +252,7 @@ func (d *Daemon) openSession(prof *profile.Profile, base *baseline.Baseline, mod
 		gid = d.cfg.Operator.GID
 	}
 	w, err := journal.Open(journal.Config{
-		Dir: s.dir(), Session: id, Recipients: recips, SensitiveRecipients: sens,
+		Dir: s.ioDir(), Session: id, Recipients: recips, SensitiveRecipients: sens,
 		Now: d.cfg.Now, Mono: d.cfg.Mono, ReaderGID: gid,
 		StartData: map[string]any{
 			"tool_version": d.cfg.ToolVersion, "guard": string(mode), "operation": prof.Operation.ID,
@@ -254,6 +261,7 @@ func (d *Daemon) openSession(prof *profile.Profile, base *baseline.Baseline, mod
 	})
 	if err != nil {
 		wipe(key)
+		_ = s.dirF.Close()
 		return nil, err
 	}
 	s.journal = w
@@ -263,22 +271,34 @@ func (d *Daemon) openSession(prof *profile.Profile, base *baseline.Baseline, mod
 	return s, nil
 }
 
-// sessionsDir creates storage.dir/sessions; as root it is root:operator 02750 so the operator
-// can read sessions after the capabilities are dropped.
-func (d *Daemon) sessionsDir(storage string) error {
-	dir := filepath.Join(storage, "sessions")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("storage: %w", err)
+// sessionDir creates storage.dir/sessions/<id> and returns it open. As root, sessions is
+// root:operator 02750 so the operator can read sessions after the capabilities are dropped. Both
+// levels are created and changed through descriptors that never follow a symlink (the operator
+// owns storage.dir; a planted sessions -> /etc must not get chowned).
+func (d *Daemon) sessionDir(storage, id string) (*os.File, error) {
+	if err := os.MkdirAll(storage, 0o700); err != nil {
+		return nil, fmt.Errorf("storage: %w", err)
 	}
+	st, err := os.Open(storage) // #nosec G304 -- operator-chosen storage.dir (may itself be a symlink)
+	if err != nil {
+		return nil, fmt.Errorf("storage: %w", err)
+	}
+	defer func() { _ = st.Close() }()
+	sessions, err := platform.MkdirAt(st, "sessions", 0o700)
+	if err != nil {
+		return nil, fmt.Errorf("storage: %w", err)
+	}
+	defer func() { _ = sessions.Close() }()
 	if isRoot() && d.cfg.Operator.GID > 0 {
-		if err := os.Chown(dir, -1, d.cfg.Operator.GID); err != nil {
-			return fmt.Errorf("storage: %w", err)
-		}
-		if err := os.Chmod(dir, 0o750|os.ModeSetgid); err != nil { // #nosec G302 -- operator group reads sessions
-			return fmt.Errorf("storage: %w", err)
+		if err := platform.SecureDir(sessions, -1, d.cfg.Operator.GID, 0o2750); err != nil {
+			return nil, fmt.Errorf("storage: %w", err)
 		}
 	}
-	return nil
+	dir, err := platform.MkdirAt(sessions, id, 0o700)
+	if err != nil {
+		return nil, fmt.Errorf("storage: %w", err)
+	}
+	return dir, nil
 }
 
 func recipients(keys []string, base *baseline.Baseline) ([]age.Recipient, error) {
@@ -476,6 +496,7 @@ func (d *Daemon) endLocked(reason string, keepGuard bool) {
 	}
 	_ = s.journal.Close(map[string]any{"reason": reason, "alerts": len(d.eng.Alerts()), "critical": s.critical, "unacked_critical": unacked, "guard_kept": keepGuard})
 	d.writeReport(s)
+	_ = s.dirF.Close()
 	s.auth.Close()
 	d.srv.SetAuthenticator(nil)
 	d.closeTorLocked()
@@ -663,7 +684,7 @@ func (d *Daemon) writeReport(s *session) {
 		fail(err)
 		return
 	}
-	js, err := journal.Read(s.dir(), []age.Identity{id})
+	js, err := journal.Read(s.ioDir(), []age.Identity{id})
 	if err != nil {
 		fail(err)
 		return
@@ -678,7 +699,7 @@ func (d *Daemon) writeReport(s *session) {
 		fail(err)
 		return
 	}
-	f, err := os.OpenFile(filepath.Join(s.dir(), "report.md"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640) // #nosec G302 G304 -- operator group reads it
+	f, err := os.OpenFile(filepath.Join(s.ioDir(), "report.md"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640) // #nosec G302 G304 -- operator group reads it
 	if err != nil {
 		fail(err)
 		return

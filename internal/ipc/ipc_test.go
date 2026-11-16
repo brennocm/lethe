@@ -127,6 +127,29 @@ func TestIPC_SocketPermissions(t *testing.T) {
 	}
 }
 
+// The socket directory sits where the operator can write (/run/user/<uid>): a planted symlink
+// must not make the daemon (root) chmod/chown its target.
+func TestIPC_SocketDirSymlinkRefused(t *testing.T) {
+	rt := t.TempDir()
+	target := t.TempDir()
+	if err := os.Chmod(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(rt, "lethe")); err != nil {
+		t.Fatal(err)
+	}
+	if l, err := Listen(filepath.Join(rt, "lethe", "lethe.sock"), os.Getuid(), os.Getgid()); err == nil {
+		_ = l.Close()
+		t.Fatal("followed a symlinked socket directory")
+	}
+	if fi, _ := os.Stat(target); fi.Mode().Perm() != 0o755 {
+		t.Fatalf("target mode changed to %v", fi.Mode().Perm())
+	}
+	if _, err := os.Stat(filepath.Join(target, "lethe.sock")); err == nil {
+		t.Fatal("socket created in the symlink target")
+	}
+}
+
 func TestIPC_ReadAndSensitive(t *testing.T) {
 	f := newFixture(t, os.Getuid())
 	c := f.dial(t)

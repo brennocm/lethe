@@ -14,6 +14,8 @@ import (
 	"sync"
 
 	"golang.org/x/sys/unix"
+
+	"lethe/internal/platform"
 )
 
 func bytesReader(b []byte) io.Reader { return bytes.NewReader(b) }
@@ -94,20 +96,36 @@ func (s *Server) SetAuthenticator(a *Authenticator) {
 }
 
 // Listen creates the socket at path: directory 0700 and socket 0600, both owned by uid/gid.
-// A stale socket is replaced; anything else at path is an error.
+// A stale socket is replaced; anything else at path is an error. The directory may sit in a
+// place the operator owns (/run/user/<uid>), so it is created and changed through a descriptor
+// opened without following symlinks, and the socket is checked and chowned relative to it.
 func Listen(path string, uid, gid int) (*net.UnixListener, error) {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	dir, base := filepath.Dir(path), filepath.Base(path)
+	parent, err := os.Open(filepath.Dir(dir)) // #nosec G304 -- fixed runtime directory
+	if err != nil {
 		return nil, fmt.Errorf("ipc: %w", err)
 	}
-	if err := os.Chmod(dir, 0o700); err != nil { // #nosec G302 -- directory needs x
+	d, err := platform.MkdirAt(parent, filepath.Base(dir), 0o700)
+	_ = parent.Close()
+	if err != nil {
 		return nil, fmt.Errorf("ipc: %w", err)
 	}
-	if fi, err := os.Lstat(path); err == nil {
-		if fi.Mode()&os.ModeSocket == 0 {
+	defer func() { _ = d.Close() }()
+	root := os.Geteuid() == 0
+	owner, group := -1, -1
+	if root {
+		owner, group = uid, gid
+	}
+	if err := platform.SecureDir(d, owner, group, 0o700); err != nil {
+		return nil, fmt.Errorf("ipc: %w", err)
+	}
+	dfd := int(d.Fd()) // #nosec G115 -- fd
+	var st unix.Stat_t
+	if err := unix.Fstatat(dfd, base, &st, unix.AT_SYMLINK_NOFOLLOW); err == nil {
+		if st.Mode&unix.S_IFMT != unix.S_IFSOCK {
 			return nil, fmt.Errorf("ipc: %s exists and is not a socket", path)
 		}
-		if err := os.Remove(path); err != nil {
+		if err := unix.Unlinkat(dfd, base, 0); err != nil {
 			return nil, fmt.Errorf("ipc: %w", err)
 		}
 	}
@@ -118,8 +136,13 @@ func Listen(path string, uid, gid int) (*net.UnixListener, error) {
 		return nil, fmt.Errorf("ipc: %w", err)
 	}
 	l.SetUnlinkOnClose(true)
-	if os.Geteuid() == 0 {
-		if err := errors.Join(os.Chown(dir, uid, gid), os.Chown(path, uid, gid)); err != nil {
+	// The socket must have landed in the directory we secured (not in one swapped in meanwhile).
+	if err := unix.Fstatat(dfd, base, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil || st.Mode&unix.S_IFMT != unix.S_IFSOCK {
+		_ = l.Close()
+		return nil, fmt.Errorf("ipc: %s changed while the socket was created", dir)
+	}
+	if root {
+		if err := unix.Fchownat(dfd, base, uid, gid, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 			_ = l.Close()
 			return nil, fmt.Errorf("ipc: %w", err)
 		}

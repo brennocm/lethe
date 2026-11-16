@@ -108,7 +108,8 @@ type session struct {
 	endpointUnknown bool
 	nftArm          []nftmon.Table // TUN-004: third-party tables at arm (nil = not readable)
 	tx              *checks.TxTracker
-	torExpected     bool // TUN-003: the session depends on tor (checks.TorExpected at arm)
+	dirF            *os.File // the session directory, open (see ioDir)
+	torExpected     bool     // TUN-003: the session depends on tor (checks.TorExpected at arm)
 	critical        int
 	sensors         *sensorSet
 	protected       map[int]bool // pids never killed by responses (self, agent)

@@ -624,3 +624,27 @@ func TestTUN008_StrictArmRefusedWithSnowflake(t *testing.T) {
 	f.arm(t, "off")
 	_, _ = f.d.Disarm()
 }
+
+// storage.dir belongs to the operator: a planted "sessions" symlink must make arm fail without
+// touching its target (as root, the daemon would otherwise chown and chmod it).
+func TestM8_SessionsSymlinkRefused(t *testing.T) {
+	f := newFixture(t)
+	storage := filepath.Join(f.home, "lethe", "data")
+	if err := os.MkdirAll(storage, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := t.TempDir()
+	if err := os.Chmod(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(storage, "sessions")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := f.d.Arm(f.armReq("off")); err == nil {
+		t.Fatal("armed through a symlinked sessions directory")
+	}
+	entries, _ := os.ReadDir(target)
+	if fi, _ := os.Stat(target); fi.Mode().Perm() != 0o755 || len(entries) != 0 {
+		t.Fatalf("target touched: mode %v, %d entries", fi.Mode().Perm(), len(entries))
+	}
+}
