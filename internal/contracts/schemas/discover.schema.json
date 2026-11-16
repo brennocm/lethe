@@ -529,6 +529,38 @@
           }
         }
       }
+    },
+    "vpn_clients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pid",
+          "exe",
+          "uid"
+        ],
+        "properties": {
+          "pid": {
+            "type": "integer"
+          },
+          "exe": {
+            "type": "string"
+          },
+          "uid": {
+            "type": "integer"
+          },
+          "cgroup": {
+            "type": "string"
+          },
+          "cgroup_id": {
+            "type": "integer"
+          },
+          "cgroup_level": {
+            "type": "integer"
+          }
+        }
+      }
     }
   }
 }

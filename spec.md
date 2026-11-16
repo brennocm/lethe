@@ -369,7 +369,7 @@ Quando o cliente VPN troca de servidor ou o Tor troca de guard, o daemon atualiz
 Problema do ovo e da galinha no modo estrito: o primeiro pacote para um endpoint novo é descartado antes de o daemon saber dele. Resolução:
 
 - **WireGuard:** o endpoint aparece no `wgctrl` assim que é configurado, antes do handshake. O daemon consulta o `wgctrl` a cada 1 s e a cada evento de link.
-- **OpenVPN e clientes comerciais:** a tentativa bloqueada chega via NFLOG (NET-002) com UID e GID. Se o socket pertencer ao processo do cliente VPN descoberto (sock_diag + `/proc/<pid>`, confiança alta), o destino é adicionado automaticamente ao allowlist e é emitido `INFO discovery.endpoint_learned`. Caso contrário, continua bloqueado.
+- **OpenVPN e clientes comerciais:** a tentativa bloqueada chega via NFLOG (NET-002) com UID e GID. Se o socket pertencer ao processo do cliente VPN descoberto (sock_diag + `/proc/<pid>`, confiança alta), o destino é adicionado automaticamente ao allowlist e é emitido `INFO discovery.endpoint_learned`. Caso contrário, continua bloqueado. "Confiança alta" aqui é o socket identificado sem ambiguidade: o socket conectado com aquela 5-tupla, ou o **único** socket UDP não conectado ligado à porta de origem (o OpenVPN sobre UDP não conecta o socket). Nada é aprendido durante o pânico, e uma sessão aprende no máximo 64 endpoints (somando os confirmados pelo operador).
 - **Resolução DNS do próprio cliente VPN** (hostname do servidor antes de conectar): bloqueada por padrão. `egress.allow_vpn_client_dns: true` libera DNS para fora **apenas** do cgroup do cliente VPN, e gera aviso no preflight.
 
 ### 7.5 Tor
@@ -694,7 +694,7 @@ Diferenças em relação à v0.1 (Apêndice B): política `drop` com allowlist d
 
 Notas:
 
-- Regras extras geradas pela descoberta: `socket cgroupv2 level N "<cgroup do cliente VPN>" accept` (§11.2) e, para Tor, `meta skuid <uid do tor> ip daddr . meta l4proto . th dport @endpoints4 accept` quando o tor roda com UID próprio.
+- Regras extras geradas pela descoberta: com `egress.allow_vpn_client_dns`, `socket cgroupv2 level N "<cgroup do cliente VPN>" meta l4proto udp|tcp th dport 53 accept` (§7.4, §11.2). O cgroup do cliente **nunca** é aceito por inteiro: com NetworkManager, o cliente roda em `NetworkManager.service`, e o tráfego próprio do NM (o teste de conectividade, por exemplo) sairia fora do túnel. O cliente alcança os servidores pelos sets de endpoints, como qualquer processo. Para Tor, `meta skuid <uid do tor> ip daddr . meta l4proto . th dport @endpoints4 accept` quando o tor roda com UID próprio.
 - Tráfego de LAN só sai se `network.allow_lan: true`.
 - VMs em **bridge** com porta física: `table bridge lethe`, com chain `forward` descartando frames IP para as portas `egress`, exceto ARP e DHCP. Gerada só quando existe bridge com porta `egress`.
 - Toda a configuração é aplicada **numa única transação netlink** (`Flush` da google/nftables), e cada atualização de set também.

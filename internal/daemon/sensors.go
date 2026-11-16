@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"reflect"
 	"slices"
 	"time"
 
@@ -82,6 +83,7 @@ func (d *Daemon) startSensorsLocked(snap discovery.Snapshot) {
 				case <-ctx.Done():
 					return
 				case b := <-blocked:
+					d.learnBlocked(s, b)
 					d.deliver(s, checks.FromBlocked(b, d.attribute(b.Leak)))
 				}
 			}
@@ -211,14 +213,14 @@ func (d *Daemon) scanSockets(ctx context.Context, s *session) error {
 	defer t.Stop()
 	beat := d.beat(s, sockdiag.SourceID)
 	for {
-		socks, err := sockdiag.Dump()
+		socks, owners, err := d.cfg.Sockets()
 		if err == nil {
-			owners, _ := sockdiag.Owners(d.cfg.ProcRoot)
 			d.mu.Lock()
 			if d.sess != s {
 				d.mu.Unlock()
 				return nil
 			}
+			s.socks, s.owners = socks, owners
 			sc := d.socketScanLocked(socks, owners)
 			d.mu.Unlock()
 			d.deliver(s, checks.NET010{}.Evaluate(sc)...)
@@ -305,16 +307,18 @@ func (d *Daemon) refreshLocked() {
 	snap := d.discoverLocked(s.prof)
 	old := d.snap
 	d.snap = snap
-	changed := !slices.Equal(old.Endpoints, snap.Endpoints) || !slices.Equal(old.CaptureIfaces, snap.CaptureIfaces) || len(old.Ifaces) != len(snap.Ifaces)
+	next := guardConfig(snap, s.prof, s.features)
+	vpnChanged := !reflect.DeepEqual(s.gcfg.VPN, next.VPN) // a restarted client has a new cgroup ID
+	changed := vpnChanged || !slices.Equal(old.Endpoints, snap.Endpoints) || !slices.Equal(old.CaptureIfaces, snap.CaptureIfaces) || len(old.Ifaces) != len(snap.Ifaces)
 	d.endpointEventsLocked(old, snap)
 	if changed {
 		oldEgress := s.gcfg.Egress
-		s.gcfg = guardConfig(snap, s.prof, s.features)
+		s.gcfg = next
 		d.appendLocked(contracts.Event{Type: contracts.EvDiscoveryChanged, Source: contracts.SourceDaemon, Data: map[string]any{
 			"capture_ifaces": len(snap.CaptureIfaces), "endpoints": len(snap.Endpoints), "tunnels": len(snap.Tunnels), "unavailable": toAny(snap.Unavailable),
 		}})
 		if s.guardMode == engine.GuardStrict && d.eng.Session() == engine.StateArmed {
-			d.updateGuardLocked(!slices.Equal(oldEgress, s.gcfg.Egress))
+			d.updateGuardLocked(vpnChanged || !slices.Equal(oldEgress, s.gcfg.Egress))
 		}
 		if s.sensors != nil {
 			d.syncCapturesLocked(snap)

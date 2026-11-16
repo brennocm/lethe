@@ -17,9 +17,10 @@ type Snapshot struct {
 	Routes         Routes            `json:"routes"`
 	DNS            DNS               `json:"dns"`
 	LegacyIPTables bool              `json:"legacy_iptables"`
-	Exclusions     []ExclusionCgroup `json:"exclusions,omitempty"` // split-tunnel cgroups (TUN-005)
-	Tor            *TorState         `json:"tor,omitempty"`        // only when the profile involves tor
-	Unavailable    []string          `json:"unavailable"`          // sources that could not be read (visibility gaps)
+	Exclusions     []ExclusionCgroup `json:"exclusions,omitempty"`  // split-tunnel cgroups (TUN-005)
+	VPNClients     []VPNClient       `json:"vpn_clients,omitempty"` // OpenVPN and other clients, by their sockets
+	Tor            *TorState         `json:"tor,omitempty"`         // only when the profile involves tor
+	Unavailable    []string          `json:"unavailable"`           // sources that could not be read (visibility gaps)
 }
 
 // Iface is one interface with its class.

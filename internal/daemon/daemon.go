@@ -27,6 +27,7 @@ import (
 	"lethe/internal/profile"
 	"lethe/internal/response"
 	"lethe/internal/sensors/nftmon"
+	"lethe/internal/sensors/sockdiag"
 )
 
 // Config wires the daemon to the host. Every I/O dependency is injectable for tests.
@@ -45,6 +46,10 @@ type Config struct {
 	ProcRoot string                     // default /proc
 	// Sensors starts the live sensors (capture, nflog, netlink, sock_diag) when armed.
 	Sensors bool
+	// Sockets and Cgroups find the VPN clients (nil with Sensors = sock_diag, /proc and
+	// /sys/fs/cgroup; nil without Sensors = not looked up).
+	Sockets discovery.SocketSource
+	Cgroups discovery.CgroupResolver
 	// Agent, when set, is the argument list for the session agent spawned at arm (portable mode).
 	Agent []string
 	// AgentEnv is the agent's environment (session bus, display, LANG).
@@ -105,6 +110,8 @@ type session struct {
 	conditions      map[string]map[string]map[string]any // check → dedup key → data of the last finding
 	tunnels         map[string]bool                      // TUN-001: tunnels seen since arm (only grows)
 	learned         []discovery.Endpoint                 // endpoints learned (NFLOG) or confirmed by the operator
+	socks           []sockdiag.Sock                      // last socket scan (VPN clients; read under the lock)
+	owners          map[uint32]sockdiag.Owner
 	endpointUnknown bool
 	nftArm          []nftmon.Table // TUN-004: third-party tables at arm (nil = not readable)
 	tx              *checks.TxTracker
@@ -134,6 +141,12 @@ func New(cfg Config) *Daemon {
 	}
 	if cfg.ProcRoot == "" {
 		cfg.ProcRoot = "/proc"
+	}
+	if cfg.Sensors && cfg.Sockets == nil {
+		cfg.Sockets = discovery.SystemSockets(cfg.ProcRoot)
+	}
+	if cfg.Sensors && cfg.Cgroups == nil {
+		cfg.Cgroups = discovery.SystemCgroups(cfg.ProcRoot, "/sys/fs/cgroup")
 	}
 	if cfg.Out == nil {
 		cfg.Out = io.Discard

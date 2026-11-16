@@ -17,6 +17,8 @@ type Options struct {
 	Tor              TorSource // nil = tor not queried
 	TorRequired      bool      // an unreachable tor is a visibility gap (egress.type tor, vpn+tor)
 	Now              time.Time
+	Sockets          SocketSource   // nil = VPN clients not looked up
+	Cgroups          CgroupResolver // cgroup of a VPN client (nil = unknown)
 }
 
 // Discover takes a snapshot of the environment. Read failures become entries in Unavailable,
@@ -81,6 +83,21 @@ func Discover(k Kernel, opt Options) Snapshot {
 		}
 	}
 	sort.Slice(s.Tunnels, func(i, j int) bool { return s.Tunnels[i].Iface < s.Tunnels[j].Iface })
+	if opt.Sockets != nil {
+		if socks, owners, err := opt.Sockets(); err != nil {
+			gap("sockdiag:vpn")
+		} else {
+			outside := func(a netip.Addr) bool {
+				r, err := k.RouteGet(a)
+				return err != nil || classes[names[r.LinkIndex]] != ClassTunnel // unknown route: outside
+			}
+			var eps []Endpoint
+			s.VPNClients, eps = vpnScan(socks, owners, opt.Cgroups, outside)
+			for _, e := range eps {
+				endpoints[e.String()] = true
+			}
+		}
+	}
 	if opt.Tor != nil {
 		var ok bool
 		if s.Tor, ok = torState(opt.Tor, endpoints); !ok && opt.TorRequired {

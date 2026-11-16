@@ -65,3 +65,23 @@ open.
 - **TUN-008.** `snowflake`, `meek` and `meek_lite` with the strict guard are a preflight FAIL, and
   the daemon refuses that arm even with `--force`: the guard cannot follow those destinations, and
   spec §7.5 leaves only observer mode for them.
+- **OpenVPN and generic clients** (added with the M8 debt work). A VPN client is a process whose
+  executable is a known client (`openvpn`, `openconnect`, `openfortivpn`, `vpnc`, strongSwan
+  `charon`, and the Mullvad, NordVPN, ExpressVPN, IVPN, PIA and WARP daemons) and that holds a
+  socket. The remote ends of its connected sockets become endpoints, but only when they are routed
+  outside the tunnel, because what a client sends through its own tunnel (its API) is not an
+  endpoint. Under the daemon lock, discovery reads the last scan of the socket sensor (every 2 s),
+  so a pass never walks `/proc` while holding the lock. A packet dropped on the way out is learned
+  when its socket is identified without ambiguity and belongs to a discovered client. That means
+  the connected socket with the 5-tuple, or the only unconnected UDP socket on the source port,
+  since OpenVPN over UDP does not connect. Requiring an exact 5-tuple would never learn OpenVPN
+  over UDP, which would leave the operator GRAY and blocked. The single-socket rule is just as
+  certain about who sent the packet. Nothing is learned in panic, and a session learns at most 64
+  endpoints. `discovery.confirm_endpoint` (sensitive) adds an operator choice to the same list.
+- **The VPN client's cgroup is never accepted whole** (fail-closed; this changes spec §11.3). With
+  NetworkManager the client runs in `NetworkManager.service`, so a blanket `socket cgroupv2 accept`
+  would let the NM connectivity check and dispatcher scripts out with the real IP. The cgroup rule
+  now opens only port 53 (UDP and TCP), and only with `egress.allow_vpn_client_dns`. A changed
+  cgroup ID, after the service restarts, regenerates the ruleset on the next discovery pass. A
+  lookup that goes through systemd-resolved leaves from resolved's cgroup, not the client's, so
+  this flag helps only clients that query DNS themselves.

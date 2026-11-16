@@ -3,17 +3,23 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"lethe/internal/sensors/capture"
+	"lethe/internal/sensors/nflog"
+	"lethe/internal/sensors/sockdiag"
 
 	"filippo.io/age"
 	"github.com/google/nftables"
@@ -728,4 +734,80 @@ func TestSELF003_AgentIdentifiedByExecutable(t *testing.T) {
 	if f.d.isAgent(4100) {
 		t.Fatal("portable mode: a dead agent's PID must not keep the role")
 	}
+}
+
+// udp4 builds an IPv4/UDP packet (the NFLOG payload).
+func udp4(src, dst netip.AddrPort) []byte {
+	p := make([]byte, 28)
+	p[0], p[9] = 0x45, 17
+	binary.BigEndian.PutUint16(p[2:], 28)
+	s4, d4 := src.Addr().As4(), dst.Addr().As4()
+	copy(p[12:], s4[:])
+	copy(p[16:], d4[:])
+	binary.BigEndian.PutUint16(p[20:], src.Port())
+	binary.BigEndian.PutUint16(p[22:], dst.Port())
+	binary.BigEndian.PutUint16(p[24:], 8)
+	return p
+}
+
+// An OpenVPN client that moves to a new server is learned from its blocked packet (spec §7.4);
+// the browser's blocked packet is never learned.
+func TestNET002_StrictLearnsVPNClientEndpoint(t *testing.T) {
+	f := newFixture(t)
+	socks := []sockdiag.Sock{
+		{Proto: "udp", Local: netip.MustParseAddrPort("0.0.0.0:1194"), Inode: 11},
+		{Proto: "tcp", Local: netip.MustParseAddrPort("10.0.0.2:50000"), Remote: netip.MustParseAddrPort("192.0.2.80:443"), Inode: 20},
+	}
+	owners := map[uint32]sockdiag.Owner{11: {PID: 500, Exe: "/usr/sbin/openvpn"}, 20: {PID: 900, Exe: "/usr/bin/firefox"}}
+	f.d.cfg.Sockets = func() ([]sockdiag.Sock, map[uint32]sockdiag.Owner, error) { return socks, owners, nil }
+	f.d.cfg.Cgroups = func(pid int) (string, uint64, uint32, bool) {
+		return "system.slice/openvpn-client@work.service", 4242, 2, pid == 500
+	}
+	res := f.arm(t, "strict")
+	if c := f.d.snap.VPNClients; len(c) != 1 || c[0].PID != 500 {
+		t.Fatalf("vpn clients %+v", c)
+	}
+	if v := f.d.sess.gcfg.VPN; v == nil || v.ID != 4242 || v.DNS {
+		t.Fatalf("guard cgroup %+v", v)
+	}
+	blocked := func(src, dst string) nflog.Blocked {
+		pkt := udp4(netip.MustParseAddrPort(src), netip.MustParseAddrPort(dst))
+		return nflog.Blocked{Prefix: "LETHE-BLOCK ", Leak: capture.ClassifyIP(pkt, len(pkt))}
+	}
+	f.d.learnBlocked(f.d.sess, blocked("10.0.0.2:1194", "198.51.100.20:1194"))
+	f.d.learnBlocked(f.d.sess, blocked("10.0.0.2:5353", "198.51.100.21:5353")) // no VPN socket
+	if !slices.Contains(f.d.snap.Endpoints, "198.51.100.20:1194/udp") || slices.Contains(f.d.snap.Endpoints, "198.51.100.21:5353/udp") {
+		t.Fatalf("endpoints %v", f.d.snap.Endpoints)
+	}
+	// the operator confirms another one (sensitive at the IPC layer)
+	if _, err := f.d.ConfirmEndpoint("203.0.113.44:443/tcp"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.d.ConfirmEndpoint("127.0.0.1:53/udp"); err == nil {
+		t.Fatal("loopback endpoint accepted")
+	}
+	if !slices.Contains(f.d.snap.Endpoints, "203.0.113.44:443/tcp") {
+		t.Fatalf("confirmed endpoint missing: %v", f.d.snap.Endpoints)
+	}
+	_, _ = f.d.Disarm()
+	got := strings.Join(types(f.events(t, res.Dir)), ",")
+	if !strings.Contains(got, "discovery.endpoint_learned") || !strings.Contains(got, "discovery.endpoint_confirmed") {
+		t.Fatalf("journal: %s", got)
+	}
+}
+
+// With allow_vpn_client_dns the cgroup rule opens DNS only; without it, no cgroup rule at all.
+func TestNET002_VPNClientDNSOnlyWithProfileFlag(t *testing.T) {
+	f := newFixture(t)
+	f.prof = regexp.MustCompile(`allow_vpn_client_dns: false`).ReplaceAll(f.prof, []byte("allow_vpn_client_dns: true"))
+	f.d.cfg.Sockets = func() ([]sockdiag.Sock, map[uint32]sockdiag.Owner, error) {
+		return []sockdiag.Sock{{Proto: "udp", Local: netip.MustParseAddrPort("0.0.0.0:1194"), Inode: 11}},
+			map[uint32]sockdiag.Owner{11: {PID: 500, Exe: "/usr/sbin/openvpn"}}, nil
+	}
+	f.d.cfg.Cgroups = func(int) (string, uint64, uint32, bool) { return "system.slice/openvpn.service", 7, 2, true }
+	f.arm(t, "strict")
+	if v := f.d.sess.gcfg.VPN; v == nil || !v.DNS {
+		t.Fatalf("guard cgroup %+v", v)
+	}
+	_, _ = f.d.Disarm()
 }

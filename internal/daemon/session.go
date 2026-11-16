@@ -32,6 +32,7 @@ import (
 	"lethe/internal/report"
 	"lethe/internal/response"
 	"lethe/internal/sensors/procscan"
+	"lethe/internal/sensors/sockdiag"
 )
 
 // ArmRequest is session.arm. The CLI reads the profile and the baseline as the operator and
@@ -355,7 +356,17 @@ func (d *Daemon) executorEnv(s *session) response.Env {
 }
 
 func (d *Daemon) discoverLocked(prof *profile.Profile) discovery.Snapshot {
-	opt := discovery.Options{Now: d.cfg.Now(), Resolved: d.cfg.Resolved}
+	opt := discovery.Options{Now: d.cfg.Now(), Resolved: d.cfg.Resolved, Cgroups: d.cfg.Cgroups}
+	if d.cfg.Sockets != nil {
+		// Under the lock, discovery reads the last scan of the socket sensor; only a pass with no
+		// scan yet (the arm) dumps the sockets itself.
+		opt.Sockets = func() ([]sockdiag.Sock, map[uint32]sockdiag.Owner, error) {
+			if d.sess != nil && d.sess.socks != nil {
+				return d.sess.socks, d.sess.owners, nil
+			}
+			return d.cfg.Sockets()
+		}
+	}
 	if prof != nil && checks.TorQueried(prof.Egress.Type) {
 		if d.tor == nil {
 			newTor := d.cfg.Tor
@@ -416,6 +427,12 @@ func guardConfig(snap discovery.Snapshot, prof *profile.Profile, f guard.Feature
 			proto = unix.IPPROTO_TCP
 		}
 		cfg.Endpoints = append(cfg.Endpoints, guard.Endpoint{Addr: e.Addr, Proto: proto})
+	}
+	for _, c := range snap.VPNClients {
+		if c.CgroupID != 0 {
+			cfg.VPN = &guard.Cgroup{Path: c.Cgroup, Level: c.CgroupLevel, ID: c.CgroupID, DNS: prof.Egress.AllowVPNClientDNS}
+			break
+		}
 	}
 	cfg.L2 = f.L2 && len(cfg.Egress) > 0
 	return cfg

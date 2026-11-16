@@ -233,6 +233,15 @@ func (d *Daemon) routes() {
 	})
 	h("session.disarm", func(*ipc.Call) (any, error) { return d.Disarm() })
 	h("panic.release", func(*ipc.Call) (any, error) { return d.Unpanic() })
+	h("discovery.confirm_endpoint", func(c *ipc.Call) (any, error) { // sensitive: the server checks the proof
+		var p struct {
+			Endpoint string `json:"endpoint"`
+		}
+		if err := decode(c, &p); err != nil {
+			return nil, err
+		}
+		return d.ConfirmEndpoint(p.Endpoint)
+	})
 }
 
 var checkIDRE = regexp.MustCompile(`^[A-Z]{2,5}-[0-9]{3}$`)
