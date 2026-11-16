@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -48,8 +49,9 @@ func TestDiscover_RunsUnprivilegedAndMatchesContract(t *testing.T) {
 	if code := Execute([]string{"discover"}, &out, &errb); code != ExitOK || !bytes.Contains(out.Bytes(), []byte("INTERFACE")) {
 		t.Fatalf("human output: %s", out.String())
 	}
-	if code := Execute([]string{"discover", "--learn"}, &out, &errb); code == ExitOK {
-		t.Fatal("--learn should not be available yet")
+	t.Setenv("LETHE_SOCKET", filepath.Join(t.TempDir(), "none.sock"))
+	if code := Execute([]string{"discover", "--learn"}, &out, &errb); code != ExitDaemonDown {
+		t.Fatalf("--learn without a daemon: exit %d", code)
 	}
 }
 

@@ -21,15 +21,17 @@ import (
 func newDiscoverCmd() *cobra.Command {
 	var asJSON, learn bool
 	var profilePath string
+	var sec secretFlags
 	cmd := &cobra.Command{
 		Use:   "discover",
 		Short: "Show the discovered environment (tunnel, endpoints, egress interfaces, DNS) without arming",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if learn {
-				return fmt.Errorf("%w: --learn needs the capture sensor (M8)", ErrNotImplemented)
+				return runLearn(cmd.InOrStdin(), cmd.OutOrStdout(), sec.source(cmd))
 			}
-			opt := discovery.Options{Now: time.Now()}
+			opt := discovery.Options{Now: time.Now(), Sockets: discovery.SystemSockets("/proc"),
+				Cgroups: discovery.SystemCgroups("/proc", "/sys/fs/cgroup")}
 			torAddr, torCookie, queryTor := "auto", "auto", true
 			op, err := platform.CurrentOperator(os.Getenv)
 			if err != nil {
@@ -69,7 +71,8 @@ func newDiscoverCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "machine-readable output (schema: discover)")
-	cmd.Flags().BoolVar(&learn, "learn", false, "show destinations leaving the egress interfaces for 10s (learning mode)")
+	cmd.Flags().BoolVar(&learn, "learn", false, "armed session: show destinations leaving the egress for 10s and confirm the tunnel endpoint")
+	sec.register(cmd)
 	cmd.Flags().StringVarP(&profilePath, "profile", "p", "", "apply interface overrides and endpoints from a profile")
 	return cmd
 }
