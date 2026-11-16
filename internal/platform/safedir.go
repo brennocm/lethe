@@ -17,19 +17,6 @@ import (
 // ErrNotDir: the name exists and is not a directory (a symlink included).
 var ErrNotDir = errors.New("exists and is not a directory (symlinks are refused)")
 
-// OpenDir opens path as a directory. Earlier components may be symlinks (the operator chose the
-// path); the last one may not.
-func OpenDir(path string) (*os.File, error) {
-	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		if errors.Is(err, unix.ELOOP) || errors.Is(err, unix.ENOTDIR) {
-			return nil, fmt.Errorf("%s %w", path, ErrNotDir)
-		}
-		return nil, &os.PathError{Op: "open", Path: path, Err: err}
-	}
-	return os.NewFile(uintptr(fd), path), nil // #nosec G115 -- fd from open(2)
-}
-
 // MkdirAt creates name inside parent (if missing) with mode perm and opens it without following
 // a symlink.
 func MkdirAt(parent *os.File, name string, perm uint32) (*os.File, error) {
