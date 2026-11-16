@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // specExample is the complete example of spec §13.2.
@@ -37,6 +38,7 @@ baseline:
   file: /media/op/vault/baseline.age
 guard:
   mode: strict
+  arm_confirm: 30s
   panic:
     keep_tunnel: false
     link_down: auto
@@ -99,6 +101,30 @@ func TestTemplate_IsValid(t *testing.T) {
 	}
 }
 
+// The generated profile starts in observer mode (spec §10.6 item 4): a first run never blocks.
+func TestM81_TemplateStartsInOff(t *testing.T) {
+	p, _, err := Parse(Template, "/home/op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Guard.Mode != "off" || p.Guard.ArmWindow != 30*time.Second {
+		t.Fatalf("template guard %+v", p.Guard)
+	}
+	if !strings.Contains(string(Template), "selftest") {
+		t.Fatal("the template must say how to move to strict")
+	}
+}
+
+func TestM81_ArmConfirmZeroWarns(t *testing.T) {
+	p, warns, err := Parse([]byte(strings.Replace(specExample, "arm_confirm: 30s", "arm_confirm: 0s", 1)), "/home/op")
+	if err != nil || p.Guard.ArmWindow != 0 {
+		t.Fatalf("%v %+v", err, p.Guard)
+	}
+	if !strings.Contains(strings.Join(warns, ";"), "arm_confirm") {
+		t.Fatalf("warnings %v", warns)
+	}
+}
+
 func TestParse_Rejects(t *testing.T) {
 	cases := map[string]struct{ from, to, want string }{
 		"unknown field":      {"ui:\n", "ui:\n  colour: red\n", "colour"},
@@ -116,6 +142,9 @@ func TestParse_Rejects(t *testing.T) {
 		"duplicate key":      {"  journald: minimal\n", "  journald: minimal\n  journald: none\n", "already defined"},
 		"remote tor control": {"tor_control: auto", "tor_control: 198.51.100.1:9051", "loopback"},
 		"bad version":        {"version: 1", "version: 2", "version"},
+		"arm_confirm syntax": {"arm_confirm: 30s", "arm_confirm: soon", "arm_confirm"},
+		"arm_confirm tiny":   {"arm_confirm: 30s", "arm_confirm: 1s", "arm_confirm"},
+		"arm_confirm huge":   {"arm_confirm: 30s", "arm_confirm: 1h", "arm_confirm"},
 		"not yaml":           {"version: 1", "version: [", "YAML"},
 	}
 	for name, c := range cases {

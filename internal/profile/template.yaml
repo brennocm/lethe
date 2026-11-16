@@ -32,7 +32,11 @@ baseline:
   file: ~/lethe/baseline.age     # gerada por: lethe baseline create
 
 guard:
-  mode: strict                   # off | reactive | strict (recomendado)
+  # Começa em off (só observa): nada é bloqueado enquanto você aprende a ferramenta.
+  # Depois de um `lethe selftest` aprovado nesta máquina, troque para strict (recomendado):
+  # o estrito só deixa o túnel passar e é o que impede o vazamento, não só o detecta.
+  mode: off                      # off | reactive | strict (recomendado)
+  arm_confirm: 30s               # no strict, o túnel tem esse tempo para provar que funciona (0 = sem janela)
   panic:
     keep_tunnel: false           # true: o pânico mantém só o túnel
     link_down: auto              # auto | always | never

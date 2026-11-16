@@ -24,6 +24,13 @@ var Template []byte
 
 const maxProfileSize = 1 << 20
 
+// Bounds of guard.arm_confirm (spec §10.6). Below the minimum a WireGuard keepalive (25 s) may
+// not fit; above the maximum the CLI would wait too long for an answer.
+const (
+	MinArmConfirm = 5 * time.Second
+	MaxArmConfirm = 5 * time.Minute
+)
+
 // commMax is TASK_COMM_LEN-1: /proc/<pid>/comm is truncated to 15 bytes.
 const commMax = 15
 
@@ -89,8 +96,10 @@ type Baseline struct {
 }
 
 type Guard struct {
-	Mode  string `yaml:"mode"`
-	Panic Panic  `yaml:"panic"`
+	Mode       string        `yaml:"mode"`
+	ArmConfirm string        `yaml:"arm_confirm"`
+	Panic      Panic         `yaml:"panic"`
+	ArmWindow  time.Duration `yaml:"-"` // parsed arm_confirm (spec §10.6)
 }
 
 type Panic struct {
@@ -213,6 +222,9 @@ func (p *Profile) applyDefaults() {
 	if p.Guard.Panic.LinkDown == "" {
 		p.Guard.Panic.LinkDown = "auto"
 	}
+	if p.Guard.ArmConfirm == "" {
+		p.Guard.ArmConfirm = "30s"
+	}
 	if len(p.ActiveChecks.EgressIP.Interval) == 0 {
 		p.ActiveChecks.EgressIP.Interval = []string{"180s", "600s"}
 	}
@@ -267,6 +279,13 @@ func (p *Profile) check(home string) (warns, problems []string) {
 	if p.ActiveChecks.Enabled && len(p.ActiveChecks.EgressIP.Endpoints) < 2 {
 		bad("active_checks.egress_ip.endpoints needs at least 2 endpoints")
 	}
+	if p.Guard.ArmWindow, err = time.ParseDuration(p.Guard.ArmConfirm); err != nil {
+		bad("guard.arm_confirm: %v", err)
+	} else if p.Guard.ArmWindow < 0 || p.Guard.ArmWindow > MaxArmConfirm {
+		bad("guard.arm_confirm must be between 0 and %s", MaxArmConfirm)
+	} else if p.Guard.ArmWindow > 0 && p.Guard.ArmWindow < MinArmConfirm {
+		bad("guard.arm_confirm must be 0 (off) or at least %s", MinArmConfirm)
+	}
 	if p.UI.SoundRepeatDur, err = time.ParseDuration(p.UI.SoundRepeat); err != nil {
 		bad("ui.sound_repeat: %v", err)
 	}
@@ -283,6 +302,9 @@ func (p *Profile) check(home string) (warns, problems []string) {
 	}
 	if p.Guard.Mode == "off" {
 		warns = append(warns, "guard.mode is off: leaks are detected but not prevented")
+	}
+	if p.Guard.Mode == "strict" && p.Guard.ArmWindow == 0 && p.Guard.ArmConfirm != "" {
+		warns = append(warns, "guard.arm_confirm is 0: a strict arm is not undone when the tunnel carries no traffic")
 	}
 	if p.Egress.AllowVPNClientDNS {
 		warns = append(warns, "egress.allow_vpn_client_dns lets the VPN client resolve names outside the tunnel")

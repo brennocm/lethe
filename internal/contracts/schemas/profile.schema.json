@@ -163,6 +163,10 @@
             "strict"
           ]
         },
+        "arm_confirm": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)?$"
+        },
         "panic": {
           "type": "object",
           "additionalProperties": false,

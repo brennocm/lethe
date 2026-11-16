@@ -74,6 +74,7 @@ func newSession(t *testing.T) *session {
 		"egress_ifaces: []", "egress_ifaces: ["+netlab.DUTEgress+"]",
 		"file: ~/lethe/baseline.age", "file: "+s.baseline,
 		"dir: ~/lethe/data", "dir: "+filepath.Join(home, "data"),
+		"mode: off ", "mode: strict ", // the lab exercises the guard; the template starts in off
 	).Replace(string(profile.Template))
 	if err := os.WriteFile(s.profile, []byte(prof), 0o600); err != nil {
 		t.Fatal(err)
@@ -165,6 +166,17 @@ func probeLeakRoute(t *testing.T, add bool) {
 // startArmed runs an in-process daemon with live sensors and arms it in strict mode over IPC.
 func startArmed(t *testing.T, s *session) (*daemon.Daemon, *ipc.Client, daemon.ArmResult) {
 	t.Helper()
+	d, c, out := startDaemon(t, s)
+	var res daemon.ArmResult
+	if err := c.Call("session.arm", s.armRequest(t), nil, &res); err != nil {
+		t.Fatalf("arm: %v\n%s", err, out.String())
+	}
+	return d, c, res
+}
+
+// startDaemon runs an in-process daemon with live sensors, not armed.
+func startDaemon(t *testing.T, s *session) (*daemon.Daemon, *ipc.Client, *syncBuffer) {
+	t.Helper()
 	out := &syncBuffer{}
 	d := daemon.New(daemon.Config{
 		Operator: platform.Operator{UID: os.Getuid(), GID: os.Getgid(), Home: s.dir}, SocketPath: s.socket,
@@ -184,11 +196,7 @@ func startArmed(t *testing.T, s *session) (*daemon.Daemon, *ipc.Client, daemon.A
 	})
 	c := dialWait(t, s.socket)
 	_ = c.SetDeadline(time.Now().Add(time.Minute))
-	var res daemon.ArmResult
-	if err := c.Call("session.arm", s.armRequest(t), nil, &res); err != nil {
-		t.Fatalf("arm: %v\n%s", err, out.String())
-	}
-	return d, c, res
+	return d, c, out
 }
 
 type syncBuffer struct {
