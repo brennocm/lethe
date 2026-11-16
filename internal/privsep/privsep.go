@@ -69,7 +69,7 @@ func Harden() error {
 	if err := unix.Setrlimit(unix.RLIMIT_CORE, &unix.Rlimit{}); err != nil {
 		return fmt.Errorf("privsep: rlimit core: %w", err)
 	}
-	return nil
+	return applySeccomp() // after no_new_privs, which the kernel requires without CAP_SYS_ADMIN
 }
 
 // Status is the security-relevant part of /proc/<pid>/status.

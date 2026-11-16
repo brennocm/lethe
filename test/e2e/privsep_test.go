@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,8 @@ import (
 
 	"lethe/internal/privsep"
 	"lethe/test/netlab"
+
+	"golang.org/x/sys/unix"
 )
 
 // TestE2E_M7_HardenCaps checks, in a child process, that Harden leaves exactly the §19.3
@@ -37,6 +40,24 @@ func TestE2E_M7_HardenCaps(t *testing.T) {
 				fmt.Printf("BAD %s %+v\n", p, st)
 				os.Exit(4)
 			}
+		}
+		// seccomp phase 1 is on every thread: mode 2 (filter), and a denied syscall gets EPERM
+		// while the daemon's own calls still work
+		for _, p := range tasks {
+			if raw, err := os.ReadFile(p); err == nil && !strings.Contains(string(raw), "Seccomp:\t2") {
+				fmt.Printf("NO SECCOMP %s\n", p)
+				os.Exit(5)
+			}
+		}
+		if err := unix.Unshare(0); !errors.Is(err, unix.EPERM) {
+			fmt.Printf("UNSHARE %v\n", err)
+			os.Exit(6)
+		}
+		if fd, err := unix.Socket(unix.AF_NETLINK, unix.SOCK_RAW, unix.NETLINK_ROUTE); err != nil {
+			fmt.Printf("SOCKET %v\n", err)
+			os.Exit(7)
+		} else {
+			_ = unix.Close(fd)
 		}
 		fmt.Println("HARDENED")
 		os.Exit(0)
