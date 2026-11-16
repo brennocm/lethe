@@ -68,6 +68,10 @@ type Config struct {
 	TickEvery time.Duration
 	// DiscoverEvery is the periodic discovery refresh while armed (default 5 s).
 	DiscoverEvery time.Duration
+	// ArmConfirmPoll is how often the arm confirmation looks for proof (default 500 ms); Sleep
+	// waits between looks (default time.Sleep; tests advance a fake clock).
+	ArmConfirmPoll time.Duration
+	Sleep          func(time.Duration)
 }
 
 // Daemon is one lethe daemon. Methods are safe for concurrent use.
@@ -124,6 +128,8 @@ type session struct {
 	critical        int
 	sensors         *sensorSet
 	protected       map[int]bool // pids never killed by responses (self, agent)
+	confirming      bool         // strict arm waiting for the tunnel's proof (spec §10.6)
+	panic           panicCause   // why the session is in PANIC (lockdown explanation)
 }
 
 const recentMax = 2048
@@ -163,6 +169,12 @@ func New(cfg Config) *Daemon {
 	}
 	if cfg.DiscoverEvery == 0 {
 		cfg.DiscoverEvery = 5 * time.Second
+	}
+	if cfg.ArmConfirmPoll == 0 {
+		cfg.ArmConfirmPoll = 500 * time.Millisecond
+	}
+	if cfg.Sleep == nil {
+		cfg.Sleep = time.Sleep
 	}
 	d := &Daemon{cfg: cfg, state: engine.StateReady, subs: map[int]chan contracts.Event{}, lastBeat: map[string]time.Time{}, ended: make(chan struct{})}
 	d.eng = engine.New(clock{cfg.Now}, engine.Config{}, engine.StateReady)

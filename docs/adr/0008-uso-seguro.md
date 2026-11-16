@@ -43,3 +43,20 @@ now state the rule. This ADR records the decisions behind it.
 ## Consequences
 - Exit code 6 and the profile field `guard.arm_confirm` are new contracts.
 - AC-16 to AC-18 cover the new behavior in the netlab.
+
+## Implementation notes (M8.1)
+- The proof is read from discovery: WireGuard peers through wgctrl, `rx_bytes` from the netlink
+  link statistics of the tunnel interfaces (compared with the snapshot taken at arm), and
+  `status/circuit-established` from the tor control port. The daemon polls every 500 ms without
+  holding its lock, so sensors and IPC keep working during the window.
+- `guard.arm_confirm` accepts 0 or 5 s to 5 min. Below 5 s a 25 s WireGuard keepalive may not
+  fit; above 5 min the CLI would wait too long for an answer.
+- During the window `status` reports `confirming: true` and a `lockdown` saying the lethe will
+  undo the block by itself; `state.changed` with `ARMED` is journaled only with the proof (its
+  data carries `proof`). A PANIC during the window ends the wait and keeps the block.
+- The IPC error code -32004 carries `arm_unconfirmed`; the CLI maps it to exit code 6.
+- `lethe status` without a daemon prints the state `NO_DAEMON` (status schema), keeps exit
+  code 12 for scripts and, as root, fills `lockdown` from the leftover `lethe*` tables. Without
+  root it adds `leftover_tables_unchecked` to `degraded` and says that `sudo lethe status` checks.
+- SELF-006 is a condition alert: it stays open until acknowledged. Under `off` the lock covers
+  every sensitive method, including the acknowledgment itself, for the 5 minutes.

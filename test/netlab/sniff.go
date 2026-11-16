@@ -5,6 +5,7 @@ package netlab
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -14,6 +15,8 @@ import (
 	"antrea.io/packet"
 	"golang.org/x/net/bpf"
 	"golang.org/x/sys/unix"
+	"golang.zx2c4.com/wireguard/wgctrl"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 // Sniffer records every frame the isp namespace receives on isp0: what left the DUT's egress.
@@ -145,5 +148,28 @@ func (l *Lab) SetTunnel(t testing.TB, up bool) {
 			return setUp(DUTTunnel)
 		}
 		return setDown(DUTTunnel)
+	}))
+}
+
+// StopServer stops the WireGuard server and resets the DUT's peer, so the client has no
+// handshake and receives nothing through the tunnel (AC-16: a tunnel that does not work).
+func (l *Lab) StopServer(t testing.TB) {
+	t.Helper()
+	must(t, l.In(l.VPN, func() error { return setDown(VPNTunnel) }))
+	must(t, l.In(l.DUT, func() error {
+		c, err := wgctrl.New()
+		if err != nil {
+			return err
+		}
+		defer func() { _ = c.Close() }()
+		d, err := c.Device(DUTTunnel)
+		if err != nil || len(d.Peers) == 0 {
+			return fmt.Errorf("netlab: no wireguard peer: %w", err)
+		}
+		p := d.Peers[0]
+		keepalive := p.PersistentKeepaliveInterval
+		return c.ConfigureDevice(DUTTunnel, wgtypes.Config{ReplacePeers: true, Peers: []wgtypes.PeerConfig{{
+			PublicKey: p.PublicKey, Endpoint: p.Endpoint, AllowedIPs: p.AllowedIPs, PersistentKeepaliveInterval: &keepalive,
+		}}})
 	}))
 }

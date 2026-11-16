@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"filippo.io/age"
@@ -60,18 +61,59 @@ type ArmResult struct {
 // ErrPreflight is returned when the preflight fails and the arm was not forced.
 var ErrPreflight = errors.New("preflight failed (use --force --reason to arm anyway)")
 
+// ErrForceTunnel refuses --force over a tunnel failure with a guard that blocks (spec §10.6
+// item 1): the guard would cut the network as soon as it was applied.
+var ErrForceTunnel = errors.New("preflight failed and --force does not apply: with this guard the network would be cut because the tunnel is not working; connect the tunnel, or arm with --guard off to only observe")
+
 const (
 	armFailLimit  = 5
 	armFailWindow = 5 * time.Minute
 	saltSize      = 16
 )
 
-// Arm runs the preflight, opens the journal, applies the guard and starts the sensors.
-// Passphrase is wiped before returning.
+// Arm runs the preflight, opens the journal, applies the guard and starts the sensors. In strict
+// mode with guard.arm_confirm it then waits for the tunnel to prove it works (spec §10.6) and
+// undoes the arm without that proof. Passphrase is wiped before returning.
 func (d *Daemon) Arm(req ArmRequest) (ArmResult, preflight.Report, error) {
+	res, rep, s, err := d.arm(req)
+	if err != nil || s == nil {
+		return res, rep, err
+	}
+	if err := d.confirmArm(s); err != nil {
+		return ArmResult{}, rep, err
+	}
+	return res, rep, nil
+}
+
+// tunnelFails lists the tunnel checks that failed in the preflight: with strict or reactive
+// they mean the guard would cut the network at once, so --force cannot override them.
+func tunnelFails(rep preflight.Report) []string {
+	var out []string
+	for _, c := range rep.Checks {
+		if c.Status == preflight.Fail && (c.ID == "TUN-001" || c.ID == "TUN-003" || c.ID == "TUN-008") {
+			out = append(out, c.ID)
+		}
+	}
+	return out
+}
+
+// arm does everything up to the confirmation. It returns the session to confirm, or nil.
+func (d *Daemon) arm(req ArmRequest) (ArmResult, preflight.Report, *session, error) {
 	defer wipe(req.Passphrase)
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	res, rep, err := d.armLocked(req)
+	if err != nil {
+		return res, rep, nil, err
+	}
+	s := d.sess
+	if !s.confirming {
+		return res, rep, nil, nil
+	}
+	return res, rep, s, nil
+}
+
+func (d *Daemon) armLocked(req ArmRequest) (ArmResult, preflight.Report, error) {
 	var rep preflight.Report
 	if st := d.eng.Session(); st != engine.StateReady && st != engine.StateVerified {
 		return ArmResult{}, rep, errState(fmt.Errorf("cannot arm in %s", st))
@@ -123,6 +165,10 @@ func (d *Daemon) Arm(req ArmRequest) (ArmResult, preflight.Report, error) {
 		if !req.Force {
 			d.closeTorLocked()
 			return ArmResult{}, rep, errState(ErrPreflight)
+		}
+		if ids := tunnelFails(rep); len(ids) > 0 && mode != engine.GuardOff {
+			d.closeTorLocked()
+			return ArmResult{}, rep, errState(fmt.Errorf("%w: %s", ErrForceTunnel, strings.Join(ids, ", ")))
 		}
 		cmd = engine.CmdArmForce
 	} else if _, err := d.eng.Apply(engine.CmdPreflightPass); err != nil {
@@ -186,6 +232,7 @@ func (d *Daemon) Arm(req ArmRequest) (ArmResult, preflight.Report, error) {
 		}
 	}
 	d.sess.color = ""
+	d.sess.confirming = mode == engine.GuardStrict && prof.Guard.ArmWindow > 0
 	d.stateChangedLocked("arm")
 	if d.cfg.HardenAfterArm && !d.hardened {
 		if err := privsep.Harden(); err != nil {
@@ -506,7 +553,7 @@ func (d *Daemon) endLocked(reason string, keepGuard bool) {
 	if !keepGuard && s.guardMode != engine.GuardOff {
 		if c, err := d.cfg.NFT(); err == nil {
 			if err := guard.Remove(c, guard.All()...); err == nil {
-				d.appendLocked(contracts.Event{Type: contracts.EvGuardRemoved, Source: contracts.SourceDaemon, Data: map[string]any{"reason": "disarm"}})
+				d.appendLocked(contracts.Event{Type: contracts.EvGuardRemoved, Source: contracts.SourceDaemon, Data: map[string]any{"reason": removalReason(reason)}})
 			} else {
 				_, _ = fmt.Fprintf(d.cfg.Out, "lethe: guard: %v (run lethe cleanup)\n", err)
 			}
@@ -529,6 +576,18 @@ func (d *Daemon) endLocked(reason string, keepGuard bool) {
 		d.endOnce.Do(func() { close(d.ended) })
 	}
 	d.publishLocked(contracts.Event{Type: contracts.EvStateChanged, Source: contracts.SourceDaemon, Data: map[string]any{"state": string(engine.StateReady), "reason": reason}})
+}
+
+// removalReason names why the guard left: the session end reason, or disarm.
+func removalReason(end string) string {
+	switch end {
+	case "arm_unconfirmed", "daemon_stopped", "ipc_failed":
+		return end
+	}
+	if strings.HasPrefix(end, "arm_failed") {
+		return "arm_failed"
+	}
+	return "disarm"
 }
 
 // DisarmResult summarizes a closed session.
@@ -579,6 +638,8 @@ func (d *Daemon) engagePanicLocked(cause, alertID string, ev contracts.Event) {
 	if ev.Check != "" {
 		data["check"] = ev.Check
 	}
+	d.sess.panic = panicCause{cause: cause, alert: alertID, check: ev.Check}
+	defer d.printLockdownLocked() // after blocking: the explanation never delays it
 	d.appendLocked(contracts.Event{Type: contracts.EvPanicEngaged, Source: contracts.SourceDaemon, AlertID: alertID, Data: data})
 	if alertID != "" {
 		return // the alert's own action plan carries block_all and kill_processes
@@ -587,6 +648,12 @@ func (d *Daemon) engagePanicLocked(cause, alertID string, ev contracts.Event) {
 		d.appendLocked(d.sess.exec.Run(a, ev).Event(""))
 	}
 	d.stateChangedLocked("panic")
+}
+
+func (d *Daemon) printLockdownLocked() {
+	if l := d.lockdownLocked(); l != nil {
+		_, _ = fmt.Fprintf(d.cfg.Out, "lethe: %s\n", l)
+	}
 }
 
 // Unpanic leaves PANIC after re-checking the local state (spec §10.5). The caller proved the
@@ -616,6 +683,7 @@ func (d *Daemon) Unpanic() (map[string]any, error) {
 		_, _ = d.eng.Apply(engine.CmdPanic)
 		return nil, err
 	}
+	d.sess.panic = panicCause{}
 	d.appendLocked(contracts.Event{Type: contracts.EvPanicReleased, Source: contracts.SourceOperator, Data: map[string]any{"recheck": []any{"NET-003", "NET-004", "TUN-001"}}})
 	d.stateChangedLocked("unpanic")
 	return map[string]any{"state": string(d.eng.Session())}, nil
@@ -671,20 +739,44 @@ func (d *Daemon) Ack(id, reason string, authorize func() error) error {
 	return nil
 }
 
-// authLimit is the Authenticator's 5-failures callback: enter panic (spec §17.3).
-func (d *Daemon) authLimit() {
-	go func() { _ = d.Panic("auth_failures") }() // called from inside Verify; avoid re-entrancy
+// authLimit is the Authenticator's 5-failures callback (spec §17.3). It is called from inside
+// Verify, so the work runs on its own goroutine.
+func (d *Daemon) authLimit() { go d.authFailures() }
+
+// authFailures opens SELF-006. Under strict and reactive its CRITICAL plan engages the panic;
+// under off the sensitive methods are locked for 5 minutes and the network is left alone
+// (spec §10.6 item 3).
+func (d *Daemon) authFailures() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	s := d.sess
+	if s == nil {
+		return
+	}
+	var locked time.Duration
+	if s.guardMode == engine.GuardOff {
+		locked = ipc.FailWindow
+		s.auth.LockFor(locked)
+		_, _ = fmt.Fprintf(d.cfg.Out, "lethe: 5 passphrases erradas: ações sensíveis travadas por %s (a rede não foi bloqueada)\n", locked)
+	}
+	d.findingLocked(checks.SELF006{}.Finding(ipc.FailLimit, ipc.FailWindow.Seconds(), locked.Seconds()))
 }
 
-func (d *Daemon) stateChangedLocked(reason string) {
-	if d.sess == nil {
+func (d *Daemon) stateChangedLocked(reason string) { d.stateChangedWithLocked(reason, nil) }
+
+// stateChangedWithLocked journals state.changed with extra fields. While the arm is being
+// confirmed nothing is announced: ARMED is said only after the proof (spec §10.6).
+func (d *Daemon) stateChangedWithLocked(reason string, extra map[string]any) {
+	if d.sess == nil || (d.sess.confirming && d.eng.Session() == engine.StateArmed) {
 		return
 	}
 	c := d.eng.Color()
 	d.sess.color = c
-	d.appendLocked(contracts.Event{Type: contracts.EvStateChanged, Source: contracts.SourceDaemon, Data: map[string]any{
-		"state": string(d.eng.Session()), "color": string(c), "reason": reason, "degraded": toAny(d.eng.Degraded()),
-	}})
+	data := map[string]any{"state": string(d.eng.Session()), "color": string(c), "reason": reason, "degraded": toAny(d.eng.Degraded())}
+	for k, v := range extra {
+		data[k] = v
+	}
+	d.appendLocked(contracts.Event{Type: contracts.EvStateChanged, Source: contracts.SourceDaemon, Data: data})
 }
 
 func toAny(xs []string) []any {

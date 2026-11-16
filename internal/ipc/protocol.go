@@ -74,6 +74,7 @@ const (
 	CodeDenied         = -32001 // peer or role not allowed
 	CodeAuth           = -32002 // missing or wrong proof for a sensitive method
 	CodeState          = -32003 // invalid session transition / precondition
+	CodeArmUnconfirmed = -32004 // strict arm undone: the tunnel gave no proof (exit code 6)
 )
 
 // Response is a reply to a request (exactly one of Result, Error).

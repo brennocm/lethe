@@ -34,6 +34,13 @@ var (
 	ErrNoProof      = errors.New("this method requires a passphrase proof")
 	ErrBadProof     = errors.New("passphrase proof rejected")
 	ErrUnknownNonce = errors.New("unknown, used or expired nonce")
+	ErrLocked       = errors.New("sensitive actions are locked for 5 minutes after 5 wrong passphrase proofs (SELF-006); wait and try again")
+)
+
+// FailLimit and FailWindow are the failure budget of spec §17.3 (SELF-006).
+const (
+	FailLimit  = failLimit
+	FailWindow = failWindow
 )
 
 // DeriveKey is K = scrypt(passphrase, session salt). The caller wipes passphrase.
@@ -66,6 +73,24 @@ type Authenticator struct {
 	nonces  map[string]time.Time
 	fails   []time.Time
 	onLimit func()
+	locked  time.Time // sensitive methods refused until then (SELF-006 under guard off)
+}
+
+// LockFor refuses every proof for d, without counting the refusals as new failures.
+func (a *Authenticator) LockFor(d time.Duration) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.locked = a.now().Add(d)
+}
+
+// LockedUntil is the end of the current lock (zero when not locked).
+func (a *Authenticator) LockedUntil() time.Time {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.now().Before(a.locked) {
+		return a.locked
+	}
+	return time.Time{}
 }
 
 // NewAuthenticator takes ownership of key (mlocked here, wiped by Close). onLimit runs once
@@ -98,6 +123,9 @@ func (a *Authenticator) Challenge() ([]byte, error) {
 
 // Verify consumes the nonce and checks the MAC. Every failure counts towards the budget.
 func (a *Authenticator) Verify(method string, params json.RawMessage, p *Auth) error {
+	if !a.LockedUntil().IsZero() {
+		return ErrLocked
+	}
 	if p == nil {
 		a.fail()
 		return ErrNoProof

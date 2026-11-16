@@ -245,3 +245,10 @@ func TestNET002_FromBlocked(t *testing.T) {
 		t.Fatalf("%+v", f)
 	}
 }
+
+func TestSELF006_Finding(t *testing.T) {
+	f := SELF006{}.Finding(5, 300, 300)
+	if f.Check != "SELF-006" || f.Severity != contracts.SeverityCritical || f.Data["locked_s"] != 300.0 {
+		t.Fatalf("%+v", f)
+	}
+}

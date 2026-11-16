@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/google/nftables"
 	"github.com/spf13/cobra"
 
 	"lethe/internal/buildinfo"
@@ -23,6 +25,7 @@ import (
 	"lethe/internal/contracts"
 	"lethe/internal/daemon"
 	"lethe/internal/discovery"
+	"lethe/internal/guard"
 	"lethe/internal/ipc"
 	"lethe/internal/platform"
 	"lethe/internal/preflight"
@@ -83,6 +86,8 @@ func rpcErr(err error) error {
 	switch {
 	case ie.Code == ipc.CodeAuth || ie.Code == ipc.CodeDenied:
 		return WithCode(ExitAuth, e)
+	case ie.Code == ipc.CodeArmUnconfirmed:
+		return WithCode(ExitArmUnconfirmed, e)
 	case strings.Contains(ie.Message, "preflight failed"):
 		return WithCode(ExitPreflightFailed, e)
 	}
@@ -134,6 +139,26 @@ type armFlags struct {
 	reason   string
 	noManual bool
 	secret   secretFlags
+	window   time.Duration // strict arm confirmation window of the profile (set by request)
+}
+
+// confirming tells the operator why the arm takes a while (spec §10.6 item 2).
+func (f *armFlags) confirming(w io.Writer) {
+	if f.window > 0 {
+		_, _ = fmt.Fprintf(w, "Guarda estrito: aguardando até %s o túnel provar que passa tráfego (abra uma página para acelerar)...\n", f.window)
+	}
+}
+
+// armFailed prints what the operator needs after a refused or undone arm.
+func armFailed(w io.Writer, rep preflight.Report, err error) error {
+	err = rpcErr(err)
+	if exitCode(err) == ExitPreflightFailed && rep.Result != "" {
+		printPreflight(w, rep)
+	}
+	if exitCode(err) == ExitArmUnconfirmed {
+		_, _ = fmt.Fprintln(w, "lethe: o bloqueio foi desfeito e a rede está como antes do arm; nada da operação começou")
+	}
+	return err
 }
 
 func (f *armFlags) register(cmd *cobra.Command) {
@@ -163,6 +188,10 @@ func (f *armFlags) request(cmd *cobra.Command, op platform.Operator) (daemon.Arm
 	base, err := os.ReadFile(p.Baseline.File) // #nosec G703 G304 -- the operator's own profile, read with their rights
 	if err != nil {
 		return daemon.ArmRequest{}, fmt.Errorf("baseline: %w", err)
+	}
+	f.window = 0
+	if mode := cmp.Or(f.guard, p.Guard.Mode); mode == "strict" {
+		f.window = p.Guard.ArmWindow
 	}
 	req := daemon.ArmRequest{Profile: raw, Baseline: base, Guard: f.guard, Force: f.force, Reason: f.reason}
 	if !f.noManual {
@@ -220,22 +249,19 @@ func newRunCmd() *cobra.Command {
 			defer stopDaemon()
 			errc := make(chan error, 1)
 			go func() { errc <- d.Run(runCtx) }()
+			f.confirming(cmd.ErrOrStderr())
 			res, rep, err := d.Arm(req)
 			if err != nil {
 				stopDaemon()
 				<-errc
-				if rep.Result == preflight.Fail && !f.force {
-					printPreflight(cmd.ErrOrStderr(), rep)
-					return WithCode(ExitPreflightFailed, err)
-				}
-				return rpcErr(err)
+				return armFailed(cmd.ErrOrStderr(), rep, err)
 			}
 			printArmed(cmd.OutOrStdout(), res)
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Ctrl-C desarma. Em PÂNICO, use `lethe unpanic` antes.")
 			<-ctx.Done()
 			st := d.Status()
 			if st.State == "PANIC" {
-				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "lethe: sessão em PÂNICO: o bloqueio fica ativo; `sudo lethe cleanup` remove")
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "lethe: sessão encerrada em PÂNICO: o bloqueio fica ativo de propósito.\n  como sair: sudo lethe cleanup (remove só as tabelas lethe*), ou reinicie a máquina")
 			}
 			var dr daemon.DisarmResult
 			if st.State == "ARMED" {
@@ -386,10 +412,12 @@ func newArmCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_ = c.SetDeadline(time.Now().Add(2 * time.Minute))
+			_ = c.SetDeadline(time.Now().Add(2*time.Minute + f.window))
+			f.confirming(cmd.ErrOrStderr())
 			var res daemon.ArmResult
 			if err := c.Call("session.arm", req, nil, &res); err != nil {
-				return rpcErr(err)
+				var rep preflight.Report
+				return armFailed(cmd.ErrOrStderr(), rep, err)
 			}
 			printArmed(cmd.OutOrStdout(), res)
 			return nil
@@ -512,7 +540,7 @@ func newStatusCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			c, err := dialDaemon()
 			if err != nil {
-				return err
+				return statusNoDaemon(cmd.OutOrStdout(), asJSON, err)
 			}
 			defer func() { _ = c.Close() }()
 			var st daemon.Status
@@ -520,25 +548,91 @@ func newStatusCmd() *cobra.Command {
 				return rpcErr(err)
 			}
 			st.AuthSalt = nil // not for humans or scripts; clients fetch it when they prove
-			if asJSON {
-				if err := contracts.Validate("status", st); err != nil {
-					return fmt.Errorf("internal: status output violates contract: %w", err)
-				}
-				return json.NewEncoder(cmd.OutOrStdout()).Encode(st)
-			}
-			return printStatus(cmd.OutOrStdout(), st)
+			return writeStatus(cmd.OutOrStdout(), st, asJSON)
 		},
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "machine-readable output (schema: status)")
 	return cmd
 }
 
+func writeStatus(w io.Writer, st daemon.Status, asJSON bool) error {
+	if asJSON {
+		if err := contracts.Validate("status", st); err != nil {
+			return fmt.Errorf("internal: status output violates contract: %w", err)
+		}
+		return json.NewEncoder(w).Encode(st)
+	}
+	return printStatus(w, st)
+}
+
+// leftoverTables lists lethe* tables in this network namespace (a variable for tests).
+var leftoverTables = func() ([]string, error) {
+	c, err := nftables.New()
+	if err != nil {
+		return nil, err
+	}
+	refs, err := guard.Leftovers(c)
+	if err != nil {
+		return nil, err
+	}
+	out := []string{}
+	for _, r := range refs {
+		out = append(out, r.String())
+	}
+	return out, nil
+}
+
+var isRoot = func() bool { return os.Geteuid() == 0 }
+
+// statusNoDaemon does not stop at "daemon unreachable" (spec §10.6 item 6): as root it looks
+// for lethe* tables left by a crash and says how to remove them. The exit code stays 12.
+func statusNoDaemon(w io.Writer, asJSON bool, cause error) error {
+	st := daemon.Status{State: "NO_DAEMON", Color: "GRAY", Alerts: []daemon.AlertView{}, Degraded: []string{}, Sensors: []daemon.SensorView{}}
+	note := ""
+	switch {
+	case !isRoot():
+		st.Degraded = append(st.Degraded, "leftover_tables_unchecked")
+		note = "sem root não dá para ver se sobraram tabelas lethe* bloqueando a rede; sudo lethe status verifica"
+	default:
+		tables, err := leftoverTables()
+		if err != nil {
+			st.Degraded = append(st.Degraded, "leftover_tables_unchecked")
+			note = fmt.Sprintf("não deu para listar as tabelas nftables: %v", err)
+			break
+		}
+		st.Lockdown = daemon.LeftoverLockdown(tables)
+		if st.Lockdown == nil {
+			note = "nenhuma tabela lethe* encontrada: o lethe não está bloqueando a rede"
+		}
+	}
+	if err := writeStatus(w, st, asJSON); err != nil {
+		return err
+	}
+	if !asJSON && note != "" {
+		_, _ = fmt.Fprintln(w, note)
+	}
+	return WithCode(ExitDaemonDown, cause)
+}
+
 func printStatus(w io.Writer, st daemon.Status) error {
+	if st.State == "NO_DAEMON" {
+		_, _ = fmt.Fprintln(w, "nenhum daemon do lethe rodando")
+		if st.Lockdown != nil {
+			_, _ = fmt.Fprintf(w, "BLOQUEIO: %s\n", st.Lockdown)
+		}
+		return nil
+	}
 	_, _ = fmt.Fprintf(w, "estado %s  cor %s", st.State, st.Color)
 	if st.Session != "" {
 		_, _ = fmt.Fprintf(w, "  sessão %s  guarda %s  impressão %s", st.Session, st.Guard, st.Fingerprint)
 	}
 	_, _ = fmt.Fprintln(w)
+	if st.Confirming {
+		_, _ = fmt.Fprintln(w, "arm em confirmação: o túnel ainda não provou que passa tráfego")
+	}
+	if st.Lockdown != nil {
+		_, _ = fmt.Fprintf(w, "BLOQUEIO: %s\n", st.Lockdown)
+	}
 	if len(st.Degraded) > 0 {
 		_, _ = fmt.Fprintf(w, "visibilidade degradada: %s\n", strings.Join(st.Degraded, ", "))
 	}

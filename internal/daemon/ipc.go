@@ -30,6 +30,8 @@ type Status struct {
 	Degraded    []string     `json:"degraded"`
 	Sensors     []SensorView `json:"sensors"`
 	Agent       bool         `json:"agent"`
+	Confirming  bool         `json:"confirming,omitempty"` // strict arm waiting for the tunnel's proof
+	Lockdown    *Lockdown    `json:"lockdown,omitempty"`   // what lethe blocks, why and how to get out
 }
 
 // AlertView is one alert in the status.
@@ -70,6 +72,8 @@ func (d *Daemon) Status() Status {
 		st.Sensors = append(st.Sensors, SensorView{Source: src, Up: !s.down[src]})
 	}
 	sortSensors(st.Sensors)
+	st.Confirming = s.confirming
+	st.Lockdown = d.lockdownLocked()
 	return st
 }
 

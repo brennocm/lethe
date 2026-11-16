@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["state", "color", "alerts", "degraded", "sensors", "agent"],
   "properties": {
-    "state": { "enum": ["NO_BASELINE", "READY", "VERIFIED", "ARMED", "PANIC"] },
+    "state": { "enum": ["NO_BASELINE", "READY", "VERIFIED", "ARMED", "PANIC", "NO_DAEMON"] },
     "color": { "enum": ["GREEN", "YELLOW", "RED", "GRAY"] },
     "session": { "type": "string" },
     "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{4}(-[0-9a-f]{4}){7}$" },
@@ -41,6 +41,18 @@
         "properties": { "source": { "type": "string" }, "up": { "type": "boolean" } }
       }
     },
-    "agent": { "type": "boolean" }
+    "agent": { "type": "boolean" },
+    "confirming": { "type": "boolean" },
+    "lockdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["what", "why", "exit"],
+      "properties": {
+        "what": { "type": "string" },
+        "why": { "type": "string" },
+        "exit": { "type": "string" },
+        "tables": { "type": "array", "items": { "type": "string" } }
+      }
+    }
   }
 }

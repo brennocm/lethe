@@ -10,6 +10,7 @@ const (
 	ExitSessionCritical = 3
 	ExitIntegrity       = 4
 	ExitAuth            = 5
+	ExitArmUnconfirmed  = 6
 	ExitPrivileges      = 10
 	ExitRequirement     = 11
 	ExitDaemonDown      = 12

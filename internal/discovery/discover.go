@@ -40,7 +40,7 @@ func Discover(k Kernel, opt Options) Snapshot {
 	classes := Classify(infos, opt.Overrides)
 	for _, l := range links {
 		ifc := Iface{LinkInfo: l.LinkInfo, Class: classes[l.Name], Up: l.Up, Running: l.Running, MAC: l.MAC, PermMAC: l.PermMAC,
-			Addrs: []string{}, GlobalV6: []string{}, IPv6Disabled: k.IPv6Disabled(l.Name)}
+			Addrs: []string{}, GlobalV6: []string{}, IPv6Disabled: k.IPv6Disabled(l.Name), RxBytes: l.RxBytes}
 		for _, a := range l.Addrs {
 			ifc.Addrs = append(ifc.Addrs, a.String())
 			if a.Addr().Is6() && a.Addr().IsGlobalUnicast() && !a.Addr().IsPrivate() {

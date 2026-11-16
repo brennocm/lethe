@@ -45,15 +45,22 @@ type fakeKernel struct {
 	mu       sync.Mutex
 	probeV4  int // link index the probe route uses
 	endpoint string
+	now      func() time.Time // the peer's last handshake (nil or stale = no handshake)
+	stale    bool
+	rx       uint64 // wg0 received bytes
+	wgDown   bool
 }
 
 func (k *fakeKernel) Links() ([]discovery.KernelLink, error) {
 	return []discovery.KernelLink{
 		{LinkInfo: discovery.LinkInfo{Index: 1, Name: "lo", Type: "device"}, Up: true, Addrs: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/8")}},
 		{LinkInfo: discovery.LinkInfo{Index: 2, Name: "eth0", Type: "device", HasDevice: true}, Up: true, Running: true, Addrs: []netip.Prefix{netip.MustParsePrefix("203.0.113.10/24")}},
-		{LinkInfo: discovery.LinkInfo{Index: 3, Name: "wg0", Type: "wireguard"}, Up: true, Running: true, Addrs: []netip.Prefix{netip.MustParsePrefix("10.66.0.2/32")}},
+		{LinkInfo: discovery.LinkInfo{Index: 3, Name: "wg0", Type: "wireguard"}, Up: !k.down(), Running: !k.down(), Addrs: []netip.Prefix{netip.MustParsePrefix("10.66.0.2/32")}, RxBytes: k.rxBytes()},
 	}, nil
 }
+
+func (k *fakeKernel) rxBytes() uint64 { k.mu.Lock(); defer k.mu.Unlock(); return k.rx }
+func (k *fakeKernel) down() bool      { k.mu.Lock(); defer k.mu.Unlock(); return k.wgDown }
 
 func (k *fakeKernel) DefaultRoutes(family int) ([]discovery.RawRoute, error) {
 	if family == 10 {
@@ -82,6 +89,9 @@ func (k *fakeKernel) WireGuard() ([]discovery.WGDevice, error) {
 		if k.endpoint != "" {
 			peer.Endpoint = netip.MustParseAddrPort(k.endpoint)
 		}
+	}
+	if k.now != nil && !k.stale {
+		peer.Stats.LastHandshake = k.now()
 	}
 	return []discovery.WGDevice{{Name: "wg0", Peers: []discovery.WGPeerRaw{peer}}}, nil
 }
@@ -205,7 +215,7 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	id, _ := b.Identity()
-	f := &fixture{k: &fakeKernel{probeV4: 3}, nft: &fakeNFT{tables: map[string]*nftables.Table{}}, clock: clk, home: home,
+	f := &fixture{k: &fakeKernel{probeV4: 3, now: clk.Now}, nft: &fakeNFT{tables: map[string]*nftables.Table{}}, clock: clk, home: home,
 		pass: pass, base: ct, prof: profile.Template, ident: id, out: &syncBuf{}, tor: &fakeTor{changed: make(chan struct{}, 1)}}
 	f.sockDir = filepath.Join(home, "run")
 	var mono int64
@@ -219,6 +229,7 @@ func newFixture(t *testing.T) *fixture {
 		ProcRoot:   t.TempDir(),
 		Out:        f.out,
 		Tor:        func(string, string) discovery.TorSource { return f.tor },
+		Sleep:      clk.Advance,
 	})
 	return f
 }

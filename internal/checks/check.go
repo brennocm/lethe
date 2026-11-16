@@ -28,6 +28,7 @@ const (
 	SrcWgctrl   SourceID = "wgctrl"
 	SrcNFTMon   SourceID = "nftmon"
 	SrcTorctl   SourceID = "torctl"
+	SrcIPC      SourceID = "ipc" // the daemon's own IPC server (proof failures)
 )
 
 // Check is the static metadata every check exposes. Behaviour lives in per-check functions,

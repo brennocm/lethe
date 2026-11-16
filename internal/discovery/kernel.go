@@ -21,6 +21,7 @@ type KernelLink struct {
 	MAC     string
 	PermMAC string
 	Addrs   []netip.Prefix
+	RxBytes uint64 // link statistics (arm confirmation, spec §10.6)
 }
 
 // RawRoute is a route as read from the kernel.
@@ -83,6 +84,9 @@ func (k NetlinkKernel) Links() ([]KernelLink, error) {
 		}
 		if _, err := os.Stat(k.path("sys/class/net/" + a.Name + "/device")); err == nil {
 			kl.HasDevice = true
+		}
+		if a.Statistics != nil {
+			kl.RxBytes = a.Statistics.RxBytes
 		}
 		if len(a.HardwareAddr) > 0 {
 			kl.MAC = a.HardwareAddr.String()

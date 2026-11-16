@@ -34,6 +34,7 @@ type Iface struct {
 	Addrs        []string `json:"addrs"`
 	GlobalV6     []string `json:"global_v6"`
 	IPv6Disabled bool     `json:"ipv6_disabled"`
+	RxBytes      uint64   `json:"-"` // received bytes (arm confirmation); not part of the discover output
 }
 
 // Tunnel is one tunnel interface and what is known about its peers.
