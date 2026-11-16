@@ -72,9 +72,9 @@ func (b *Baseline) Validate() error {
 	if _, err := b.Identity(); err != nil {
 		errs = append(errs, fmt.Errorf("log_identity: %w", err))
 	}
-	for _, m := range b.PermMACs {
+	for i, m := range b.PermMACs {
 		if _, err := net.ParseMAC(m); err != nil {
-			errs = append(errs, fmt.Errorf("perm_macs: %q: %w", m, err))
+			errs = append(errs, fmt.Errorf("perm_macs[%d]: not a MAC address", i)) // never the value
 		}
 	}
 	names := map[string]bool{}
@@ -90,35 +90,37 @@ func (b *Baseline) Validate() error {
 
 func (n Network) validate(i int) error {
 	var errs []error
-	bad := func(field, v string, err error) {
-		errs = append(errs, fmt.Errorf("networks[%d].%s: %q: %w", i, field, v, err))
+	// Messages name the field, never the value (parser errors quote their input, so they are
+	// dropped too).
+	bad := func(field, what string) {
+		errs = append(errs, fmt.Errorf("networks[%d].%s: not %s", i, field, what))
 	}
 	if strings.TrimSpace(n.Name) == "" {
 		errs = append(errs, fmt.Errorf("networks[%d].name is required", i))
 	}
 	if n.PublicIPv4 != "" {
 		if a, err := netip.ParseAddr(n.PublicIPv4); err != nil || !a.Is4() {
-			bad("public_ipv4", n.PublicIPv4, errors.New("not an IPv4 address"))
+			bad("public_ipv4", "an IPv4 address")
 		}
 	}
 	if n.PublicIPv6 != "" {
 		if a, err := netip.ParseAddr(n.PublicIPv6); err != nil || !a.Is6() {
-			bad("public_ipv6", n.PublicIPv6, errors.New("not an IPv6 address"))
+			bad("public_ipv6", "an IPv6 address")
 		}
 	}
 	for _, r := range n.Resolvers {
 		if _, err := netip.ParseAddr(r); err != nil {
-			bad("resolvers", r, err)
+			bad("resolvers", "an IP address")
 		}
 	}
 	if n.GatewayIP != "" {
 		if _, err := netip.ParseAddr(n.GatewayIP); err != nil {
-			bad("gateway_ip", n.GatewayIP, err)
+			bad("gateway_ip", "an IP address")
 		}
 	}
 	if n.GatewayMAC != "" {
 		if _, err := net.ParseMAC(n.GatewayMAC); err != nil {
-			bad("gateway_mac", n.GatewayMAC, err)
+			bad("gateway_mac", "a MAC address")
 		}
 	}
 	return errors.Join(errs...)

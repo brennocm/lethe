@@ -73,3 +73,14 @@ func TestBaseline_RedactIsCaseInsensitive(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+func TestBaseline_ValidationErrorsCarryNoValues(t *testing.T) {
+	b := scrubBase(t)
+	b.PermMACs = []string{"zz-secret-mac"}
+	b.Networks[0].GatewayIP = "secret-gw"
+	b.Networks[0].Resolvers = []string{"secret-dns"}
+	err := b.Validate()
+	if err == nil || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("%v", err)
+	}
+}
