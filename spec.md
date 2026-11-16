@@ -154,6 +154,7 @@ Grupo criminoso com capacidade técnica alta, interesse em identificar e localiz
 8. **Testável.** Cada detector tem um caso de autoteste que comprova que ele funciona naquela máquina, naquele momento, e um teste e2e em network namespace no CI.
 9. **Dados de baixa confiança só elevam a severidade.** O que vem do processo de sessão (mesmo UID do navegador) pode abrir alertas, mas nunca fechar nem rebaixar alertas.
 10. **Sem `exec` de comandos externos.** Tudo passa por syscalls, netlink e D-Bus. A única exceção é o próprio binário (`/proc/self/exe`) re-executado para separar privilégios.
+11. **Ajudar, não atrapalhar o operador.** Quem usa o lethe é investigador, não especialista em firewall. O bloqueio fica onde impede um vazamento, mas nenhum erro de configuração pode trancar a rede em silêncio: todo estado de bloqueio diz, em linguagem simples, o que aconteceu, por quê e o comando exato para sair; o que tranca a rede é difícil de ativar por engano (§10.6).
 
 ---
 
@@ -293,7 +294,7 @@ Na implementação (ADR 0004), a interface carrega só os metadados (`ID`, `Kind
                                                                  └─────────┘
 ```
 
-Transições inválidas (por exemplo, `arm` em PRONTO sem preflight) retornam erro tipado. A única exceção é `arm --force --reason`, que fica registrada. A tabela de transições DEVE estar em `internal/engine/session.go` e ser testada exaustivamente (todas as combinações estado × comando).
+Transições inválidas (por exemplo, `arm` em PRONTO sem preflight) retornam erro tipado. A única exceção é `arm --force --reason`, que fica registrada. O `--force` nunca passa por cima de uma falha de túnel quando o guarda é `strict` ou `reactive` (§10.6). A tabela de transições DEVE estar em `internal/engine/session.go` e ser testada exaustivamente (todas as combinações estado × comando).
 
 Dentro de **ARMADO** e **PÂNICO**, o estado global é a cor:
 
@@ -310,7 +311,7 @@ Precedência: **VERMELHO > CINZA > AMARELO > VERDE**.
 
 1. **Baseline** (antes da operação, em rede conhecida): captura a identidade real (§12).
 2. **Preflight**: checks PF, passada única dos P e checklist humano (§9.8). Falha crítica bloqueia o `arm`, a menos que se use `--force --reason "..."`, o que fica registrado.
-3. **Arm**: decifra a baseline, inicia os sensores, aplica o guarda (se habilitado), gera a chave de sessão, abre o log e mostra a impressão digital da chave de sessão (§14.3).
+3. **Arm**: decifra a baseline, inicia os sensores, aplica o guarda (se habilitado), gera a chave de sessão, abre o log e mostra a impressão digital da chave de sessão (§14.3). No modo estrito, o arm só se completa depois que o túnel prova que passa tráfego com o guarda aplicado (janela de confirmação, §10.6); sem essa prova, o guarda é removido e a sessão não fica armada.
 4. **Execução**: monitoramento contínuo, alertas e respostas.
 5. **Pânico** (automático ou manual): bloqueio total, encerramento dos processos configurados, alerta em tela cheia.
 6. **Unpanic**: exige reconhecimento dos CRITICAL abertos, nova rodada dos checks de estado e passphrase (§10.5).
@@ -505,6 +506,7 @@ Convenções: **P** = passivo, **A** = ativo, **PF** = preflight (pontual). Seve
 | SELF-003 | Agente de sessão ou GUI desconectados | P | Sem heartbeat IPC por mais de 3 s. Sem agente, o daemon passa a alertar só pelo terminal e pelo journald (não tem acesso ao D-Bus de sessão) | W (cinza) |
 | SELF-004 | Selftest desatualizado | PF | Último selftest há mais de 24 h, ou nunca rodado nesta máquina | W |
 | SELF-005 | Relógio alterado | P | `timerfd` com `TFD_TIMER_CANCEL_ON_SET` (aviso do kernel quando o relógio é ajustado) + comparação entre `CLOCK_REALTIME` e `CLOCK_BOOTTIME` a cada 1 s (salto > 2 s) | I |
+| SELF-006 | Tentativas de passphrase | P | 5 provas erradas em 5 min numa ação sensível (§17.3). Nos guardas `strict` e `reactive`, a resposta é o pânico; no `off`, as ações sensíveis ficam travadas por 5 min e não há bloqueio de rede (§10.6) | C |
 
 ### 9.7 Fontes e checks dependentes
 
@@ -536,6 +538,8 @@ Executa todos os **PF**, uma passada única (`Evaluate`) dos **P** e o checklist
 - [ ] O horário da operação não segue o padrão do expediente pessoal
 
 O resultado é `PASS`, `WARN` ou `FAIL` (com qualquer C). `FAIL` → exit code 2.
+
+Falhas de **túnel** (TUN-001, TUN-003 e TUN-008 em CRITICAL) não podem ser contornadas com `--force` quando o guarda é `strict` ou `reactive`: o guarda cortaria a rede na hora. A mensagem diz isso e oferece as saídas: conectar o túnel, ou armar com `--guard off` (§10.6). Com `--guard off`, o `--force` continua valendo para elas.
 
 ### 9.9 Checks ativos (NET-011)
 
@@ -601,6 +605,33 @@ NET-002 (tentativa bloqueada no estrito) é WARNING por definição: o guarda fu
 - Com `guard.panic.keep_tunnel: true`, o pânico mantém só o túnel (igual ao estrito sem exceções de LAN). O padrão é **bloquear tudo**, inclusive o túnel.
 - `guard.panic.link_down: auto | always | never` (padrão `auto` = usar `link_down` quando o kernel não tem `netdev egress`).
 
+### 10.6 Proteção contra trancamento (princípio 11)
+
+O bloqueio é deliberado só quando protege contra um vazamento durante a operação. Antes de a operação começar, ou quando o próprio guarda impediria o túnel de funcionar, a ferramenta prefere não armar e explicar.
+
+**Evitar o trancamento por engano**
+
+1. **`--force` não arma um guarda que cortaria a rede.** Com `strict` ou `reactive`, um FAIL de túnel no preflight (TUN-001, TUN-003, TUN-008) recusa o arm mesmo com `--force`, com exit code 2. A mensagem nomeia o problema e as saídas (`--guard off` ou conectar o túnel).
+2. **Janela de confirmação do arm** (`guard.arm_confirm`, padrão `30s`; `0` desliga e gera WARN no preflight). No `strict`, depois de aplicar as tabelas, o daemon espera uma prova de que o túnel funciona com o guarda:
+   - WireGuard: um handshake com menos de 180 s em algum peer, ou `rx_bytes` subindo no túnel;
+   - Tor: `status/circuit-established=1`;
+   - OpenVPN e genéricos: `rx_bytes` subindo em alguma interface de túnel (estatísticas netlink do link).
+
+   A prova é só local, sem tráfego gerado pela ferramenta (princípio 5). Se ela não vier dentro da janela, o daemon remove o guarda (`guard.removed`, `reason: arm_unconfirmed`), fecha o log com `session.end` (`reason: arm_unconfirmed`) e a CLI sai com exit code 6, explicando o que faltou (por exemplo: "nenhum tráfego pelo túnel em 30 s; abra uma página ou ative o keepalive"). Durante a janela, a sessão já está armada e protegida; a reversão só acontece antes de o operador começar a operar, então não há vazamento de operação em curso. O estado `ARMADO` só é anunciado (`ARMADO` no terminal, cor na GUI) depois da prova.
+3. **Passphrase errada no modo observador não bloqueia a rede.** O SELF-006 continua CRITICAL, mas com `guard.mode: off` a resposta é travar as ações sensíveis por 5 min, sem `block_all`. O `lethe panic` explícito continua bloqueando em qualquer modo, porque foi pedido pelo operador.
+4. **O perfil gerado por `lethe profile init` e pelo `lethe setup` (§15.1) começa em `off`** com um comentário que explica como passar para `strict` depois do selftest. O `strict` continua sendo o recomendado (§11.1).
+
+**Sempre mostrar a saída**
+
+5. Todo estado em que a rede está bloqueada pelo lethe (pânico, guarda estrito sem túnel, tabelas `lethe*` que sobraram) é descrito no `status` (humano e `--json`, campo `lockdown`), no terminal do `run` e nas mensagens de erro, sempre com três partes: **o que** (por exemplo "a rede está bloqueada: pânico"), **por quê** (causa e alerta, sem valores da baseline) e **como sair** (o comando exato: `lethe unpanic`, `sudo lethe cleanup` ou reiniciar a máquina).
+6. **`lethe status` sem daemon** não para no "daemon inacessível". Como root, ele lista as tabelas `lethe*` que sobraram (crash, `kill -9`, sessão interrompida) e diz que a rede está bloqueada por elas e que `sudo lethe cleanup` as remove. Sem root, ele diz que não consegue verificar e que `sudo lethe status` verifica.
+7. `lethe cleanup` diz o que removeu e confirma que a rede voltou ao estado de antes do lethe (ou que não havia nada a remover).
+
+**Primeiro uso guiado**
+
+8. `lethe setup` é um assistente no terminal que cria o perfil e a baseline com perguntas simples (identificador da operação, persona, tipo de túnel detectado pela descoberta) e grava o perfil em `off`. Ele só oferece passar para `strict` depois de um `lethe selftest` aprovado nesta máquina, e então roda o preflight para mostrar o que o estrito vai permitir.
+9. `lethe report` e `lethe verify` abrem o log com `--baseline FILE` (pede a passphrase e usa a `log_identity` embutida), além de `--identity`. Sem chaves institucionais, o operador lê o próprio relatório sem gerar outra chave.
+
 ---
 
 ## 11. Modo guarda (nftables)
@@ -611,7 +642,7 @@ NET-002 (tentativa bloqueada no estrito) é WARNING por definição: o guarda fu
 |---|---|---|
 | `off` (observador) | Nenhuma regra; só detecta e alerta | Onde não se pode mexer no firewall |
 | `reactive` | Sem regras até um CRITICAL; então aplica `block_all`. **O primeiro pacote vazado já saiu** | Quando o allowlist não é confiável |
-| `strict` (**recomendado**) | No `arm`, aplica uma tabela que só deixa sair pelas interfaces de saída o tráfego dos endpoints e as exceções de enlace. Vazamentos são **impedidos** e viram NET-002. Se o daemon morrer, a tabela fica: **fail-closed** | Padrão quando há perfil |
+| `strict` (**recomendado**) | No `arm`, aplica uma tabela que só deixa sair pelas interfaces de saída o tráfego dos endpoints e as exceções de enlace. Vazamentos são **impedidos** e viram NET-002. Se o daemon morrer, a tabela fica: **fail-closed** | Depois de um selftest aprovado nesta máquina; o perfil gerado começa em `off` (§10.6) |
 
 ### 11.2 Propriedades do netfilter usadas no design
 
@@ -782,6 +813,7 @@ baseline:
 
 guard:
   mode: strict                   # off | reactive | strict
+  arm_confirm: 30s               # janela para o túnel provar que funciona com o guarda (0 = sem janela)
   panic:
     keep_tunnel: false
     link_down: auto              # auto | always | never
@@ -918,20 +950,21 @@ UTC com microssegundos mais `CLOCK_MONOTONIC`. Saltos de relógio são registrad
 | `lethe baseline create [--manual] [--out FILE] [--recipient AGE]` | Cria a baseline cifrada |
 | `lethe baseline add-network [--manual] FILE` | Adiciona uma rede conhecida |
 | `lethe baseline show FILE` | Mostra o conteúdo (pede a passphrase) |
-| `lethe profile init [--out FILE]` | Gera um perfil comentado |
+| `lethe setup` | Assistente do primeiro uso: perfil + baseline, começando em `off` (§10.6) |
+| `lethe profile init [--out FILE]` | Gera um perfil comentado (guarda `off`) |
 | `lethe profile validate FILE` | Valida contra o schema |
 | `lethe discover [--json] [--learn]` | Mostra o que foi descoberto (sem armar) |
 | `lethe preflight -p FILE [--json] [--no-manual]` | Roda o preflight |
 | `lethe run -p FILE [--guard off\|reactive\|strict] [--no-gui] [--tui] [--no-active] [--force --reason TEXT]` | Modo portátil: sobe o daemon em primeiro plano e arma |
 | `lethe arm -p FILE [--force --reason TEXT]` / `lethe disarm` | Com o daemon rodando como serviço |
-| `lethe status [--json]` | Estado, alertas abertos, sensores |
+| `lethe status [--json]` | Estado, alertas abertos, sensores e, se houver, o bloqueio ativo com a saída (`lockdown`). Sem daemon, procura tabelas `lethe*` que sobraram (§10.6) |
 | `lethe events [--follow] [--severity S] [--json]` | Fluxo de eventos |
 | `lethe ack ID --reason TEXT` | Reconhece um alerta |
 | `lethe panic` / `lethe unpanic` | Bloqueio manual / liberação |
 | `lethe selftest [--case ID] [--json]` | Autoteste (§18) |
-| `lethe report SESSÃO [--format md\|json]` | Relatório |
-| `lethe verify SESSÃO [--expect-fingerprint FP]` | Verificação de integridade |
-| `lethe cleanup` | Remove tabelas `lethe*`, socket e arquivos temporários |
+| `lethe report SESSÃO [--format md\|json] (--identity FILE \| --baseline FILE)` | Relatório |
+| `lethe verify SESSÃO [--expect-fingerprint FP] (--identity FILE \| --baseline FILE)` | Verificação de integridade |
+| `lethe cleanup` | Remove tabelas `lethe*`, socket e arquivos temporários e diz o que removeu |
 | `lethe version [--json]` | Versão, commit, hash do binário, data da base geo |
 | `lethe daemon` / `lethe agent` | Internos (o `run` e as unidades systemd os chamam) |
 
@@ -947,6 +980,7 @@ Toda saída com `--json` segue schemas em `internal/contracts/`. A saída humana
 | 3 | A sessão terminou com pelo menos um CRITICAL |
 | 4 | A verificação de integridade falhou |
 | 5 | Autenticação falhou (passphrase incorreta ou peer não autorizado) |
+| 6 | Arm desfeito: o túnel não provou tráfego com o guarda dentro de `guard.arm_confirm` (§10.6) |
 | 10 | Privilégios insuficientes |
 | 11 | Requisito de sistema ausente (kernel, nftables, cgroup v2) |
 | 12 | Daemon inacessível |
@@ -1012,7 +1046,7 @@ O navegador comprometido roda com o UID do operador e, portanto, passaria no `SO
 
 1. O cliente pede `auth.challenge` e recebe um nonce de 32 bytes (validade de 30 s, uso único).
 2. O cliente manda `HMAC-SHA256(K, nonce ‖ método ‖ params_jcs)`, onde `K = scrypt(passphrase, salt_sessão)`. O salt vai no `session.start`.
-3. O daemon confere com a `K` que mantém em memória protegida. Erros geram `ipc.denied`; depois de 5 erros em 5 min, o daemon entra em pânico.
+3. O daemon confere com a `K` que mantém em memória protegida. Erros geram `ipc.denied`; depois de 5 erros em 5 min, abre-se SELF-006 CRITICAL e, com guarda `strict` ou `reactive`, o daemon entra em pânico. Com guarda `off`, as ações sensíveis ficam travadas por 5 min, sem bloqueio de rede (§10.6).
 
 Assim, a passphrase não trafega pelo socket. (Um keylogger no X11 continua sendo um risco: §22.)
 
@@ -1086,7 +1120,7 @@ Depois de inicializar como root (abrir sockets, ler a baseline, fazer fork do ag
 | `CAP_IPC_LOCK` | `mlock` além do `RLIMIT_MEMLOCK` |
 
 2. aplica `PR_SET_NO_NEW_PRIVS`, `PR_SET_DUMPABLE=0` e `RLIMIT_CORE=0`;
-3. aplica seccomp (§24, M14): primeiro em modo `SECCOMP_RET_LOG` para levantar as syscalls na suíte e2e, depois em allowlist (`SECCOMP_RET_KILL_PROCESS`).
+3. aplica seccomp em duas fases. **Fase 1 (já no M8):** uma denylist, em todas as threads (`SECCOMP_FILTER_FLAG_TSYNC`), das syscalls que o daemon nunca usa e que servem para escalar ou sair do confinamento (`open_by_handle_at`, módulos de kernel, `kexec_*`, `mount`, `pivot_root`, `chroot`, `setns`, `unshare`, `ptrace`, `process_vm_writev`, `bpf`, `perf_event_open`, `keyctl`, `userfaultfd`, `reboot`, `swapon`/`swapoff`, ajuste de relógio, entre outras), respondendo `EPERM`; ela nunca mata o processo, então não derruba uma sessão por causa de uma syscall esquecida. **Fase 2 (M14):** primeiro em modo `SECCOMP_RET_LOG` para levantar as syscalls na suíte e2e, depois em allowlist (`SECCOMP_RET_KILL_PROCESS`).
 
 **Em Go, as capabilities são por thread do sistema.** O descarte DEVE usar `kernel.org/pub/linux/libs/security/libcap/cap` (aplica em todas as threads via `psx`), nunca `syscall` direto.
 
@@ -1230,7 +1264,8 @@ Fronteiras (impostas pelo `depguard` no `check`):
 10. **`PACKET_QDISC_BYPASS`:** frames enviados por sockets AF_PACKET com essa opção não passam pelos taps. A camada `netdev egress` (≥ 5.16) os bloqueia no estrito, mas o sensor não os vê.
 11. **Tor só dentro de VM (Whonix-Gateway) sem VPN no host**, e transportes `snowflake`/`meek`, não funcionam no modo estrito (TUN-008).
 12. **Keylogger no X11:** qualquer processo do mesmo UID lê o teclado no X11, inclusive a passphrase digitada na GUI. No X11, a passphrase DEVERIA ser digitada no terminal do `run` (pinentry no TTY). No Wayland, isso não se aplica.
-13. **Containers em outros network namespaces:** os sockets deles não são atribuídos (o sock_diag só vê o namespace do daemon), mas o tráfego deles que sai pela egress é visto e bloqueado normalmente.
+13. **Túnel ocioso no arm estrito:** sem tráfego e sem keepalive, um WireGuard pode ficar mais de 180 s sem handshake. A janela de confirmação (§10.6) então desfaz o arm; basta abrir uma página durante a janela ou configurar `PersistentKeepalive`.
+14. **Containers em outros network namespaces:** os sockets deles não são atribuídos (o sock_diag só vê o namespace do daemon), mas o tráfego deles que sai pela egress é visto e bloqueado normalmente.
 
 ---
 
@@ -1295,13 +1330,14 @@ Regras para o agente:
 | **M5 — Captura** | Gerador de cBPF a partir do allowlist (testado como dados + e2e), sensor AF_PACKET, classificador (§8.3), decodificação de DNS e STUN, sock_diag + atribuição (NET-010), NET-003/004/005/006 | AC-01, AC-02, AC-03 no netlab; ST-NET-001/003/010/012 e ST-DNS-001 rodando no netlab; fuzz do parser |
 | **M6 — Guarda** | Tabelas `inet lethe`, `lethe_panic`, `netdev lethe_l2`, `bridge lethe` (gerador + aplicação), atualização de sets, NFLOG (NET-002), vigilância do cgroup (§11.2), `cleanup` | AC-04, AC-08 (parte nft), AC-09, AC-13 no netlab; o ruleset gerado tem golden test; o sniffer externo não vê nenhum pacote vazado |
 | **M7 — Daemon, IPC e CLI** | Orquestração, servidor IPC com papéis e auth challenge (§17.3), respostas (§10.3), `run`/`arm`/`disarm`/`status`/`events`/`ack`/`panic`/`unpanic`, `privsep` (fork do agente, descarte de caps), preflight automático + manual no terminal | AC-08 completo; um peer de outro UID é recusado; ação sensível sem HMAC é recusada; 5 erros → pânico; caps efetivas conferidas em `/proc/self/status` |
-| **M8 — Túneis** | OpenVPN/genérico (sock_diag do processo do cliente + aprendizado via NFLOG), `torctl` próprio, PTs (§7.5), TUN-001…008 | AC-05, AC-06 no netlab; AC-07 no netlab com `tor` do sistema se existir o binário (senão SKIP + runbook manual) |
+| **M8 — Túneis** | OpenVPN/genérico (sock_diag do processo do cliente + aprendizado via NFLOG), `discover --learn`, `torctl` próprio, PTs (§7.5), TUN-001…008 (TUN-006 com a lógica e a interface da base geo; os dados chegam no M11), seccomp fase 1 (§19.3), agente reconhecido pelo executável e não só pelo PID, limite da lista de alertas do engine | AC-05, AC-06 no netlab; AC-07 no netlab com `tor` do sistema se existir o binário (senão SKIP + runbook manual) |
+| **M8.1 — Uso seguro** | §10.6 itens 1–7 e 9: `--force` limitado, janela de confirmação do arm, SELF-006 sem bloqueio no `off`, perfil gerado em `off`, `lockdown` no `status`, `status` sem daemon, `cleanup` explicado, `report`/`verify --baseline` | AC-16, AC-17, AC-18 no netlab |
 | **M9 — Host, persona, autodiagnóstico e agente** | HOST-001…009, PER-001…003, SELF-001…005, NET-007/008/009/013/014, `lethe agent` (notificações, PipeWire, portal, teclado) | Unit com fixtures de `/proc` e de D-Bus; e2e de SELF-001/002; teste de que dado do agente nunca rebaixa severidade |
-| **M10 — Selftest** | Todos os casos da §18.2, exceções temporárias no estrito, dry-run das respostas, `selftest.json` | AC-11 no netlab |
-| **M11 — Checks ativos e geo** | NET-011 (VPN com bind + resolvedor no túnel; Tor via SOCKS5h), base embutida, TUN-006, PER-001 completo | Servidor HTTP falso dentro do ns "vpn" responde o IP; nenhuma consulta sai pela egress (sniffer); cenário "resolvedor do túnel ausente" → skip com W |
+| **M10 — Selftest** | Todos os casos da §18.2, exceções temporárias no estrito, dry-run das respostas, `selftest.json`, `lethe setup` (§10.6 item 8: o assistente usa o selftest para oferecer o estrito) | AC-11 no netlab; `setup` testado com entradas simuladas |
+| **M11 — Checks ativos e geo** | NET-011 (VPN com bind + resolvedor no túnel; Tor via SOCKS5h), base embutida (que ativa o TUN-006 do M8), PER-001 completo | Servidor HTTP falso dentro do ns "vpn" responde o IP; nenhuma consulta sai pela egress (sniffer); cenário "resolvedor do túnel ausente" → skip com W |
 | **M12 — TUI** | bubbletea; tela de alerta; atalhos | Teste com `teatest` (golden das telas) |
 | **M13 — GUI** | Módulo `apps/lethe-gui`: bandeja, painel, tela cheia, entrada de passphrase | Build no CI; teste com o driver de teste da Fyne; runbook manual GNOME/KDE, X11/Wayland |
-| **M14 — Endurecimento e empacotamento** | seccomp (log → enforce), unidades systemd, nfpm deb/rpm, build reprodutível (dois builds = mesmo hash), SBOM, `docs/runbooks/`, `docs/THIRD_PARTY.md` | AC-12; e2e completo com seccomp em enforce; `check:all` verde; dois builds com hash idêntico |
+| **M14 — Endurecimento e empacotamento** | seccomp fase 2 (log → allowlist em enforce), unidades systemd, nfpm deb/rpm, build reprodutível (dois builds = mesmo hash), SBOM, `docs/runbooks/`, `docs/THIRD_PARTY.md` | AC-12; e2e completo com seccomp em enforce; `check:all` verde; dois builds com hash idêntico |
 | **M15 — Entrega** | Guia de release e deploy para o dono (assinatura, repositório interno) | `docs/runbooks/release.md` completo; a automação não assina nem publica |
 
 ---
@@ -1345,6 +1381,9 @@ Cada critério é um teste automatizado (`TestE2E_ACxx_*`) no netlab, salvo indi
 | AC-12 | Suíte e2e completa com checks ativos **desligados** | Sniffer da "internet" não vê nenhum pacote gerado pelo `lethe` fora do que os testes injetam |
 | AC-13 | `nft list ruleset` (via biblioteca) antes do `arm` e depois do `disarm` | Idênticos, desconsiderando mudanças feitas de propósito por terceiros no teste |
 | AC-14 | Peer com UID diferente conecta no socket | Recusado, `ipc.denied` no log |
+| AC-16 | Estrito; o túnel não passa tráfego depois do arm (servidor WG parado) | O arm é desfeito em `guard.arm_confirm`; zero tabelas `lethe*`; exit code 6 com a causa; o log fecha com `reason: arm_unconfirmed` |
+| AC-17 | Estrito sem túnel; `run --force --reason x` | Recusado com exit code 2 e a sugestão `--guard off`; nenhuma tabela aplicada |
+| AC-18 | Guarda `off`; 5 provas erradas | SELF-006 CRITICAL; nenhuma tabela aplicada; ações sensíveis recusadas por 5 min. `kill -9` num daemon estrito seguido de `lethe status` como root → `lockdown` aponta `sudo lethe cleanup` |
 | AC-15 | Manual (runbook): Debian 12, Ubuntu 24.04 e Fedora com Wi-Fi real, NM, Tor Browser e GUI em GNOME/Wayland e KDE | Checklist do runbook completo, com prints anexados ao relatório de release |
 
 ---
