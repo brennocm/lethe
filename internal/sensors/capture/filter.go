@@ -110,7 +110,17 @@ func Build(al Allowlist, withPktType bool) ([]bpf.Instruction, error) {
 	a.deliver() // any other L2 protocol: user space decides (fail toward visibility)
 
 	// ---- IPv4 ----
+	// A cBPF load past the end of the packet aborts the program with 0, which is "drop". A
+	// truncated packet (crafted on a raw socket) would then never reach user space while still
+	// leaving the machine. Every load below stays within ip4Base+IHL*4+4 bytes, so shorter
+	// packets are delivered first.
 	a.add(bpf.LoadMemShift{Off: ip4Base}) // X = IHL*4
+	a.add(bpf.LoadExtension{Num: bpf.ExtLen})
+	a.add(bpf.JumpIf{Cond: bpf.JumpGreaterOrEqual, Val: ip4Base + 20, SkipTrue: 1})
+	a.deliver()
+	a.add(bpf.ALUOpConstant{Op: bpf.ALUOpSub, Val: ip4Base + 4})  // A = len - 18 (no underflow: len >= 34)
+	a.add(bpf.JumpIfX{Cond: bpf.JumpGreaterOrEqual, SkipTrue: 1}) // len >= X + 18
+	a.deliver()
 	// DHCPv4 client → server (udp 68 → 67)
 	a.add(bpf.LoadAbsolute{Off: ip4Base + 9, Size: 1})
 	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: protoUDP, SkipFalse: 5})
@@ -150,6 +160,11 @@ func Build(al Allowlist, withPktType bool) ([]bpf.Instruction, error) {
 
 	// ---- IPv6 (no extension-header walking: anything unusual is delivered) ----
 	a.label("v6")
+	// Same rule as IPv4. Outside the Hop-by-Hop branch the deepest load is the L4 port word at
+	// ip6Base+42, so frames shorter than ip6Base+44 are delivered. The HBH branch guards itself.
+	a.add(bpf.LoadExtension{Num: bpf.ExtLen})
+	a.add(bpf.JumpIf{Cond: bpf.JumpGreaterOrEqual, Val: ip6Base + 44, SkipTrue: 1})
+	a.deliver()
 	a.add(bpf.LoadAbsolute{Off: ip6Base + 6, Size: 1}) // next header
 	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: protoICMPv6, SkipFalse: 6})
 	a.add(bpf.LoadAbsolute{Off: ip6Base + 40, Size: 1}) // ICMPv6 type: RS 133, NS 135, NA 136, MLDv2 143
@@ -162,7 +177,10 @@ func Build(al Allowlist, withPktType bool) ([]bpf.Instruction, error) {
 	// shape is dropped: 8-byte HBH, then ICMPv6 130/131/132/143, to link-local multicast
 	// (ff02::/16, never routed). Any other extension-header chain is delivered.
 	a.add(bpf.LoadAbsolute{Off: ip6Base + 6, Size: 1})
-	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0, SkipFalse: 12})
+	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0, SkipFalse: 15})
+	a.add(bpf.LoadExtension{Num: bpf.ExtLen}) // the ICMPv6 type after an 8-byte HBH is at +48
+	a.add(bpf.JumpIf{Cond: bpf.JumpGreaterOrEqual, Val: ip6Base + 49, SkipTrue: 1})
+	a.deliver()
 	a.add(bpf.LoadAbsolute{Off: ip6Base + 41, Size: 1}) // HBH length in 8-byte units, minus one
 	a.add(bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0, SkipFalse: 10})
 	a.add(bpf.LoadAbsolute{Off: ip6Base + 40, Size: 1}) // HBH next header

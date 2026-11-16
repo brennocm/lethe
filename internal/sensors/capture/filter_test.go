@@ -158,3 +158,31 @@ func TestNET001_FilterPktTypePrefix(t *testing.T) {
 func hbh(next byte, payload []byte) []byte {
 	return append([]byte{next, 0, 5, 2, 0, 0, 1, 0}, payload...)
 }
+
+// A load past the end of the frame aborts cBPF with 0 ("drop"). Truncated frames crafted on a raw
+// socket would leave the machine unseen; the filter must deliver them instead.
+func TestNET001_FilterDeliversTruncatedFrames(t *testing.T) {
+	v := vm(t, testAllow)
+	cases := map[string][]byte{
+		// UDP to an allowed endpoint, cut inside the UDP header (the port load used to abort)
+		"v4 udp header cut": ip4("10.0.0.2", "198.18.0.2", protoUDP, []byte{0x9c, 0x40}),
+		// a bare IPv4 header
+		"v4 no payload": ip4("10.0.0.2", "192.0.2.1", 253, nil),
+		// Hop-by-Hop with nothing after it: the MLD check reads past the end
+		"v6 bare HBH": ip6("2001:db8:1::2", "2001:db8::1", 0, []byte{protoICMPv6, 0, 0, 0, 0, 0, 0, 0}),
+		// IPv6 header only
+		"v6 no payload": ip6("2001:db8:1::2", "2001:db8::1", 59, nil),
+		// UDP cut before the destination port
+		"v6 udp header cut": ip6("2001:db8:1::2", "2001:db8:ffff::2", protoUDP, []byte{0x9c, 0x40}),
+	}
+	for name, f := range cases {
+		if !delivered(t, v, f) {
+			t.Errorf("%s (%d bytes) dropped", name, len(f))
+		}
+	}
+	// Short but complete control traffic is still filtered: a Router Solicitation without options.
+	rs := ip6("fe80::2", "ff02::2", protoICMPv6, []byte{133, 0, 0, 0, 0, 0, 0, 0})
+	if delivered(t, v, rs) {
+		t.Errorf("router solicitation (%d bytes) delivered", len(rs))
+	}
+}
