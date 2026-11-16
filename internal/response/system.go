@@ -1,8 +1,10 @@
 package response
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/vishvananda/netlink"
@@ -52,7 +54,9 @@ func (s SystemLogin1) SessionsOf(uid uint32) ([]dbus.ObjectPath, error) {
 		Path dbus.ObjectPath
 	}
 	obj := s.Conn.Object("org.freedesktop.login1", "/org/freedesktop/login1")
-	if err := obj.Call("org.freedesktop.login1.Manager.ListSessions", 0).Store(&sessions); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), login1Timeout)
+	defer cancel()
+	if err := obj.CallWithContext(ctx, "org.freedesktop.login1.Manager.ListSessions", 0).Store(&sessions); err != nil {
 		return nil, fmt.Errorf("login1 ListSessions: %w", err)
 	}
 	var out []dbus.ObjectPath
@@ -66,5 +70,11 @@ func (s SystemLogin1) SessionsOf(uid uint32) ([]dbus.ObjectPath, error) {
 
 // Lock locks one session.
 func (s SystemLogin1) Lock(p dbus.ObjectPath) error {
-	return s.Conn.Object("org.freedesktop.login1", p).Call("org.freedesktop.login1.Session.Lock", 0).Err
+	ctx, cancel := context.WithTimeout(context.Background(), login1Timeout)
+	defer cancel()
+	return s.Conn.Object("org.freedesktop.login1", p).CallWithContext(ctx, "org.freedesktop.login1.Session.Lock", 0).Err
 }
+
+// login1Timeout bounds each logind call: responses run under the daemon lock, and a stuck logind
+// must not hold back the actions and the panic that follow.
+const login1Timeout = 2 * time.Second

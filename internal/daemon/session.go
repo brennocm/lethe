@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -338,7 +339,9 @@ func (d *Daemon) executorEnv(s *session) response.Env {
 		Egress:      func() []string { return s.gcfg.Egress },
 		LinkDown:    response.NetlinkLinkDown,
 		LockScreen: func() error {
-			c, err := dbus.ConnectSystemBus()
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			c, err := dbus.ConnectSystemBus(dbus.WithContext(ctx))
 			if err != nil {
 				return err
 			}
