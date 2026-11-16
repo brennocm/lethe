@@ -163,3 +163,24 @@ func TestBuild_Empty(t *testing.T) {
 		t.Fatal("empty session accepted")
 	}
 }
+
+// Untrusted text (process names, QNAMEs, reasons) must not become an image, link or HTML in
+// report.md: a viewer fetching it would leak the reader's address.
+func TestReport_MarkdownInert(t *testing.T) {
+	for _, in := range []string{
+		"![x](http://198.51.100.1/p.png)", "<img src=http://198.51.100.1/>", "[a](http://x)", "a|b\n# heading", "x `code`",
+	} {
+		out := md(in)
+		for _, bad := range []string{"![", "](", "<", "\n", " `"} {
+			if strings.Contains(out, bad) {
+				t.Errorf("md(%q) = %q contains %q", in, out, bad)
+			}
+		}
+		if strings.Count(out, "|") != strings.Count(out, "\\|") {
+			t.Errorf("md(%q) = %q splits a table cell", in, out)
+		}
+	}
+	if got := md("&lt;"); got != "&amp;lt;" {
+		t.Errorf("entities must not pass through: %q", got)
+	}
+}

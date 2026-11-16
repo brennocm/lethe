@@ -230,7 +230,7 @@ func WriteMarkdown(w io.Writer, r Report) error {
 	var b strings.Builder
 	f := func(format string, a ...any) { fmt.Fprintf(&b, format, a...) }
 	ts := func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04:05Z") }
-	f("# Relatório da sessão %s\n\n", r.Session)
+	f("# Relatório da sessão %s\n\n", md(r.Session))
 	f("| Campo | Valor |\n|---|---|\n")
 	f("| Operação | %s |\n| Persona | %s |\n| Operador | %s |\n", dash(r.Operation), dash(r.Persona), dash(r.Operator))
 	f("| Modo do guarda | %s |\n| Hash do perfil | %s |\n| Hash da baseline | %s |\n", dash(r.GuardMode), dash(r.ProfileHash), dash(r.BaselineHash))
@@ -241,7 +241,7 @@ func WriteMarkdown(w io.Writer, r Report) error {
 		f("Nenhum.\n\n")
 	}
 	for _, w := range r.Warnings {
-		f("- %s\n", w)
+		f("- %s\n", md(w))
 	}
 	if len(r.Warnings) > 0 {
 		f("\n")
@@ -249,13 +249,13 @@ func WriteMarkdown(w io.Writer, r Report) error {
 
 	f("## Linha do tempo\n\n| Cor | De | Até |\n|---|---|---|\n")
 	for _, iv := range r.Timeline {
-		f("| %s | %s | %s |\n", iv.Color, ts(iv.From), ts(iv.To))
+		f("| %s | %s | %s |\n", md(iv.Color), ts(iv.From), ts(iv.To))
 	}
 	f("\n## Alertas (%d)\n\n", len(r.Alerts))
 	if len(r.Alerts) > 0 {
 		f("| ID | Check | Severidade | Primeiro | Ocorrências | Reconhecido | Motivo | Resolvido | Detalhe |\n|---|---|---|---|---|---|---|---|---|\n")
 		for _, a := range r.Alerts {
-			f("| %s | %s | %s | %s | %d | %s | %s | %s | %s |\n", a.ID, a.Check, a.Severity, ts(a.First), a.Count,
+			f("| %s | %s | %s | %s | %d | %s | %s | %s | %s |\n", md(a.ID), md(a.Check), md(a.Severity), ts(a.First), a.Count,
 				yes(a.Acknowledged), dash(a.AckReason), yes(a.Resolved), detailString(a.Detail))
 		}
 	}
@@ -265,27 +265,27 @@ func WriteMarkdown(w io.Writer, r Report) error {
 		for _, x := range r.Responses {
 			res := "ok"
 			if !x.OK {
-				res = "erro: " + x.Error
+				res = "erro: " + md(x.Error)
 			}
-			f("| %s | %s | %s | %.0f | %s |\n", ts(x.TS), x.Action, res, x.LatencyMS, dash(x.AlertID))
+			f("| %s | %s | %s | %.0f | %s |\n", ts(x.TS), md(x.Action), res, x.LatencyMS, dash(x.AlertID))
 		}
 	}
 	f("\n## Preflight\n\n")
 	if r.Preflight == nil {
 		f("Não registrado.\n")
 	} else {
-		f("Resultado: **%s**\n", r.Preflight.Result)
+		f("Resultado: **%s**\n", md(r.Preflight.Result))
 		keys := make([]string, 0, len(r.Preflight.ManualItems))
 		for k := range r.Preflight.ManualItems {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			f("- %s: %s\n", k, r.Preflight.ManualItems[k])
+			f("- %s: %s\n", md(k), md(r.Preflight.ManualItems[k]))
 		}
 	}
 	for _, reason := range r.Forced {
-		f("\n> **Armado com --force.** Motivo: %s\n", reason)
+		f("\n> **Armado com --force.** Motivo: %s\n", md(reason))
 	}
 	f("\n## Integridade\n\n")
 	f("| Campo | Valor |\n|---|---|\n")
@@ -300,7 +300,34 @@ func dash(s string) string {
 	if s == "" {
 		return "—"
 	}
-	return strings.ReplaceAll(s, "|", "\\|")
+	return md(s)
+}
+
+// md makes untrusted text (process names, DNS names, operator reasons, error messages) inert in
+// Markdown: no links or images (a viewer that fetches them would leak the reader's address), no
+// HTML, no emphasis or code spans, and no line breaks that would split a table row.
+func md(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '<':
+			b.WriteString("&lt;")
+		case r == '>':
+			b.WriteString("&gt;")
+		case r == '&':
+			b.WriteString("&amp;")
+		case r == '\n' || r == '\r' || r == '\t':
+			b.WriteByte(' ')
+		case r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) || r == 0x2028 || r == 0x2029:
+			b.WriteRune('\uFFFD')
+		case strings.ContainsRune("\\`*_[]()!|~", r):
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func yes(b bool) string {

@@ -611,7 +611,7 @@ func printEvent(w io.Writer, ev contracts.Event, asJSON bool) {
 	if len(ev.Actions) > 0 {
 		line += " actions=" + strings.Join(ev.Actions, ",")
 	}
-	_, _ = fmt.Fprintln(w, line)
+	_, _ = fmt.Fprintln(w, platform.TermSafe(line))
 }
 
 func newPreflightCmd() *cobra.Command {

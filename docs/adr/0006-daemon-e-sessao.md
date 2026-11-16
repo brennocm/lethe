@@ -63,3 +63,22 @@ contradict each other once the code had to run.
   and cannot call `agent.report`.
 - `--tui` returns "not implemented" until M12. `--no-gui` and `--no-active` are accepted and
   change nothing yet.
+
+## Addendum (M8 review)
+
+- **Directories in operator-owned places.** The daemon runs as root but creates the IPC directory
+  inside `/run/user/<uid>` and `sessions/<id>` inside `storage.dir`, both owned by the operator.
+  Path-based `chown`/`chmod` would follow a symlink planted by any process of the operator, for
+  example `sessions -> /etc`. Those directories are now created with `mkdirat`, opened with
+  `O_NOFOLLOW`, and changed with `fchown`/`fchmod`. The session directory stays open for the whole
+  session, and the journal and `report.md` are written through `/proc/self/fd/<n>`, so renaming
+  or swapping a path component cannot redirect root's writes. The socket is checked and chowned
+  relative to its directory descriptor (`fstatat`/`fchownat` with `AT_SYMLINK_NOFOLLOW`).
+- **Killing processes.** `kill_offender` and `kill_processes` kill through a pidfd, and only if
+  `/proc/<pid>/exe` is still the executable that was attributed or matched. Otherwise the pid was
+  reused, and the root daemon would kill a bystander.
+- **Untrusted text in outputs.** Process names, executable paths, DNS names and operator reasons
+  are escaped in `report.md`, so they cannot form links, images, HTML, emphasis or line breaks (a
+  viewer fetching an image would leak the reader's address). Control characters are replaced
+  before anything reaches the terminal. `agent.report` accepts only an ID of the form `XXX-000`
+  with a valid severity.

@@ -11,6 +11,7 @@ import (
 	"lethe/internal/contracts"
 	"lethe/internal/discovery"
 	"lethe/internal/engine"
+	"lethe/internal/platform"
 	"lethe/internal/preflight"
 	"lethe/internal/response"
 	"lethe/internal/sensors/nftmon"
@@ -207,6 +208,7 @@ func (d *Daemon) terminalLocked(ev contracts.Event) {
 	if d.sess != nil && d.sess.base != nil {
 		line = d.sess.base.Redact(line)
 	}
+	line = platform.TermSafe(line)
 	if ev.Severity == contracts.SeverityCritical {
 		line = "\a" + line
 	}

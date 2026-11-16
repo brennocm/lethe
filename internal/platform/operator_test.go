@@ -25,3 +25,9 @@ func TestCurrentOperator(t *testing.T) {
 		t.Fatal("unknown SUDO_UID accepted")
 	}
 }
+
+func TestPlatform_TermSafe(t *testing.T) {
+	if got := TermSafe("exe=/tmp/\x1b]0;pwned\x07x\u009b31m ok"); got != "exe=/tmp/?]0;pwned?x?31m ok" {
+		t.Fatalf("%q", got)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"time"
 
 	"lethe/internal/contracts"
@@ -202,6 +203,9 @@ func (d *Daemon) routes() {
 		if ev.Type != contracts.EvCheckAlert {
 			return nil, errParams(fmt.Errorf("agent may only report %s", contracts.EvCheckAlert))
 		}
+		if !checkIDRE.MatchString(ev.Check) || !ev.Severity.Valid() {
+			return nil, errParams(errors.New("agent report needs a check ID (XXX-000) and a valid severity"))
+		}
 		d.mu.Lock()
 		defer d.mu.Unlock()
 		if d.sess == nil {
@@ -226,6 +230,8 @@ func (d *Daemon) routes() {
 	h("session.disarm", func(*ipc.Call) (any, error) { return d.Disarm() })
 	h("panic.release", func(*ipc.Call) (any, error) { return d.Unpanic() })
 }
+
+var checkIDRE = regexp.MustCompile(`^[A-Z]{2,5}-[0-9]{3}$`)
 
 // agentProc is the session agent spawned by the daemon (portable mode).
 type agentProc struct {

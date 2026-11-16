@@ -30,19 +30,19 @@ Nenhum.
 
 | ID | Check | Severidade | Primeiro | Ocorrências | Reconhecido | Motivo | Resolvido | Detalhe |
 |---|---|---|---|---|---|---|---|---|
-| A-0001 | DNS-001 | CRITICAL | 2026-11-15 14:10:01Z | 2 | sim | dig manual de teste | sim | dport=53 dst=192.0.2.53 iface=eth0 proc=/usr/bin/dig qname=[cifrado] |
+| A-0001 | DNS-001 | CRITICAL | 2026-11-15 14:10:01Z | 2 | sim | dig manual de teste | sim | dport=53 dst=192.0.2.53 iface=eth0 proc=/usr/bin/dig qname=\[cifrado\] |
 | A-0002 | NET-006 | WARNING | 2026-11-15 14:11:03Z | 1 | não | — | não | iface=usb0 |
 
 ## Respostas executadas (1)
 
 | Quando | Ação | Resultado | Latência (ms) | Alerta |
 |---|---|---|---|---|
-| 2026-11-15 14:10:01Z | block_all | ok | 42 | A-0001 |
+| 2026-11-15 14:10:01Z | block\_all | ok | 42 | A-0001 |
 
 ## Preflight
 
 Resultado: **PASS**
-- no_personal_accounts: confirmado
+- no\_personal\_accounts: confirmado
 
 ## Integridade
 
