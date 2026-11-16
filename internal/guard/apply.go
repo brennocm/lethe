@@ -160,9 +160,9 @@ func All() []TableRef {
 	}
 }
 
-// Cleanup removes every table whose name starts with "lethe", in any family, and nothing else
-// (lethe cleanup, after a crash). It returns the removed tables.
-func Cleanup(c Conn) ([]TableRef, error) {
+// Leftovers lists every table whose name starts with "lethe", in any family, sorted (lethe
+// status without a daemon, spec §10.6).
+func Leftovers(c Conn) ([]TableRef, error) {
 	have, err := c.ListTables()
 	if err != nil {
 		return nil, fmt.Errorf("guard: list tables: %w", err)
@@ -173,15 +173,25 @@ func Cleanup(c Conn) ([]TableRef, error) {
 			out = append(out, TableRef{t.Family, t.Name})
 		}
 	}
-	if len(out) == 0 {
-		return nil, nil
-	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Family != out[j].Family {
 			return out[i].Family < out[j].Family
 		}
 		return out[i].Name < out[j].Name
 	})
+	return out, nil
+}
+
+// String is "family name".
+func (r TableRef) String() string { return FamilyName(r.Family) + " " + r.Name }
+
+// Cleanup removes every lethe* table, in any family, and nothing else (lethe cleanup, after a
+// crash). It returns the removed tables.
+func Cleanup(c Conn) ([]TableRef, error) {
+	out, err := Leftovers(c)
+	if err != nil || len(out) == 0 {
+		return nil, err
+	}
 	return out, Remove(c, out...)
 }
 
