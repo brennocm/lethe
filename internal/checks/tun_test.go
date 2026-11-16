@@ -2,8 +2,12 @@ package checks
 
 import (
 	"fmt"
+	"net/netip"
+	"reflect"
 	"testing"
 	"time"
+
+	"lethe/internal/geo"
 
 	"lethe/internal/contracts"
 	"lethe/internal/discovery"
@@ -190,5 +194,41 @@ func TestTUN005_CgroupExclusion(t *testing.T) {
 	}
 	if fs := (TUN005{}).Evaluate(&discovery.Snapshot{}); len(fs) != 0 {
 		t.Fatalf("no exclusion: %+v", fs)
+	}
+}
+
+func TestTUN006_UnexpectedEndpoint(t *testing.T) {
+	db := geo.Map{
+		netip.MustParseAddr("198.51.100.7"):  {Country: "NL", ASN: 64500},
+		netip.MustParseAddr("198.51.100.8"):  {Country: "BR", ASN: 64500},
+		netip.MustParseAddr("198.51.100.9"):  {Country: "NL", ASN: 64999},
+		netip.MustParseAddr("198.51.100.10"): {Country: "nl", ASN: 64500},
+	}
+	s := &discovery.Snapshot{Endpoints: []string{
+		"198.51.100.7:51820/udp",  // known at arm
+		"198.51.100.8:51820/udp",  // new, wrong country
+		"198.51.100.9:51820/udp",  // new, wrong ASN
+		"198.51.100.10:51820/udp", // new, expected (case-insensitive country)
+		"203.0.113.50:1194/udp",   // new, not in the database
+	}}
+	armed := map[string]bool{"198.51.100.7:51820/udp": true}
+	want := GeoExpect{Country: "NL", ASN: []uint32{64500}}
+	fs := TUN006{}.Evaluate(db, want, armed, s)
+	got := map[string]any{}
+	for _, f := range fs {
+		if f.Severity != contracts.SeverityWarning {
+			t.Fatalf("%+v", f)
+		}
+		got[f.Data["dst"].(string)] = f.Data["reason"]
+	}
+	exp := map[string]any{"198.51.100.8": "country", "198.51.100.9": "asn", "203.0.113.50": "unknown_location"}
+	if !reflect.DeepEqual(got, exp) {
+		t.Fatalf("got %v want %v", got, exp)
+	}
+	if fs := (TUN006{}).Evaluate(nil, want, armed, s); fs != nil {
+		t.Fatal("without a database TUN-006 must stay silent")
+	}
+	if fs := (TUN006{}).Evaluate(db, GeoExpect{}, armed, s); fs != nil {
+		t.Fatal("without expectations TUN-006 must stay silent")
 	}
 }

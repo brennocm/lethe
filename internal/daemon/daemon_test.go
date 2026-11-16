@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"lethe/internal/geo"
+
 	"lethe/internal/sensors/capture"
 	"lethe/internal/sensors/nflog"
 	"lethe/internal/sensors/sockdiag"
@@ -808,6 +810,25 @@ func TestNET002_VPNClientDNSOnlyWithProfileFlag(t *testing.T) {
 	f.arm(t, "strict")
 	if v := f.d.sess.gcfg.VPN; v == nil || !v.DNS {
 		t.Fatalf("guard cgroup %+v", v)
+	}
+	_, _ = f.d.Disarm()
+}
+
+// A WireGuard endpoint that moves to another country during the session is TUN-006 (WARNING).
+func TestTUN006_EndpointMovesAbroad(t *testing.T) {
+	f := newFixture(t)
+	f.d.cfg.Geo = geo.Map{
+		netip.MustParseAddr("198.51.100.7"): {Country: "NL", ASN: 64500},
+		netip.MustParseAddr("198.51.100.8"): {Country: "US", ASN: 64501},
+	}
+	f.arm(t, "off")
+	f.k.setEndpoint("198.51.100.8:51820")
+	f.d.mu.Lock()
+	f.d.refreshLocked()
+	f.d.mu.Unlock()
+	st := f.d.Status()
+	if st.Color != "YELLOW" || len(st.Alerts) != 1 || st.Alerts[0].Check != "TUN-006" {
+		t.Fatalf("%+v", st)
 	}
 	_, _ = f.d.Disarm()
 }

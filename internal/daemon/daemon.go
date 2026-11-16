@@ -20,6 +20,7 @@ import (
 	"lethe/internal/contracts"
 	"lethe/internal/discovery"
 	"lethe/internal/engine"
+	"lethe/internal/geo"
 	"lethe/internal/guard"
 	"lethe/internal/ipc"
 	"lethe/internal/journal"
@@ -50,6 +51,8 @@ type Config struct {
 	// /sys/fs/cgroup; nil without Sensors = not looked up).
 	Sockets discovery.SocketSource
 	Cgroups discovery.CgroupResolver
+	// Geo answers country and ASN for TUN-006 (nil = the embedded database, if this build has one).
+	Geo geo.DB
 	// Agent, when set, is the argument list for the session agent spawned at arm (portable mode).
 	Agent []string
 	// AgentEnv is the agent's environment (session bus, display, LANG).
@@ -115,8 +118,9 @@ type session struct {
 	endpointUnknown bool
 	nftArm          []nftmon.Table // TUN-004: third-party tables at arm (nil = not readable)
 	tx              *checks.TxTracker
-	dirF            *os.File // the session directory, open (see ioDir)
-	torExpected     bool     // TUN-003: the session depends on tor (checks.TorExpected at arm)
+	dirF            *os.File        // the session directory, open (see ioDir)
+	torExpected     bool            // TUN-003: the session depends on tor (checks.TorExpected at arm)
+	armEndpoints    map[string]bool // TUN-006: endpoints known at arm
 	critical        int
 	sensors         *sensorSet
 	protected       map[int]bool // pids never killed by responses (self, agent)
@@ -141,6 +145,9 @@ func New(cfg Config) *Daemon {
 	}
 	if cfg.ProcRoot == "" {
 		cfg.ProcRoot = "/proc"
+	}
+	if cfg.Geo == nil {
+		cfg.Geo, _ = geo.Embedded() // none before M11: TUN-006 stays inactive
 	}
 	if cfg.Sensors && cfg.Sockets == nil {
 		cfg.Sockets = discovery.SystemSockets(cfg.ProcRoot)

@@ -139,6 +139,10 @@ func (d *Daemon) Arm(req ArmRequest) (ArmResult, preflight.Report, error) {
 	d.sess = s
 	d.snap = snap
 	s.torExpected = checks.TorExpected(prof.Egress.Type, &snap)
+	s.armEndpoints = map[string]bool{}
+	for _, e := range snap.Endpoints {
+		s.armEndpoints[e] = true
+	}
 	ov := map[string]engine.Override{}
 	for id, o := range prof.Overrides {
 		e := engine.Override{Severity: contracts.Severity(o.Severity)}

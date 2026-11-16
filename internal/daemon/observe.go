@@ -105,6 +105,10 @@ func (d *Daemon) evaluateConditionsLocked(snap discovery.Snapshot) {
 	d.conditionLocked("TUN-002", checks.TUN002{}.Evaluate(d.sess.tx, &snap, d.cfg.Now()))
 	d.conditionLocked("TUN-003", checks.TUN003{}.Evaluate(d.sess.torExpected, &snap))
 	d.conditionLocked("TUN-005", checks.TUN005{}.Evaluate(&snap))
+	if p := d.sess.prof; p.Egress.Type != "tor" { // tor guards are anywhere by design
+		want := checks.GeoExpect{Country: p.Egress.ExpectCountry, ASN: p.Egress.ExpectASN}
+		d.conditionLocked("TUN-006", checks.TUN006{}.Evaluate(d.cfg.Geo, want, d.sess.armEndpoints, &snap))
+	}
 	d.conditionLocked("TUN-007", checks.TUN007{}.Evaluate(&snap))
 	if d.sess.nftArm != nil {
 		if now, err := d.nftTables(); err == nil {
