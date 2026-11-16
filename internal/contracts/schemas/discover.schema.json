@@ -498,6 +498,37 @@
           }
         }
       }
+    },
+    "exclusions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "version",
+          "procs"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "version": {
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "classid": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "procs": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
     }
   }
 }

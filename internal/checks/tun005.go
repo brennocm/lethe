@@ -18,7 +18,7 @@ func (TUN005) Sources() []SourceID                 { return tun005Meta.Sources()
 func (TUN005) SelfTestCases() []string             { return tun005Meta.SelfTestCases() }
 
 // Evaluate: WARNING for each policy rule that sends marked or per-UID traffic to a table whose
-// default route is not a tunnel. Inverted rules ("not fwmark", wg-quick) and the tunnels' own
+// default route is not a tunnel, and for each populated exclusion cgroup. Inverted rules ("not fwmark", wg-quick) and the tunnels' own
 // transport marks are the normal full-tunnel setup and are left alone.
 func (TUN005) Evaluate(s *discovery.Snapshot) []Finding {
 	tunnelTable := map[int]bool{}
@@ -49,6 +49,12 @@ func (TUN005) Evaluate(s *discovery.Snapshot) []Finding {
 		}
 		out = append(out, Finding{Check: "TUN-005", Severity: contracts.SeverityWarning,
 			Data: map[string]any{"reason": reason, "family": r.Family, "table": r.Table, "priority": r.Priority}})
+	}
+	// Processes inside an exclusion cgroup leave outside the tunnel (net_cls classid marks, or a
+	// client's own cgroup v2 matched by its nftables rules).
+	for _, c := range s.Exclusions {
+		out = append(out, Finding{Check: "TUN-005", Severity: contracts.SeverityWarning,
+			Data: map[string]any{"reason": "cgroup_exclusion", "cgroup": c.Path, "cgroup_version": c.Version, "procs": c.Procs}})
 	}
 	return out
 }

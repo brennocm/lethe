@@ -154,5 +154,12 @@ func Discover(k Kernel, opt Options) Snapshot {
 		gap("resolved")
 	}
 	s.LegacyIPTables = k.LegacyIPTables()
+	if es, ok := k.(ExclusionSource); ok {
+		if ex, err := es.ExclusionCgroups(); err != nil {
+			gap("cgroup:exclusions")
+		} else {
+			s.Exclusions = ex
+		}
+	}
 	return s
 }

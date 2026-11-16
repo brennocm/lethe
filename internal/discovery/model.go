@@ -9,16 +9,17 @@ import (
 
 // Snapshot is everything discovery knows at one instant (lethe discover --json, schema: discover).
 type Snapshot struct {
-	TakenAt        time.Time `json:"taken_at"`
-	Ifaces         []Iface   `json:"ifaces"`
-	CaptureIfaces  []string  `json:"capture_ifaces"`
-	Tunnels        []Tunnel  `json:"tunnels"`
-	Endpoints      []string  `json:"endpoints"` // "ip:port/proto", sorted
-	Routes         Routes    `json:"routes"`
-	DNS            DNS       `json:"dns"`
-	LegacyIPTables bool      `json:"legacy_iptables"`
-	Tor            *TorState `json:"tor,omitempty"` // only when the profile involves tor
-	Unavailable    []string  `json:"unavailable"`   // sources that could not be read (visibility gaps)
+	TakenAt        time.Time         `json:"taken_at"`
+	Ifaces         []Iface           `json:"ifaces"`
+	CaptureIfaces  []string          `json:"capture_ifaces"`
+	Tunnels        []Tunnel          `json:"tunnels"`
+	Endpoints      []string          `json:"endpoints"` // "ip:port/proto", sorted
+	Routes         Routes            `json:"routes"`
+	DNS            DNS               `json:"dns"`
+	LegacyIPTables bool              `json:"legacy_iptables"`
+	Exclusions     []ExclusionCgroup `json:"exclusions,omitempty"` // split-tunnel cgroups (TUN-005)
+	Tor            *TorState         `json:"tor,omitempty"`        // only when the profile involves tor
+	Unavailable    []string          `json:"unavailable"`          // sources that could not be read (visibility gaps)
 }
 
 // Iface is one interface with its class.

@@ -180,3 +180,15 @@ func TestTUN002_TrackerForgetsGonePeers(t *testing.T) {
 		t.Fatalf("tracker keeps %d peers", len(tr.last))
 	}
 }
+
+func TestTUN005_CgroupExclusion(t *testing.T) {
+	s := &discovery.Snapshot{Exclusions: []discovery.ExclusionCgroup{{Path: "mullvad-exclusions", Version: 2, Procs: 3}}}
+	fs := TUN005{}.Evaluate(s)
+	if len(fs) != 1 || fs[0].Severity != contracts.SeverityWarning || fs[0].Data["reason"] != "cgroup_exclusion" ||
+		fs[0].Data["cgroup"] != "mullvad-exclusions" || fs[0].Data["procs"] != 3 {
+		t.Fatalf("%+v", fs)
+	}
+	if fs := (TUN005{}).Evaluate(&discovery.Snapshot{}); len(fs) != 0 {
+		t.Fatalf("no exclusion: %+v", fs)
+	}
+}
