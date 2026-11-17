@@ -15,7 +15,7 @@ import (
 
 	"lethe/internal/baseline"
 	"lethe/internal/buildinfo"
-	"lethe/internal/checks"
+	"lethe/internal/contracts"
 	"lethe/internal/discovery"
 	"lethe/internal/platform"
 	"lethe/internal/preflight"
@@ -253,25 +253,16 @@ func (w *wizard) makeBaseline(path string) error {
 func (w *wizard) selftestOK(dataDir string) (bool, string) {
 	raw, err := os.ReadFile(filepath.Join(dataDir, "state", "selftest.json")) // #nosec G304 G703 -- the operator's own data dir
 	if err != nil {
-		return false, "nenhum selftest rodou nesta máquina"
+		raw = nil
 	}
-	var r struct {
-		FinishedAt time.Time `json:"finished_at"`
-		Passed     bool      `json:"passed"`
-		Full       bool      `json:"full"`
-	}
-	if json.Unmarshal(raw, &r) != nil {
-		return false, "o registro do selftest está ilegível"
-	}
-	switch {
-	case !r.Passed:
-		return false, "o último selftest teve falhas"
-	case !r.Full:
-		return false, "o último selftest não rodou todos os casos"
-	case w.env.now().Sub(r.FinishedAt) > checks.SelftestMaxAge:
-		return false, "o último selftest tem mais de 24 h"
-	}
-	return true, ""
+	ok, why := contracts.SelftestApproval(raw, w.env.now())
+	return ok, map[string]string{
+		contracts.SelftestNone:       "nenhum selftest rodou nesta máquina",
+		contracts.SelftestUnreadable: "o registro do selftest está ilegível",
+		contracts.SelftestFailed:     "o último selftest teve falhas",
+		contracts.SelftestPartial:    "o último selftest não rodou todos os casos",
+		contracts.SelftestStale:      "o último selftest tem mais de 24 h",
+	}[why]
 }
 
 // offerStrict switches the profile to strict after an approved selftest, then shows the

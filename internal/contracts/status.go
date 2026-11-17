@@ -1,6 +1,7 @@
 package contracts
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -163,6 +164,40 @@ type SelftestResult struct {
 	Critical   bool         `json:"critical"`
 	Full       bool         `json:"full"` // every case was asked (only a full run updates SELF-004)
 	Cases      []CaseResult `json:"cases"`
+}
+
+// SelftestMaxAge is how old the last selftest may be (SELF-004, the offer of strict).
+const SelftestMaxAge = 24 * time.Hour
+
+// Why the last selftest does not clear strict (SelftestApproval).
+const (
+	SelftestNone       = "none"       // no selftest.json
+	SelftestUnreadable = "unreadable" // not a selftest table
+	SelftestFailed     = "failed"     // a case failed
+	SelftestPartial    = "partial"    // not every case ran
+	SelftestStale      = "stale"      // older than SelftestMaxAge
+)
+
+// SelftestApproval reads storage.dir/state/selftest.json (raw; nil when it does not exist) and
+// says whether this machine has a recent, full, approved selftest: the condition to offer strict
+// (spec §10.6 item 8). why is one of the Selftest* codes when it does not.
+func SelftestApproval(raw []byte, now time.Time) (ok bool, why string) {
+	if raw == nil {
+		return false, SelftestNone
+	}
+	var r SelftestResult
+	if json.Unmarshal(raw, &r) != nil || r.FinishedAt.IsZero() {
+		return false, SelftestUnreadable
+	}
+	switch {
+	case !r.Passed:
+		return false, SelftestFailed
+	case !r.Full:
+		return false, SelftestPartial
+	case now.Sub(r.FinishedAt) > SelftestMaxAge:
+		return false, SelftestStale
+	}
+	return true, ""
 }
 
 // FullscreenReport is gui.fullscreen_result (spec §16.4): what the GUI's full-screen alert

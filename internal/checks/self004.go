@@ -19,7 +19,7 @@ func (SELF004) Sources() []SourceID                 { return self004Meta.Sources
 func (SELF004) SelfTestCases() []string             { return self004Meta.SelfTestCases() }
 
 // SelftestMaxAge is how old the last selftest may be.
-const SelftestMaxAge = 24 * time.Hour
+const SelftestMaxAge = contracts.SelftestMaxAge
 
 // Evaluate: WARNING when the last selftest on this machine is older than 24 h or never ran,
 // and when it did not pass; CRITICAL when ST-NET-001, ST-NET-002 (strict) or RESP-001 failed,
