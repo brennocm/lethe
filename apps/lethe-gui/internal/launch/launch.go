@@ -33,6 +33,7 @@ func Setup(a fyne.App, args []string) (*gui.UI, error) {
 			opt.StartService = func(ctx context.Context) error { return sysd.Start(ctx, name) }
 		}
 	}
+	opt.Cleanup = sysd.Cleanup
 	u := gui.New(a, gui.Client{Socket: *sock, Others: gui.Sockets(os.Getuid())}, opt)
 	u.Build()
 	return u, nil

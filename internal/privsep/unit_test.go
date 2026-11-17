@@ -71,6 +71,11 @@ func TestM14_ServiceUnitMatchesSpec(t *testing.T) {
 	if tpl["Environment"] != "LETHE_OPERATOR=%i" || tpl["ReadWritePaths"] != "-/home/%i/lethe" || len(tpl) != len(d)+2 {
 		t.Errorf("lethed@.service adds only the operator and its default storage: %v", tpl)
 	}
+	// the crash release: lethe cleanup with only CAP_NET_ADMIN, never enabled
+	c := unitDirectives(t, "../../packaging/systemd/lethe-cleanup.service")
+	if c["ExecStart"] != "/usr/bin/lethe cleanup" || c["CapabilityBoundingSet"] != "CAP_NET_ADMIN" || c["Type"] != "oneshot" || c["NoNewPrivileges"] != "yes" {
+		t.Errorf("cleanup unit: %v", c)
+	}
 	a := unitDirectives(t, "../../packaging/systemd/lethe-agent.service")
 	if a["ExecStart"] != "/usr/bin/lethe agent --socket /run/lethe/lethe.sock" || a["Environment"] == "" {
 		t.Errorf("agent unit: %v", a)

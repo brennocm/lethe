@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/dialog"
 
 	"lethe/internal/contracts"
 )
@@ -75,4 +76,30 @@ func (u *UI) startService() {
 			u.poll()
 		}
 	}()
+}
+
+// askCleanup confirms, then releases a block no session owns: lethe cleanup removes only the
+// lethe* tables, as root, after polkit's password. The block was left on purpose (a crash must
+// not leak), so the operator decides, knowing nothing watches the network afterwards.
+func (u *UI) askCleanup() {
+	dialog.NewCustomConfirm(u.t("cleanup_btn"), u.t("cleanup_btn"), u.t("cancel"), wrapped(u.t("cleanup_ask")), func(ok bool) {
+		if !ok {
+			return
+		}
+		u.cleanBtn.Disable()
+		u.cleanOff.Disable()
+		u.setFlash(u.t("service_starting"))
+		u.wg.Add(1)
+		go func() {
+			defer u.wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			err := u.opt.Cleanup(ctx)
+			fyne.Do(func() { u.cleanBtn.Enable(); u.cleanOff.Enable() })
+			u.say(u.t("cleanup_btn"), err, u.t("cleanup_done"))
+			if err == nil && u.offline == nil {
+				u.poll()
+			}
+		}()
+	}, u.panel).Show()
 }

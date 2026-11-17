@@ -1,0 +1,24 @@
+# Releases the network after a crash (spec §10.6 item 7): `lethe cleanup` removes every lethe*
+# nftables table and nothing else, and brings back the interfaces a panic set down. The GUI's
+# "Release the network" starts it through systemd's D-Bus API; polkit asks an administrator's
+# password, the same gate as `sudo lethe cleanup`. Never enabled: it runs only when started.
+[Unit]
+Description=lethe: release the network after a crash (remove leftover lethe* tables)
+Documentation=file:/usr/share/doc/lethe/service-mode.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/lethe cleanup
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+# the record of the interfaces link_down set down (lethed keeps it across restarts)
+ReadWritePaths=-/run/lethe-state
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native

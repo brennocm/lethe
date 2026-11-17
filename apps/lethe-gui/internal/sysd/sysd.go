@@ -31,6 +31,19 @@ func Start(ctx context.Context, user string) error {
 	if err != nil {
 		return err
 	}
+	return startUnit(ctx, unit)
+}
+
+// CleanupUnit removes leftover lethe* tables after a crash (packaging/systemd).
+const CleanupUnit = "lethe-cleanup.service"
+
+// Cleanup starts lethe-cleanup.service (lethe cleanup as root, polkit asking the password) and
+// waits for the oneshot to finish, so the panel can say whether the network came back.
+func Cleanup(ctx context.Context) error {
+	return startUnit(ctx, CleanupUnit)
+}
+
+func startUnit(ctx context.Context, unit string) error {
 	conn, err := dbus.ConnectSystemBus(dbus.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("system bus: %w", err)

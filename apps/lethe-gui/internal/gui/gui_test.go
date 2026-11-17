@@ -131,8 +131,8 @@ func overlayButton(t *testing.T, w fyne.Window, text string) *widget.Button {
 	var found *widget.Button
 	var walk func(o fyne.CanvasObject)
 	walk = func(o fyne.CanvasObject) {
-		if b, ok := o.(*widget.Button); ok && b.Text == text {
-			found = b
+		if b, ok := o.(*widget.Button); ok && b.Text == text && found == nil && b.Visible() {
+			found = b // the first visible one: dialogs are walked before the window
 		}
 		if c, ok := o.(*fyne.Container); ok {
 			for _, x := range c.Objects {
@@ -246,8 +246,8 @@ func TestM13_FullscreenAlertOnlyClosesWithAck(t *testing.T) {
 
 func TestM13_PanicAndDisarm(t *testing.T) {
 	u, f, a := setup(t, armed())
-	a.menu.Items[2].Action() // tray: Pânico
-	test.Tap(overlayButton(t, u.panel, "Yes"))
+	a.menu.Items[2].Action()                      // tray: Pânico
+	test.Tap(overlayButton(t, u.panel, "Pânico")) // the dialog names the action, in the panel's language
 	u.wg.Wait()
 	u.askPassphrase(u.panel, u.t("disarm_ask"), u.be.Disarm)
 	test.Type(overlaySecret(t, u.panel), "pw")
@@ -533,4 +533,40 @@ func TestM13_StartServiceFromThePanel(t *testing.T) {
 	}
 	go u.Run(ctx) // Run compiles and keeps polling (main.go starts it)
 	cancel()
+}
+
+// A block no session owns (a daemon restarted after a crash) shows Release the network; it asks
+// for confirmation and then runs the cleanup unit. Offline, the same button is there, because a
+// crash in portable mode leaves no daemon to report the block (spec §10.6 item 7, ADR 0015).
+func TestM81_ReleaseLeftoverBlockFromThePanel(t *testing.T) {
+	home := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(home, "lethe"), 0o700)
+	_ = os.WriteFile(filepath.Join(home, "lethe", "profile.yaml"), profile.Template, 0o600)
+	cleaned := 0
+	a := &trayApp{App: test.NewTempApp(t)}
+	u := New(a, &fake{}, Options{Lang: "pt-BR", Now: func() time.Time { return t0 }, Home: home,
+		Cleanup: func(context.Context) error { cleaned++; return nil }})
+	u.Build()
+	st := contracts.Status{State: "READY", Lockdown: &contracts.Lockdown{What: "a rede está bloqueada", Why: "sobrou", Ways: []string{contracts.WayCleanup}, Tables: []string{"inet lethe"}}}
+	u.Apply(st, nil)
+	if !u.block.Visible() || !u.cleanBtn.Visible() || u.endBtn.Visible() || !strings.Contains(u.blockText.Text, "Liberar a rede") {
+		t.Fatalf("block notice: %q", u.blockText.Text)
+	}
+	test.Tap(u.cleanBtn)
+	test.Tap(overlayButton(t, u.panel, "Cancelar"))
+	u.wg.Wait()
+	if cleaned != 0 {
+		t.Fatal("released without the confirmation")
+	}
+	test.Tap(u.cleanBtn)
+	test.Tap(overlayButton(t, u.panel, "Liberar a rede"))
+	u.wg.Wait()
+	if cleaned != 1 || u.flash.Text != u.t("cleanup_done") {
+		t.Fatalf("%d %q", cleaned, u.flash.Text)
+	}
+	u.offline = os.ErrNotExist
+	u.Apply(contracts.Status{}, nil)
+	if !u.cleanOff.Visible() || u.cleanBtn.Visible() {
+		t.Fatal("offline: the release stays reachable")
+	}
 }

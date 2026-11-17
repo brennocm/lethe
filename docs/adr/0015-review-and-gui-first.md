@@ -19,6 +19,8 @@ Security fixes (each with a test named after its ID):
 Ways out of a block:
 - **Disarm also works in PANIC** (passphrase). The unpanic re-check needs the tunnel, and the default panic blocks the tunnel. When the VPN really goes down, the re-check can never pass, so the only exit used to be `sudo lethe cleanup` in a terminal. Ending the session from PANIC journals `session.end` with `reason: disarm_in_panic` and the count of unacknowledged CRITICALs. Without the passphrase (a signal, a crash) the block stays, on purpose (spec §10.6 item 10).
 - The GUI shows the block notice with both exits as buttons: leave the panic, or end the session.
+- **A block no session owns can be released from the GUI.** A daemon that starts over `lethe*` tables reports them in its status and refuses to arm until they are gone; before this it said "no session" while the network stayed dead. **Release the network** starts `lethe-cleanup.service` through systemd's D-Bus API. Polkit asks an administrator's password, so the gate is the same as `sudo lethe cleanup`. The button is offered offline too, because a crash in portable mode leaves no daemon. Confirmation dialogs name the action in the panel's language; fyne's Yes/No followed the system language instead.
+- **Clients talk only to a root daemon.** `ipc.DialDaemon` checks the listener's SO_PEERCRED. A process of the operator's own UID listening in `/run/user/<uid>/lethe` would otherwise receive the passphrase that `session.arm` carries.
 
 Where the exit is:
 - **Exit place.** The status carries the exit IP when it is not a baseline value, and the city and country the endpoint claims (`am.i.mullvad.net` answers both), with the source named. The country that decides alerts is still the one from the offline database.

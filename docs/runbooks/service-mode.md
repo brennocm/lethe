@@ -10,6 +10,7 @@ Para máquinas dedicadas, em que o lethe fica sempre instalado. No modo portáti
 | `/usr/bin/lethe-gui` | GUI (pacote `lethe-gui`, opcional) |
 | `/usr/lib/systemd/system/lethed@.service` | daemon de um operador (a instância é o usuário): o mesmo que `lethed.service` com `LETHE_OPERATOR` e `~/lethe` já declarados |
 | `/usr/lib/systemd/system/lethed.service` | daemon, como root com capabilities reduzidas (spec §19.3); operador num drop-in |
+| `/usr/lib/systemd/system/lethe-cleanup.service` | `lethe cleanup` como oneshot: o botão Liberar a rede da GUI o sobe (polkit pede a senha) |
 | `/usr/lib/systemd/user/lethe-agent.service` | agente de sessão, como o operador |
 
 Nenhuma unidade é habilitada pelo pacote.

@@ -39,6 +39,9 @@ type Options struct {
 	// StartService starts the service for this operator (lethed@<user>.service through systemd's
 	// D-Bus API, polkit asking for the password); nil = the panel only says how.
 	StartService func(ctx context.Context) error
+	// Cleanup releases a block a dead session left (lethe-cleanup.service: lethe cleanup as root,
+	// polkit asking the password); nil = the panel only says how.
+	Cleanup func(ctx context.Context) error
 }
 
 const maxEvents = 500
@@ -63,6 +66,8 @@ type UI struct {
 	routeNote *widget.Label
 	routeActs *fyne.Container
 	svcBtn    *widget.Button // start the service (offline)
+	cleanBtn  *widget.Button // release a leftover block (block notice)
+	cleanOff  *widget.Button // the same, offline: a crash in portable mode leaves no daemon to ask
 	dnsOut    *widget.Label
 	block     *fyne.Container
 	blockWhat *widget.Label
@@ -138,6 +143,11 @@ func (u *UI) Build() {
 	u.svcBtn = widget.NewButton(u.t("service_btn"), u.startService)
 	u.svcBtn.Importance = widget.HighImportance
 	u.svcBtn.Hide()
+	u.cleanBtn = widget.NewButton(u.t("cleanup_btn"), u.askCleanup)
+	u.cleanBtn.Importance = widget.HighImportance
+	u.cleanBtn.Hide()
+	u.cleanOff = widget.NewButton(u.t("cleanup_btn"), u.askCleanup)
+	u.cleanOff.Hide()
 
 	u.blockWhat = wrapped("")
 	u.blockWhat.TextStyle = fyne.TextStyle{Bold: true}
@@ -148,7 +158,7 @@ func (u *UI) Build() {
 	u.endBtn = widget.NewButton(u.t("end_btn"), u.askEnd)
 	u.ackWayBtn = widget.NewButton(u.t("ack_btn"), func() { u.askAck(u.panel) })
 	u.block = container.NewStack(canvas.NewRectangle(colPanicBg),
-		container.NewPadded(container.NewVBox(u.blockWhat, u.blockText, container.NewHBox(u.ackWayBtn, u.unpanicBtn, u.endBtn))))
+		container.NewPadded(container.NewVBox(u.blockWhat, u.blockText, container.NewHBox(u.ackWayBtn, u.unpanicBtn, u.endBtn, u.cleanBtn))))
 	u.block.Hide()
 
 	u.buildStart()
@@ -198,7 +208,7 @@ func (u *UI) Build() {
 	u.top = container.NewVBox(
 		u.verdict, u.header,
 		u.route.box,
-		container.NewBorder(nil, nil, nil, container.NewHBox(u.routeActs, u.svcBtn), u.routeNote),
+		container.NewBorder(nil, nil, nil, container.NewHBox(u.routeActs, u.svcBtn, u.cleanOff), u.routeNote),
 		u.dnsOut, u.block, u.flash, widget.NewSeparator())
 	u.body = container.NewStack(u.start, u.firstForm.box, u.work)
 	u.panel.SetContent(container.NewPadded(container.NewBorder(u.top, container.NewVBox(widget.NewSeparator(), u.actions), nil, nil, u.body)))
@@ -546,8 +556,13 @@ func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 			note = u.t("offline_how_btn")
 			u.svcBtn.Show()
 		}
+		if u.opt.Cleanup != nil {
+			note += " " + u.t("offline_cleanup")
+			u.cleanOff.Show()
+		}
 	} else {
 		u.svcBtn.Hide()
+		u.cleanOff.Hide()
 	}
 	u.routeNote.SetText(note)
 	session := st.Session != "" && u.offline == nil
@@ -602,6 +617,7 @@ func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 	show(u.ackWayBtn, ways[contracts.WayAck])
 	show(u.unpanicBtn, ways[contracts.WayUnpanic] || st.State == "PANIC")
 	show(u.endBtn, session && (ways[contracts.WayDisarm] || len(ways) == 0))
+	show(u.cleanBtn, ways[contracts.WayCleanup] && u.opt.Cleanup != nil)
 	for _, rows := range Grid(st, u.lang) {
 		for _, r := range rows {
 			l, ok := u.rows[r.ID]
@@ -821,7 +837,8 @@ func (u *UI) askPanic() { u.askPanicOn(u.panel)() }
 
 func (u *UI) askPanicOn(w fyne.Window) func() {
 	return func() {
-		dialog.ShowConfirm(u.t("panic_btn"), u.t("panic_ask"), func(yes bool) {
+		// the buttons name the action in the panel's language (fyne's Yes/No follow the system's)
+		dialog.NewCustomConfirm(u.t("panic_btn"), u.t("panic_btn"), u.t("cancel"), wrapped(u.t("panic_ask")), func(yes bool) {
 			if !yes {
 				return
 			}
@@ -830,7 +847,7 @@ func (u *UI) askPanicOn(w fyne.Window) func() {
 				defer u.wg.Done()
 				u.say(u.t("panic_btn"), u.be.Panic(), u.t("panic_ok"))
 			}()
-		}, w)
+		}, w).Show()
 	}
 }
 
