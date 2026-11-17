@@ -33,6 +33,7 @@ func (d *Daemon) deliver(s *session, fs ...checks.Finding) {
 }
 
 func (d *Daemon) findingLocked(f checks.Finding) {
+	f = checks.NET009{}.Match(f, d.sess.known)
 	ev, err := f.SealedAlert(d.sess.journal.Seal)
 	if err != nil {
 		ev = f.Alert() // sensitive fields are dropped, never written in clear
@@ -142,15 +143,31 @@ func (d *Daemon) tunnelExpectLocked() checks.TunnelExpect {
 	return want
 }
 
-// beat records a heartbeat of source for session s.
+// beat records a heartbeat of source for session s. A paused source (selftest ST-SELF-001)
+// loses its heartbeats until the pause ends.
 func (d *Daemon) beat(s *session, source string) func(time.Time) {
 	return func(time.Time) {
 		d.mu.Lock()
 		defer d.mu.Unlock()
-		if d.sess == s && s != nil {
+		if d.sess == s && s != nil && !d.cfg.Now().Before(s.paused[source]) {
 			s.beats[source] = d.cfg.Now()
 		}
 	}
+}
+
+// PauseSensor drops the heartbeats of source for dur, so the state goes GRAY (SELF-001) and
+// comes back (selftest ST-SELF-001). The sensor itself keeps running.
+func (d *Daemon) PauseSensor(source string, dur time.Duration) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.sess == nil {
+		return errState(errNotArmed)
+	}
+	if _, ok := d.sess.beats[source]; !ok {
+		return errParams(fmt.Errorf("unknown sensor %q", source))
+	}
+	d.sess.paused[source] = d.cfg.Now().Add(dur)
+	return nil
 }
 
 // Tick does the 1 s housekeeping: alert resolution, heartbeats, journal maintenance, color.
@@ -185,6 +202,8 @@ func (d *Daemon) Tick() {
 		d.eng.Observe(ev)
 		d.appendLocked(ev)
 	}
+	d.captureStatsLocked()
+	d.clockLocked(now)
 	if err := s.journal.Tick(); err != nil {
 		_, _ = fmt.Fprintf(d.cfg.Out, "lethe: journal: %v\n", err)
 	}

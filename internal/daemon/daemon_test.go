@@ -230,6 +230,8 @@ func newFixture(t *testing.T) *fixture {
 		Out:        f.out,
 		Tor:        func(string, string) discovery.TorSource { return f.tor },
 		Sleep:      clk.Advance,
+		HostRoot:   t.TempDir(),
+		Boottime:   func() time.Duration { return clk.Now().Sub(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)) },
 	})
 	return f
 }

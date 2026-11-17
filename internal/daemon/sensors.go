@@ -14,6 +14,7 @@ import (
 	"lethe/internal/engine"
 	"lethe/internal/guard"
 	"lethe/internal/sensors/capture"
+	"lethe/internal/sensors/hostinfo"
 	"lethe/internal/sensors/netlinkmon"
 	"lethe/internal/sensors/nflog"
 	"lethe/internal/sensors/sockdiag"
@@ -119,6 +120,14 @@ func (d *Daemon) startSensorsLocked(snap discovery.Snapshot) {
 	s.beats[sockdiag.SourceID] = now
 	d.goSensor(s, sockdiag.SourceID, func() error { return d.scanSockets(ctx, s) })
 
+	s.beats[hostinfo.SourceID] = now
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		d.hostLoop(ctx, s)
+	}()
+	go d.clockSetLoop(ctx, s)
+
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -158,6 +167,21 @@ func (d *Daemon) goSensor(s *session, name string, fn func() error) {
 func (d *Daemon) syncCapturesLocked(snap discovery.Snapshot) {
 	s := d.sess
 	al := allowlist(s.gcfg)
+	for iface, c := range s.sensors.captures {
+		if !slices.Contains(snap.CaptureIfaces, iface) {
+			// the interface is gone: its sensor stops and its heartbeat no longer counts
+			_ = c.Close()
+			delete(s.sensors.captures, iface)
+			src := capture.SourceID + ":" + iface
+			if s.down[src] {
+				ev := contracts.Event{Type: contracts.EvSensorUp, Source: contracts.SourceDaemon, Data: map[string]any{"source": src, "reason": "iface_removed"}}
+				d.eng.Observe(ev)
+				d.appendLocked(ev)
+			}
+			delete(s.beats, src)
+			delete(s.down, src)
+		}
+	}
 	for _, iface := range snap.CaptureIfaces {
 		if c, ok := s.sensors.captures[iface]; ok {
 			if err := c.Update(al); err != nil {

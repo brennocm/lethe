@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -204,23 +203,14 @@ func (d *Daemon) routes() {
 		return map[string]any{"ok": true}, d.Ack(p.ID, p.Reason, c.Authorize)
 	})
 	h("agent.report", func(c *ipc.Call) (any, error) {
-		var ev contracts.Event
-		if err := decode(c, &ev); err != nil {
+		if err := contracts.ValidateJSON("agent_report", c.Req.Params); err != nil {
+			return nil, errParams(err) // facts only: no check IDs, no severities (ADR 0009)
+		}
+		var f AgentFacts
+		if err := decode(c, &f); err != nil {
 			return nil, err
 		}
-		if ev.Type != contracts.EvCheckAlert {
-			return nil, errParams(fmt.Errorf("agent may only report %s", contracts.EvCheckAlert))
-		}
-		if !checkIDRE.MatchString(ev.Check) || !ev.Severity.Valid() {
-			return nil, errParams(errors.New("agent report needs a check ID (XXX-000) and a valid severity"))
-		}
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		if d.sess == nil {
-			return nil, errState(errNotArmed)
-		}
-		d.alertLocked(contracts.Event{V: 1, Type: ev.Type, Check: ev.Check, Severity: ev.Severity, Source: contracts.SourceAgent, Data: ev.Data})
-		return map[string]any{"ok": true}, nil
+		return map[string]any{"ok": true}, d.AgentReport(f)
 	})
 	h("session.arm", func(c *ipc.Call) (any, error) {
 		var req ArmRequest
@@ -247,8 +237,6 @@ func (d *Daemon) routes() {
 		return d.ConfirmEndpoint(p.Endpoint)
 	})
 }
-
-var checkIDRE = regexp.MustCompile(`^[A-Z]{2,5}-[0-9]{3}$`)
 
 // agentProc is the session agent spawned by the daemon (portable mode).
 type agentProc struct {

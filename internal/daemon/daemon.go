@@ -27,6 +27,7 @@ import (
 	"lethe/internal/platform"
 	"lethe/internal/profile"
 	"lethe/internal/response"
+	"lethe/internal/sensors/dbusmon"
 	"lethe/internal/sensors/nftmon"
 	"lethe/internal/sensors/sockdiag"
 )
@@ -72,6 +73,13 @@ type Config struct {
 	// waits between looks (default time.Sleep; tests advance a fake clock).
 	ArmConfirmPoll time.Duration
 	Sleep          func(time.Duration)
+	// HostRoot is where the host files and sysfs are read ("/"); SystemBus gives the system bus
+	// connection (nil with Sensors = connect once; nil without = no bus). HostEvery is the period
+	// of the host checks (default 2 s). Boottime reads CLOCK_BOOTTIME (SELF-005).
+	HostRoot  string
+	SystemBus func() dbusmon.Bus
+	HostEvery time.Duration
+	Boottime  func() time.Duration
 }
 
 // Daemon is one lethe daemon. Methods are safe for concurrent use.
@@ -130,6 +138,11 @@ type session struct {
 	protected       map[int]bool // pids never killed by responses (self, agent)
 	confirming      bool         // strict arm waiting for the tunnel's proof (spec §10.6)
 	panic           panicCause   // why the session is in PANIC (lockdown explanation)
+	known           checks.Known // the baseline values the host checks compare with
+	armWiFi         []dbusmon.WiFi
+	agentKeyboard   string
+	clockOffset     time.Duration        // realtime − boottime at the last tick (SELF-005)
+	paused          map[string]time.Time // heartbeats ignored until then (ST-SELF-001)
 }
 
 const recentMax = 2048
@@ -175,6 +188,18 @@ func New(cfg Config) *Daemon {
 	}
 	if cfg.Sleep == nil {
 		cfg.Sleep = time.Sleep
+	}
+	if cfg.HostRoot == "" {
+		cfg.HostRoot = "/"
+	}
+	if cfg.Sensors && cfg.SystemBus == nil {
+		cfg.SystemBus = systemBus()
+	}
+	if cfg.HostEvery == 0 {
+		cfg.HostEvery = hostEveryDefault
+	}
+	if cfg.Boottime == nil {
+		cfg.Boottime = boottime
 	}
 	d := &Daemon{cfg: cfg, state: engine.StateReady, subs: map[int]chan contracts.Event{}, lastBeat: map[string]time.Time{}, ended: make(chan struct{})}
 	d.eng = engine.New(clock{cfg.Now}, engine.Config{}, engine.StateReady)

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lethe:agent_report",
+  "title": "params of agent.report: facts the session agent sees (ADR 0009). No check IDs, no severities.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["capture"],
+  "properties": {
+    "lang": { "type": "string", "maxLength": 64 },
+    "keyboard": { "type": "string", "maxLength": 64 },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["audio", "video", "screencast"],
+      "properties": {
+        "audio": { "type": "integer", "minimum": 0, "maximum": 1024 },
+        "video": { "type": "integer", "minimum": 0, "maximum": 1024 },
+        "screencast": { "type": "integer", "minimum": 0, "maximum": 1024 }
+      }
+    }
+  }
+}

@@ -32,6 +32,7 @@ import (
 	"lethe/internal/profile"
 	"lethe/internal/report"
 	"lethe/internal/response"
+	"lethe/internal/sensors/dbusmon"
 	"lethe/internal/sensors/procscan"
 	"lethe/internal/sensors/sockdiag"
 )
@@ -152,7 +153,11 @@ func (d *Daemon) armLocked(req ArmRequest) (ArmResult, preflight.Report, error) 
 
 	d.closeTorLocked() // a new profile may name another control port
 	snap := d.discoverLocked(prof)
-	rep = preflight.Run(preflight.Input{Snapshot: &snap, Profile: prof, Guard: string(mode), Warnings: warns, Manual: req.Manual})
+	known := checks.KnownFrom(base)
+	col := d.collector(&session{prof: prof})
+	host := col.Collect()
+	rep = preflight.Run(preflight.Input{Snapshot: &snap, Profile: prof, Guard: string(mode), Warnings: warns, Manual: req.Manual,
+		Host: &host, Known: known, Now: now})
 	if mode == engine.GuardStrict && len(checks.TUN008{}.Evaluate(string(mode), &snap)) > 0 {
 		d.closeTorLocked()
 		return ArmResult{}, rep, errParams(errors.New("TUN-008: snowflake and meek bridges cannot be followed by the strict guard; arm with --guard off (observer)"))
@@ -184,6 +189,10 @@ func (d *Daemon) armLocked(req ArmRequest) (ArmResult, preflight.Report, error) 
 	}
 	d.sess = s
 	d.snap = snap
+	s.known = known
+	if host.BusRead {
+		s.armWiFi = append([]dbusmon.WiFi{}, host.Bus.NM.WiFi...)
+	}
 	s.torExpected = checks.TorExpected(prof.Egress.Type, &snap)
 	s.armEndpoints = map[string]bool{}
 	for _, e := range snap.Endpoints {
@@ -277,7 +286,7 @@ func (d *Daemon) openSession(prof *profile.Profile, base *baseline.Baseline, mod
 		return nil, err
 	}
 	s := &session{id: id, prof: prof, base: base, guardMode: mode, startedAt: now,
-		beats: map[string]time.Time{}, down: map[string]bool{}, conditions: map[string]map[string]map[string]any{}, tunnels: map[string]bool{}, tx: checks.NewTxTracker()}
+		beats: map[string]time.Time{}, paused: map[string]time.Time{}, down: map[string]bool{}, conditions: map[string]map[string]map[string]any{}, tunnels: map[string]bool{}, tx: checks.NewTxTracker()}
 	recips, err := recipients(prof.Storage.LogRecipients, base)
 	if err != nil {
 		return nil, errParams(err)
