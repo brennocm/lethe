@@ -375,6 +375,7 @@ func TestNET011_RouteAndDNSTest(t *testing.T) {
 	u, f, _ := setup(t, armed())
 	u.Apply(armed(), nil)
 	u.checkNow()
+	u.wg.Wait() // the test driver runs fyne.Do on the caller: one action at a time
 	u.askDNS()
 	test.Tap(overlayButton(t, u.panel, "Rodar o teste"))
 	u.wg.Wait()
