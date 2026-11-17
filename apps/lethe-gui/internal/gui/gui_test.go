@@ -506,9 +506,7 @@ func (o *offBackend) Status() (contracts.Status, error) {
 // The panel goes offline when the daemon does not answer and offers to start the service; once
 // started, the next poll finds it (spec §16.2, ADR 0015).
 func TestM13_StartServiceFromThePanel(t *testing.T) {
-	home := t.TempDir()
-	_ = os.MkdirAll(filepath.Join(home, "lethe"), 0o700)
-	_ = os.WriteFile(filepath.Join(home, "lethe", "profile.yaml"), profile.Template, 0o600)
+	home := t.TempDir() // no ~/lethe yet: the service is started before the first use
 	be := &offBackend{}
 	started := 0
 	a := &trayApp{App: test.NewTempApp(t)}
@@ -529,7 +527,10 @@ func TestM13_StartServiceFromThePanel(t *testing.T) {
 	}
 	test.Tap(u.svcBtn)
 	u.wg.Wait()
-	if started != 1 || u.offline != nil || u.svcBtn.Visible() || !u.start.Visible() {
+	if fi, err := os.Stat(filepath.Join(home, "lethe")); err != nil || fi.Mode().Perm() != 0o700 {
+		t.Fatal("~/lethe exists before the service starts (its ReadWritePaths)")
+	}
+	if started != 1 || u.offline != nil || u.svcBtn.Visible() || !u.firstForm.box.Visible() {
 		t.Fatalf("after the start: %d %v %q", started, u.offline, u.flash.Text)
 	}
 	go u.Run(ctx) // Run compiles and keeps polling (main.go starts it)

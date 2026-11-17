@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -69,6 +70,12 @@ func (u *UI) startService() {
 		defer u.wg.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute) // the password prompt waits for the operator
 		defer cancel()
+		// lethed@ makes ~/lethe writable only if it exists when the service starts
+		// (ReadWritePaths=-/home/%i/lethe): create it first, or a first use done after the start
+		// would leave the session directory read-only until a restart
+		if u.opt.Home != "" {
+			_ = os.MkdirAll(u.firstDir(), 0o700)
+		}
 		err := u.opt.StartService(ctx)
 		fyne.Do(u.svcBtn.Enable)
 		u.say(u.t("service_btn"), err, u.t("service_started"))
