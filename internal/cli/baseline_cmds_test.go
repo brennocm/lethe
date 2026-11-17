@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -91,9 +93,21 @@ func TestBaselineManual_CreateAddShow_NoValueLeaks(t *testing.T) {
 	}
 }
 
-func TestBaselineCreate_OnlineNotYet(t *testing.T) {
-	code, _, errs := runIn(t, "", nil, "baseline", "create", "--out", filepath.Join(t.TempDir(), "b.age"))
-	if code != ExitGeneric || !strings.Contains(errs, "not implemented") {
+func TestNET011_BaselineCreateOnline(t *testing.T) {
+	prev := onlineNetwork
+	t.Cleanup(func() { onlineNetwork = prev })
+	onlineNetwork = func(context.Context, io.Writer, bool) (baseline.Network, error) {
+		return baseline.Network{PublicIPv4: "198.51.100.77", ASN: 64501, Provider: "Provedor"}, nil
+	}
+	file := filepath.Join(t.TempDir(), "b.age")
+	code, _, errs := runIn(t, "casa\n\n\n\n\n\n\n\n\n", []string{"correct horse", "correct horse"}, "baseline", "create", "--out", file)
+	if code != ExitOK {
+		t.Fatalf("%d %s", code, errs)
+	}
+	onlineNetwork = func(context.Context, io.Writer, bool) (baseline.Network, error) {
+		return baseline.Network{}, ErrTunnelUp
+	}
+	if code, _, errs := runIn(t, "", nil, "baseline", "create", "--out", filepath.Join(t.TempDir(), "c.age")); code == ExitOK || !strings.Contains(errs, "túnel") {
 		t.Fatalf("%d %s", code, errs)
 	}
 }

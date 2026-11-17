@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"filippo.io/age"
@@ -41,7 +42,7 @@ func newBaselineCmd() *cobra.Command {
 }
 
 func newBaselineCreateCmd() *cobra.Command {
-	var manual bool
+	var manual, allowTunnel bool
 	var out string
 	var recipients []string
 	var sec secretFlags
@@ -50,8 +51,12 @@ func newBaselineCreateCmd() *cobra.Command {
 		Short: "Create the encrypted baseline (run without tunnel, on a known network)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			def := baseline.Network{}
 			if !manual {
-				return fmt.Errorf("%w: online baseline (public IP + offline ASN) arrives with the geo database (M11); use --manual", ErrNotImplemented)
+				var err error
+				if def, err = onlineNetwork(cmd.Context(), cmd.ErrOrStderr(), allowTunnel); err != nil {
+					return err
+				}
 			}
 			b, err := baseline.New(time.Now(), buildinfo.Version)
 			if err != nil {
@@ -59,7 +64,7 @@ func newBaselineCreateCmd() *cobra.Command {
 			}
 			baseline.CollectLocal("/", os.Getenv).Apply(b)
 			pr := &prompter{in: bufio.NewReader(cmd.InOrStdin()), out: cmd.ErrOrStderr()}
-			n, err := askNetwork(pr)
+			n, err := askNetworkWith(pr, def)
 			if err != nil {
 				return err
 			}
@@ -95,7 +100,8 @@ func newBaselineCreateCmd() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().BoolVar(&manual, "manual", false, "no network queries: answer the questions on stdin")
+	cmd.Flags().BoolVar(&manual, "manual", false, "no network queries: answer every question on stdin")
+	cmd.Flags().BoolVar(&allowTunnel, "allow-tunnel", false, "detect even with a tunnel up (the public IP will be the tunnel's)")
 	cmd.Flags().StringVar(&out, "out", "baseline.age", "output file")
 	cmd.Flags().StringSliceVar(&recipients, "recipient", nil, "institutional age recipient for a separate recovery copy (repeatable)")
 	sec.register(cmd)
@@ -103,15 +109,19 @@ func newBaselineCreateCmd() *cobra.Command {
 }
 
 func newBaselineAddNetworkCmd() *cobra.Command {
-	var manual bool
+	var manual, allowTunnel bool
 	var sec secretFlags
 	cmd := &cobra.Command{
 		Use:   "add-network FILE",
 		Short: "Add another known network to the baseline",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			def := baseline.Network{}
 			if !manual {
-				return fmt.Errorf("%w: online mode arrives in M11; use --manual", ErrNotImplemented)
+				var err error
+				if def, err = onlineNetwork(cmd.Context(), cmd.ErrOrStderr(), allowTunnel); err != nil {
+					return err
+				}
 			}
 			pw, b, err := openBaseline(cmd, args[0], &sec)
 			if err != nil {
@@ -119,7 +129,7 @@ func newBaselineAddNetworkCmd() *cobra.Command {
 			}
 			defer wipeBytes(pw)
 			pr := &prompter{in: bufio.NewReader(cmd.InOrStdin()), out: cmd.ErrOrStderr()}
-			n, err := askNetwork(pr)
+			n, err := askNetworkWith(pr, def)
 			if err != nil {
 				return err
 			}
@@ -137,7 +147,8 @@ func newBaselineAddNetworkCmd() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().BoolVar(&manual, "manual", false, "no network queries: answer the questions on stdin")
+	cmd.Flags().BoolVar(&manual, "manual", false, "no network queries: answer every question on stdin")
+	cmd.Flags().BoolVar(&allowTunnel, "allow-tunnel", false, "detect even with a tunnel up (the public IP will be the tunnel's)")
 	sec.register(cmd)
 	return cmd
 }
@@ -186,25 +197,40 @@ func openBaseline(cmd *cobra.Command, path string, sec *secretFlags) ([]byte, *b
 }
 
 func askNetwork(pr *prompter) (baseline.Network, error) {
+	return askNetworkWith(pr, baseline.Network{})
+}
+
+// askNetworkWith asks the network questions; def holds what was detected (Enter keeps it).
+func askNetworkWith(pr *prompter, def baseline.Network) (baseline.Network, error) {
 	var n baseline.Network
 	var err error
-	q := func(label string) string {
+	q := func(label, d string) string {
 		if err != nil {
 			return ""
 		}
+		if d != "" {
+			label = strings.TrimSuffix(label, ": ") + " [" + d + "]: "
+		}
 		var v string
 		v, err = pr.ask(label)
+		if v == "" {
+			v = d
+		}
 		return v
 	}
-	n.Name = q("Nome da rede (ex.: casa): ")
-	n.PublicIPv4 = q("IP público IPv4 (vazio se não souber): ")
-	n.PublicIPv6 = q("IP público IPv6 (vazio se não houver): ")
-	asn := q("ASN do provedor (só o número, vazio se não souber): ")
-	n.Provider = q("Nome do provedor: ")
-	n.Resolvers = splitList(q("Resolvedores DNS do provedor (separados por vírgula): "))
-	n.GatewayIP = q("IP do gateway (roteador): ")
-	n.GatewayMAC = q("MAC do gateway: ")
-	n.SSIDs = splitList(q("SSIDs desta rede (separados por vírgula): "))
+	asnDef := ""
+	if def.ASN != 0 {
+		asnDef = strconv.FormatUint(uint64(def.ASN), 10)
+	}
+	n.Name = q("Nome da rede (ex.: casa): ", def.Name)
+	n.PublicIPv4 = q("IP público IPv4 (vazio se não souber): ", def.PublicIPv4)
+	n.PublicIPv6 = q("IP público IPv6 (vazio se não houver): ", def.PublicIPv6)
+	asn := q("ASN do provedor (só o número, vazio se não souber): ", asnDef)
+	n.Provider = q("Nome do provedor: ", def.Provider)
+	n.Resolvers = splitList(q("Resolvedores DNS do provedor (separados por vírgula): ", strings.Join(def.Resolvers, ",")))
+	n.GatewayIP = q("IP do gateway (roteador): ", def.GatewayIP)
+	n.GatewayMAC = q("MAC do gateway: ", def.GatewayMAC)
+	n.SSIDs = splitList(q("SSIDs desta rede (separados por vírgula): ", strings.Join(def.SSIDs, ",")))
 	if err != nil {
 		return n, err
 	}

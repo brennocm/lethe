@@ -3,6 +3,9 @@ package cli
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"errors"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,8 +14,10 @@ import (
 
 	"lethe/internal/baseline"
 	"lethe/internal/discovery"
+	"lethe/internal/geo"
 	"lethe/internal/preflight"
 	"lethe/internal/profile"
+	"lethe/internal/sensors/egressip"
 	"lethe/internal/sensors/hostinfo"
 )
 
@@ -131,4 +136,40 @@ func mustRead(t *testing.T, p string) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+func TestNET011_BaselineOnlineDetection(t *testing.T) {
+	snap := discovery.Snapshot{Routes: discovery.Routes{DefaultV4: []discovery.Route{{Iface: "eth0", Gateway: "192.168.1.1", Class: discovery.ClassEgress}}},
+		DNS: discovery.DNS{ResolvConf: discovery.ResolvConf{Nameservers: []string{"192.168.1.1"}}}}
+	db := geo.Map{netip.MustParseAddr("198.51.100.77"): {Country: "BR", ASN: 64501, Org: "Provedor"}}
+	q := func(context.Context, []string) egressip.Result {
+		return egressip.Result{Agreed: true, IP: netip.MustParseAddr("198.51.100.77")}
+	}
+	var out bytes.Buffer
+	n, err := detectNetwork(context.Background(), &out, snap, false, q, db)
+	if err != nil || n.PublicIPv4 != "198.51.100.77" || n.ASN != 64501 || n.Provider != "Provedor" || n.GatewayIP != "192.168.1.1" || n.Resolvers[0] != "192.168.1.1" {
+		t.Fatalf("%+v %v", n, err)
+	}
+	snap.Routes.DefaultV4 = []discovery.Route{{Iface: "wg0", Class: discovery.ClassTunnel}}
+	if _, err := detectNetwork(context.Background(), &out, snap, false, q, db); !errors.Is(err, ErrTunnelUp) {
+		t.Fatal("a baseline through the tunnel would record the VPN's IP")
+	}
+	// the answers keep the detected value on Enter and take the typed one otherwise
+	pr := &prompter{in: bufio.NewReader(strings.NewReader("casa\n\n\n\nOutro\n\n\n\n\n")), out: &out}
+	got, err := askNetworkWith(pr, baseline.Network{PublicIPv4: "198.51.100.77", ASN: 64501, Provider: "Provedor"})
+	if err != nil || got.PublicIPv4 != "198.51.100.77" || got.ASN != 64501 || got.Provider != "Outro" {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+func TestNET011_BaselineAllowTunnel(t *testing.T) {
+	snap := discovery.Snapshot{Routes: discovery.Routes{DefaultV4: []discovery.Route{{Iface: "wg0", Class: discovery.ClassTunnel}}}}
+	q := func(context.Context, []string) egressip.Result {
+		return egressip.Result{Agreed: true, IP: netip.MustParseAddr("203.0.113.9")}
+	}
+	var out bytes.Buffer
+	n, err := detectNetwork(context.Background(), &out, snap, true, q, nil)
+	if err != nil || n.PublicIPv4 != "203.0.113.9" || !strings.Contains(out.String(), "--allow-tunnel") {
+		t.Fatalf("%+v %v %s", n, err, out.String())
+	}
 }
