@@ -546,9 +546,12 @@ Falhas de **túnel** (TUN-001, TUN-003 e TUN-008 em CRITICAL) não podem ser con
 - Intervalo aleatório uniforme em `active_checks.egress_ip.interval` (padrão 180–600 s), mais um no `arm`.
 - Consulta ≥ 2 endpoints da lista. O resultado só vale se eles concordarem.
 - **VPN:** o socket é preso à interface do túnel (`SO_BINDTODEVICE`), e a resolução de nomes usa um resolvedor próprio, preso ao túnel, que pergunta ao DNS daquele link. Se não houver DNS conhecido no túnel, o check é pulado com W, e o resolvedor do sistema **nunca** é usado.
+  - "DNS conhecido no túnel", nesta ordem: `active_checks.tunnel_dns` do perfil, os servidores que o systemd-resolved associa ao link do túnel, e os `nameserver` do `resolv.conf` cuja rota sai pelo túnel. Endereços loopback (stubs) nunca contam: atrás deles está o resolvedor do sistema.
 - **Tor:** SOCKS5 no `SocksPort` descoberto, com resolução remota (`socks5h`).
 - Cabeçalhos HTTP mínimos e um User-Agent genérico e comum. Nenhum identificador da ferramenta, para que a consulta não vire assinatura capaz de ligar personas.
-- País e ASN resolvidos **offline** (§20). IP ou ASN da baseline = C; país diferente de `expect_country` = W.
+- País e ASN resolvidos **offline** (§20). IP ou ASN da baseline = C; país diferente de `expect_country` = W. ASN fora de `expect_asn` (quando definido) = W. Endpoints que não concordam ou falham = W.
+- O IP de saída vai **selado** no evento (pode ser o da baseline); o campo casado aparece pelo nome. O `status` mostra só país, ASN (nunca um ASN da baseline), caminho e horário da última resposta concordante.
+- Com o país do IP de saída, o PER-001 compara o país do timezone da máquina (`zone1970.tab` do sistema; timezone de vários países casa com qualquer um) e o território do locale. Sem base geo no binário, a parte de país do NET-011 e do PER-001 fica inativa, e o IP/ASN da baseline continua sendo verificado pelo IP.
 
 ---
 
@@ -825,6 +828,7 @@ active_checks:
     endpoints:
       - https://check.torproject.org/api/ip
       - https://am.i.mullvad.net/json
+  tunnel_dns: []               # DNS do túnel, se a descoberta não achar (nunca loopback)
 
 processes:
   deny:
@@ -947,7 +951,7 @@ UTC com microssegundos mais `CLOCK_MONOTONIC`. Saltos de relógio são registrad
 
 | Comando | Descrição |
 |---|---|
-| `lethe baseline create [--manual] [--out FILE] [--recipient AGE]` | Cria a baseline cifrada |
+| `lethe baseline create [--manual] [--allow-tunnel] [--out FILE] [--recipient AGE]` | Cria a baseline cifrada |
 | `lethe baseline add-network [--manual] FILE` | Adiciona uma rede conhecida |
 | `lethe baseline show FILE` | Mostra o conteúdo (pede a passphrase) |
 | `lethe setup` | Assistente do primeiro uso: perfil + baseline, começando em `off` (§10.6) |
