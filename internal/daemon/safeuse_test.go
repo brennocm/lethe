@@ -230,6 +230,10 @@ func TestM81_LockdownManualPanic(t *testing.T) {
 	if l == nil || !strings.Contains(l.Why, "lethe panic") || !strings.HasPrefix(l.Exit, "lethe unpanic") {
 		t.Fatalf("lockdown %+v", l)
 	}
+	// the ways out as actions for the GUI: leave the panic, or end the session
+	if strings.Join(l.Ways, ",") != "unpanic,disarm" {
+		t.Fatalf("ways %v", l.Ways)
+	}
 }
 
 func TestM81_LeftoverLockdown(t *testing.T) {
@@ -237,7 +241,7 @@ func TestM81_LeftoverLockdown(t *testing.T) {
 		t.Fatal("no tables, no lockdown")
 	}
 	l := LeftoverLockdown([]string{"inet lethe"})
-	if !strings.Contains(l.Exit, "sudo lethe cleanup") || len(l.Tables) != 1 {
+	if !strings.Contains(l.Exit, "sudo lethe cleanup") || len(l.Tables) != 1 || len(l.Ways) != 1 || l.Ways[0] != "cleanup" {
 		t.Fatalf("%+v", l)
 	}
 }

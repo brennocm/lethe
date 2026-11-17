@@ -629,7 +629,7 @@ O bloqueio é deliberado só quando protege contra um vazamento durante a opera�
 
 **Sempre mostrar a saída**
 
-5. Todo estado em que a rede está bloqueada pelo lethe (pânico, guarda estrito sem túnel, tabelas `lethe*` que sobraram) é descrito no `status` (humano e `--json`, campo `lockdown`), no terminal do `run` e nas mensagens de erro, sempre com três partes: **o que** (por exemplo "a rede está bloqueada: pânico"), **por quê** (causa e alerta, sem valores da baseline) e **como sair** (o comando exato: `lethe unpanic`, `sudo lethe cleanup` ou reiniciar a máquina).
+5. Todo estado em que a rede está bloqueada pelo lethe (pânico, guarda estrito sem túnel, tabelas `lethe*` que sobraram) é descrito no `status` (humano e `--json`, campo `lockdown`), no terminal do `run` e nas mensagens de erro, sempre com três partes: **o que** (por exemplo "a rede está bloqueada: pânico"), **por quê** (causa e alerta, sem valores da baseline) e **como sair** (o comando exato: `lethe unpanic`, `sudo lethe cleanup` ou reiniciar a máquina). O `lockdown` traz também `ways`, as saídas como ações na ordem a tentar (`ack`, `unpanic`, `reconnect`, `disarm`, `wait`, `cleanup`): a GUI as transforma em botões e em frases sem comandos de terminal, e o alerta em tela cheia oferece "Encerrar sessão" quando `disarm` está entre elas.
 6. **`lethe status` sem daemon** não para no "daemon inacessível". Como root, ele lista as tabelas `lethe*` que sobraram (crash, `kill -9`, sessão interrompida) e diz que a rede está bloqueada por elas e que `sudo lethe cleanup` as remove. Sem root, ele diz que não consegue verificar e que `sudo lethe status` verifica.
 7. `lethe cleanup` diz o que removeu e confirma que a rede voltou ao estado de antes do lethe (ou que não havia nada a remover).
 

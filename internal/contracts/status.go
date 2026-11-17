@@ -88,7 +88,22 @@ type Lockdown struct {
 	Why    string   `json:"why"`
 	Exit   string   `json:"exit"`
 	Tables []string `json:"tables,omitempty"` // leftover lethe* tables (status without a daemon)
+	// Ways is the way out as actions, in the order to try them, for an interface to turn into
+	// buttons (Exit stays the terminal's text): ack (acknowledge the CRITICALs first), unpanic,
+	// reconnect (bring the tunnel back), disarm (end the session, passphrase), wait (lethe
+	// undoes it by itself), cleanup (sudo lethe cleanup, no daemon).
+	Ways []string `json:"ways,omitempty"`
 }
+
+// Ways out of a block (Lockdown.Ways).
+const (
+	WayAck       = "ack"
+	WayUnpanic   = "unpanic"
+	WayReconnect = "reconnect"
+	WayDisarm    = "disarm"
+	WayWait      = "wait"
+	WayCleanup   = "cleanup"
+)
 
 // String is the human form used on the terminal and in error messages.
 func (l Lockdown) String() string {

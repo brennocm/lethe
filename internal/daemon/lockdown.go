@@ -25,6 +25,7 @@ func LeftoverLockdown(tables []string) *Lockdown {
 		What:   "a rede está bloqueada por tabelas do lethe que sobraram: " + strings.Join(tables, ", "),
 		Why:    "nenhum daemon do lethe está rodando (ele caiu, foi morto com kill -9 ou a sessão foi interrompida); o bloqueio fica de propósito, para não vazar",
 		Exit:   "sudo lethe cleanup (remove só as tabelas lethe*), ou reinicie a máquina",
+		Ways:   []string{contracts.WayCleanup},
 		Tables: tables,
 	}
 }
@@ -59,19 +60,24 @@ func (d *Daemon) lockdownLocked() *Lockdown {
 			why = "5 passphrases erradas em 5 minutos (SELF-006)"
 		}
 		exit := "lethe unpanic (pede a passphrase e confere túnel, rotas e IPv6 antes de liberar)"
+		ways := []string{contracts.WayUnpanic, contracts.WayDisarm}
 		if len(unacked) > 0 {
+			ways = []string{contracts.WayAck, contracts.WayUnpanic, contracts.WayDisarm}
 			exit = fmt.Sprintf("reconheça os CRITICAL com lethe ack ID --reason \"...\" (%s) e depois rode lethe unpanic", strings.Join(unacked, ", "))
 		}
 		return &Lockdown{What: "a rede está bloqueada: pânico", Why: why,
-			Exit: exit + "; se o túnel não voltar: lethe disarm encerra a sessão e libera a rede (pede a passphrase); se o lethe não responder: sudo lethe cleanup, ou reinicie a máquina"}
+			Exit: exit + "; se o túnel não voltar: lethe disarm encerra a sessão e libera a rede (pede a passphrase); se o lethe não responder: sudo lethe cleanup, ou reinicie a máquina",
+			Ways: ways}
 	case s.guardMode == engine.GuardStrict && s.confirming:
 		return &Lockdown{What: "guarda estrito aplicado: só o túnel passa enquanto ele prova que funciona",
 			Why:  fmt.Sprintf("o arm espera até %s por um handshake ou tráfego pelo túnel", s.prof.Guard.ArmWindow),
-			Exit: "nada a fazer: sem a prova o lethe desfaz o bloqueio sozinho; abra uma página para acelerar"}
+			Exit: "nada a fazer: sem a prova o lethe desfaz o bloqueio sozinho; abra uma página para acelerar",
+			Ways: []string{contracts.WayWait}}
 	case s.guardMode == engine.GuardStrict && len(tunnel) > 0:
 		return &Lockdown{What: "a rede está bloqueada: guarda estrito sem túnel",
 			Why:  "o túnel caiu (" + strings.Join(tunnel, ", ") + "); no estrito só o túnel passa, então nada sai pela rede física",
-			Exit: "reconecte o túnel (a rede volta sozinha), ou lethe disarm para encerrar a sessão e liberar a rede"}
+			Exit: "reconecte o túnel (a rede volta sozinha), ou lethe disarm para encerrar a sessão e liberar a rede",
+			Ways: []string{contracts.WayReconnect, contracts.WayDisarm}}
 	}
 	return nil
 }
