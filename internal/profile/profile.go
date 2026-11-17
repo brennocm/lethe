@@ -108,8 +108,12 @@ type Panic struct {
 }
 
 type ActiveChecks struct {
-	Enabled  bool     `yaml:"enabled"`
-	EgressIP EgressIP `yaml:"egress_ip"`
+	Enabled   bool     `yaml:"enabled"`
+	EgressIP  EgressIP `yaml:"egress_ip"`
+	TunnelDNS []string `yaml:"tunnel_dns"` // DNS servers reached through the tunnel (NET-011)
+
+	// ParsedTunnelDNS is filled by Load.
+	ParsedTunnelDNS []netip.Addr `yaml:"-"`
 }
 
 type EgressIP struct {
@@ -275,6 +279,14 @@ func (p *Profile) check(home string) (warns, problems []string) {
 	}
 	if p.ActiveChecks.EgressIP.IntervalMin < 30*time.Second || p.ActiveChecks.EgressIP.IntervalMax < p.ActiveChecks.EgressIP.IntervalMin {
 		bad("active_checks.egress_ip.interval must be [min, max] with 30s <= min <= max")
+	}
+	for _, v := range p.ActiveChecks.TunnelDNS {
+		a, err := netip.ParseAddr(v)
+		if err != nil || a.IsLoopback() || a.IsUnspecified() {
+			bad("active_checks.tunnel_dns: %q must be the IP of a DNS server in the tunnel (not loopback)", v)
+			continue
+		}
+		p.ActiveChecks.ParsedTunnelDNS = append(p.ActiveChecks.ParsedTunnelDNS, a.Unmap())
 	}
 	if p.ActiveChecks.Enabled && len(p.ActiveChecks.EgressIP.Endpoints) < 2 {
 		bad("active_checks.egress_ip.endpoints needs at least 2 endpoints")
