@@ -20,6 +20,9 @@ Ways out of a block:
 - **Disarm also works in PANIC** (passphrase). The unpanic re-check needs the tunnel, and the default panic blocks the tunnel. When the VPN really goes down, the re-check can never pass, so the only exit used to be `sudo lethe cleanup` in a terminal. Ending the session from PANIC journals `session.end` with `reason: disarm_in_panic` and the count of unacknowledged CRITICALs. Without the passphrase (a signal, a crash) the block stays, on purpose (spec §10.6 item 10).
 - The GUI shows the block notice with both exits as buttons: leave the panic, or end the session.
 - **A block no session owns can be released from the GUI.** A daemon that starts over `lethe*` tables reports them in its status and refuses to arm until they are gone; before this it said "no session" while the network stayed dead. **Release the network** starts `lethe-cleanup.service` through systemd's D-Bus API. Polkit asks an administrator's password, so the gate is the same as `sudo lethe cleanup`. The button is offered offline too, because a crash in portable mode leaves no daemon. Confirmation dialogs name the action in the panel's language; fyne's Yes/No followed the system language instead.
+- **Challenges are bound to their connection** (at most 4 pending per connection, a new one evicting that connection's oldest). Before, 64 outstanding nonces in total refused new challenges, so a process of the operator's UID could keep the GUI from proving unpanic or disarm.
+- **`active.check_now` keeps 15 s between rounds**, and **`dns.leak_test` runs one at a time**. Both are safe methods any process of the operator can call, and neither may become a stream of queries.
+- **systemd's answer is read from `JobRemoved`**, not from `StartUnit`, which only queues the job. A failed cleanup is not reported as a released network.
 - **Clients talk only to a root daemon.** `ipc.DialDaemon` checks the listener's SO_PEERCRED. A process of the operator's own UID listening in `/run/user/<uid>/lethe` would otherwise receive the passphrase that `session.arm` carries.
 
 Where the exit is:
@@ -39,6 +42,8 @@ GUI first:
 - The GUI's `main` moved to `apps/lethe-gui/internal/launch`, which the tests compile without the GL driver. An earlier rewrite of the panel had dropped `UI.Run`. Since `main.go` only compiles with cgo, `check` did not see it.
 - Theme: the palette of the logo. Charcoal canvas, aged gold for the one primary action and a protected route, teal for selection, sage, ochre and brick for ok, warning and critical. Only the dark composition exists: the panel is watched for hours in dim rooms.
 
+- The start form also offers **Register the current network**, which adds a network to the baseline with its passphrase. A duplicate name or public IP is refused, and the file is replaced atomically. It also offers **Reports**: past sessions and the `report.md` the daemon verified when each one ended.
+
 ## Consequences
 - An operator who knows the passphrase can always release the network from the panel, with or without a working tunnel. An attacker without it cannot.
 - The DNS leak test makes the system resolver ask for `bash.ws` names. When DNS is leaking, whoever sees it learns that someone ran the test. The GUI says so before running it.
@@ -47,4 +52,5 @@ GUI first:
   - it fills the gateway, the resolvers and the kind of tunnel from a local reading;
   - it asks the public IP only on request, and never with a tunnel on the default route;
   - the only secret is the passphrase, typed twice, with no key to generate or keep.
+  An existing baseline is kept only when the passphrase typed opens it.
   The creation moved to `internal/setup`, shared with `lethe setup`. It runs as the operator, and a test keeps it away from the guard, the responses, the daemon, privsep and `os/exec` in lethe code. The GUI may now import `internal/setup` and `internal/buildinfo`, which pulls netlink, D-Bus and age into the GUI module.
