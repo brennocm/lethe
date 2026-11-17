@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/nftables"
+
 	"lethe/internal/contracts"
 	"lethe/internal/engine"
 	"lethe/internal/ipc"
@@ -237,11 +239,31 @@ func TestM81_LockdownManualPanic(t *testing.T) {
 }
 
 func TestM81_LeftoverLockdown(t *testing.T) {
-	if LeftoverLockdown(nil) != nil {
+	if LeftoverLockdown(nil, false) != nil {
 		t.Fatal("no tables, no lockdown")
 	}
-	l := LeftoverLockdown([]string{"inet lethe"})
+	l := LeftoverLockdown([]string{"inet lethe"}, false)
 	if !strings.Contains(l.Exit, "sudo lethe cleanup") || len(l.Tables) != 1 || len(l.Ways) != 1 || l.Ways[0] != "cleanup" {
 		t.Fatalf("%+v", l)
+	}
+}
+
+// A daemon that starts over tables a dead one left (service mode restarts it) says the network
+// is blocked and how to release it, and refuses to arm on top of the block.
+func TestM81_RestartedDaemonReportsLeftovers(t *testing.T) {
+	f := newFixture(t)
+	if l := f.d.Status().Lockdown; l != nil {
+		t.Fatalf("no tables: %+v", l)
+	}
+	f.nft.mu.Lock()
+	f.nft.tables["inet lethe"] = &nftables.Table{Family: nftables.TableFamilyINet, Name: "lethe"}
+	f.nft.tables["inet other"] = &nftables.Table{Family: nftables.TableFamilyINet, Name: "other"}
+	f.nft.mu.Unlock()
+	l := f.d.Status().Lockdown
+	if l == nil || strings.Join(l.Tables, ",") != "inet lethe" || l.Ways[0] != "cleanup" || !strings.Contains(l.Why, "este daemon não tem sessão") {
+		t.Fatalf("%+v", l)
+	}
+	if _, _, err := f.d.Arm(f.armReq("off")); err == nil || !strings.Contains(err.Error(), "libere a rede primeiro") {
+		t.Fatalf("arm over a leftover block: %v", err)
 	}
 }

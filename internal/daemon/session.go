@@ -127,6 +127,10 @@ func (d *Daemon) armLocked(req ArmRequest) (ArmResult, preflight.Report, error) 
 	if req.Force && req.Reason == "" {
 		return ArmResult{}, rep, errParams(errors.New("--force needs --reason"))
 	}
+	if left := d.leftoverLocked(); len(left) > 0 {
+		// a session over a block it does not own would say "protection off" with the network dead
+		return ArmResult{}, rep, errState(fmt.Errorf("a rede está bloqueada por tabelas que sobraram de uma sessão anterior (%s): libere a rede primeiro (Liberar a rede no painel, ou sudo lethe cleanup)", strings.Join(left, ", ")))
+	}
 	prof, warns, err := profile.Parse(req.Profile, d.cfg.Operator.Home)
 	if err != nil {
 		return ArmResult{}, rep, errParams(err)

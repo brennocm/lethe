@@ -7,6 +7,7 @@ import (
 
 	"lethe/internal/contracts"
 	"lethe/internal/engine"
+	"lethe/internal/guard"
 )
 
 // panicCause records why the session entered PANIC (for the lockdown explanation).
@@ -16,18 +17,42 @@ type panicCause struct {
 	check string
 }
 
-// LeftoverLockdown describes lethe* tables found with no daemon running (spec §10.6 item 6).
-func LeftoverLockdown(tables []string) *Lockdown {
+// LeftoverLockdown describes lethe* tables that no session owns (spec §10.6 item 6): found with
+// no daemon running (lethe status), or by a daemon that started after another one died (service
+// mode restarts it) and has no session yet.
+func LeftoverLockdown(tables []string, daemonUp bool) *Lockdown {
 	if len(tables) == 0 {
 		return nil
 	}
+	why := "nenhum daemon do lethe está rodando (ele caiu, foi morto com kill -9 ou a sessão foi interrompida); o bloqueio fica de propósito, para não vazar"
+	if daemonUp {
+		why = "a sessão anterior terminou sem liberar a rede (o daemon caiu, foi morto ou a máquina perdeu energia) e este daemon não tem sessão; o bloqueio fica de propósito, para não vazar"
+	}
 	return &Lockdown{
 		What:   "a rede está bloqueada por tabelas do lethe que sobraram: " + strings.Join(tables, ", "),
-		Why:    "nenhum daemon do lethe está rodando (ele caiu, foi morto com kill -9 ou a sessão foi interrompida); o bloqueio fica de propósito, para não vazar",
-		Exit:   "sudo lethe cleanup (remove só as tabelas lethe*), ou reinicie a máquina",
+		Why:    why,
+		Exit:   "Liberar a rede no painel (pede a senha de administrador) ou sudo lethe cleanup (remove só as tabelas lethe*), ou reinicie a máquina",
 		Ways:   []string{contracts.WayCleanup},
 		Tables: tables,
 	}
+}
+
+// leftoverLocked lists the lethe* tables present while no session owns them (nil on error: the
+// status then says nothing rather than something false).
+func (d *Daemon) leftoverLocked() []string {
+	c, err := d.cfg.NFT()
+	if err != nil {
+		return nil
+	}
+	refs, err := guard.Leftovers(c)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(refs))
+	for _, r := range refs {
+		out = append(out, r.String())
+	}
+	return out
 }
 
 // lockdownLocked describes the current block, or nil when lethe blocks nothing.

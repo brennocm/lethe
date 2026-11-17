@@ -638,7 +638,7 @@ func statusNoDaemon(w io.Writer, asJSON bool, cause error) error {
 			note = fmt.Sprintf("não deu para listar as tabelas nftables: %v", err)
 			break
 		}
-		st.Lockdown = daemon.LeftoverLockdown(tables)
+		st.Lockdown = daemon.LeftoverLockdown(tables, false)
 		if st.Lockdown == nil {
 			note = "nenhuma tabela lethe* encontrada: o lethe não está bloqueando a rede"
 		}
