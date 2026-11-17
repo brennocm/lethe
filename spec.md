@@ -1003,10 +1003,14 @@ Toda saída com `--json` segue schemas em `internal/contracts/`. A saída humana
 
 ### 16.2 Painel
 
-- **Cabeçalho:** operação e persona, tempo de sessão, modo do guarda, IP e país de saída (último check ativo), túnel identificado.
-- **Grade de checks:** um cartão por categoria; cada check com estado, última avaliação e detalhe.
+- **Veredito:** uma linha que responde "estou coberto?" (Protegido, Protegido com avisos, Vazamento detectado, Rede bloqueada pelo lethe, Nenhuma sessão, O lethe não está rodando, com o comando que o inicia), seguida do estado, do modo do guarda e do tempo de sessão.
+- **Rota:** esta máquina, o túnel e onde a web vê o operador (IP, cidade e país do último check ativo, §9.9), cada trecho colorido pelo estado; botões "Verificar agora" (`active.check_now`) e "Testar vazamento de DNS" (`dns.leak_test`, explicado antes de rodar). Escondidos no pânico.
+- **Bloqueio:** quando a rede está bloqueada, o quadro com o quê, por quê e como sair (§10.6 item 5), com os botões "Sair do pânico" e "Encerrar sessão" (§10.6 item 10).
+- **Iniciar sessão** (sem sessão): perfil (padrão `~/lethe/profile.yaml`, outro pelo seletor de arquivo, nunca lembrado em disco), proteção (como no perfil, só observar ou estrita) e passphrase. O GUI lê perfil e baseline com os direitos do operador e chama `session.arm`.
+- **Grade de checks:** um grupo por categoria; cada check com estado e severidade.
 - **Linha do tempo:** eventos filtráveis por severidade e por check.
-- **Botões:** Pânico (sempre visível, vermelho), Selftest, Reconhecer, Desarmar.
+- **Botões:** Pânico (sempre visível, separado dos outros), Reconhecer, Selftest, Encerrar sessão.
+- **Tema:** as cores da logo (carvão, ouro envelhecido, verde-azulado, sálvia); ouro só para a ação principal e a rota protegida, tijolo para CRITICAL e pânico (ADR 0015).
 
 ### 16.3 Alerta em tela cheia
 
