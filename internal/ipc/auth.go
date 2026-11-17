@@ -121,13 +121,15 @@ func (a *Authenticator) Challenge() ([]byte, error) {
 	return n, nil
 }
 
-// Verify consumes the nonce and checks the MAC. Every failure counts towards the budget.
+// Verify consumes the nonce and checks the MAC. Only a wrong MAC counts towards the budget: it
+// is the only failure that tests a passphrase. A missing proof or an unknown/expired nonce is a
+// client error, and counting it would let a slow dialog or a buggy client engage panic (and
+// close the network) without one wrong passphrase.
 func (a *Authenticator) Verify(method string, params json.RawMessage, p *Auth) error {
 	if !a.LockedUntil().IsZero() {
 		return ErrLocked
 	}
 	if p == nil {
-		a.fail()
 		return ErrNoProof
 	}
 	a.mu.Lock()
@@ -136,7 +138,6 @@ func (a *Authenticator) Verify(method string, params json.RawMessage, p *Auth) e
 	now := a.now()
 	if !ok || now.Sub(issued) > nonceTTL || a.key == nil {
 		a.mu.Unlock()
-		a.fail()
 		return ErrUnknownNonce
 	}
 	// Under the lock: Close wipes the key in place.

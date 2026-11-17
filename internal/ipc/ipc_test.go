@@ -221,18 +221,33 @@ func TestIPC_NonceExpiresAndFailureBudgetPanics(t *testing.T) {
 	if err := c.Call("panic.release", map[string]any{}, p, nil); code(err) != CodeAuth {
 		t.Fatalf("expired: %v", err)
 	}
-	for range 4 {
+	// client errors (no proof, expired nonce) are refused but are no passphrase guess
+	for range 10 {
 		_ = c.Call("panic.release", map[string]any{}, nil, nil)
+	}
+	wrong := make([]byte, 32)
+	guess := func() {
+		p, _ := c.Prove(wrong, "panic.release", map[string]any{})
+		_ = c.Call("panic.release", map[string]any{}, p, nil)
 	}
 	f.mu.Lock()
 	tripped := f.tripped
 	f.mu.Unlock()
+	if tripped != 0 {
+		t.Fatalf("missing proofs engaged panic (%d)", tripped)
+	}
+	for range 5 {
+		guess()
+	}
+	f.mu.Lock()
+	tripped = f.tripped
+	f.mu.Unlock()
 	if tripped != 1 {
-		t.Fatalf("5 failures within 5 min must engage panic once, got %d", tripped)
+		t.Fatalf("5 wrong passphrases within 5 min must engage panic once, got %d", tripped)
 	}
 	// failures spread beyond the window do not trip
 	for range 4 {
-		_ = c.Call("panic.release", map[string]any{}, nil, nil)
+		guess()
 		f.clk.add(2 * time.Minute)
 	}
 	f.mu.Lock()
