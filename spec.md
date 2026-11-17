@@ -481,7 +481,7 @@ Convenções: **P** = passivo, **A** = ativo, **PF** = preflight (pontual). Seve
 |---|---|---|---|---|
 | HOST-001 | Processo da lista de negação | P | Varredura de `/proc` a cada 2 s. Casamento por `exe` (caminho ou basename do `/proc/<pid>/exe`), `comm` ou `cgroup`. **`comm` é truncado em 15 caracteres** (`TASK_COMM_LEN`): o validador do perfil rejeita valores de `comm` mais longos e sugere `exe` | W/C (perfil) |
 | HOST-002 | Câmera ou microfone em uso | P | Daemon: `/dev/video*` e `/dev/snd/pcmC*c` abertos (via `/proc/*/fd`). Agente: streams de captura no PipeWire | W |
-| HOST-003 | Compartilhamento de tela ou acesso remoto | P | Processos conhecidos (AnyDesk, TeamViewer, RustDesk, x11vnc etc.); agente: sessões de screencast ativas no portal xdg | W |
+| HOST-003 | Compartilhamento de tela ou acesso remoto | P | Processos conhecidos (AnyDesk, TeamViewer, RustDesk, x11vnc etc.); agente: nós de screencast no PipeWire (o portal xdg não lista as sessões ativas; ADR 0009) | W |
 | HOST-004 | Hostname real | PF/P | Hostname atual = hostname da baseline | W |
 | HOST-005 | Timezone e locale fora do perfil | PF/P | `/etc/localtime`, `org.freedesktop.timedate1`; agente: `LANG`/`LC_*` da sessão | W |
 | HOST-006 | Disco e swap sem cifra | PF | sysfs: a raiz está sobre dm-crypt (`/sys/block/dm-*/dm/uuid` começa com `CRYPT-`); swap sobre dm-crypt ou zram | W |
@@ -1266,6 +1266,7 @@ Fronteiras (impostas pelo `depguard` no `check`):
 12. **Keylogger no X11:** qualquer processo do mesmo UID lê o teclado no X11, inclusive a passphrase digitada na GUI. No X11, a passphrase DEVERIA ser digitada no terminal do `run` (pinentry no TTY). No Wayland, isso não se aplica.
 13. **Túnel ocioso no arm estrito:** sem tráfego e sem keepalive, um WireGuard pode ficar mais de 180 s sem handshake. A janela de confirmação (§10.6) então desfaz o arm; basta abrir uma página durante a janela ou configurar `PersistentKeepalive`.
 14. **Containers em outros network namespaces:** os sockets deles não são atribuídos (o sock_diag só vê o namespace do daemon), mas o tráfego deles que sai pela egress é visto e bloqueado normalmente.
+15. **Layout de teclado no GNOME:** o GNOME guarda o layout da sessão no dconf, que o agente não lê; o PER-001 usa então o layout do sistema (`org.freedesktop.locale1`). O compartilhamento de tela (HOST-003) é reconhecido pelos nós `Video/Source` do PipeWire com nome de compositor (gnome-shell, mutter, kwin, xdpw, obs): um compositor com outro nome passa despercebido (ADR 0009).
 
 ---
 
