@@ -101,7 +101,7 @@ func (s LinkStore) Restore(up func(string) error) ([]string, error) {
 	return done, errors.Join(errs...)
 }
 
-// NetlinkLinkUp sets iface up (the undo of NetlinkLinkDown).
+// NetlinkLinkUp sets iface up (the undo of RecordedLinkDown).
 func NetlinkLinkUp(iface string) error {
 	l, err := netlink.LinkByName(iface)
 	if err != nil {

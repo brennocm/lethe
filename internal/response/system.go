@@ -7,17 +7,7 @@ import (
 	"time"
 
 	"github.com/godbus/dbus/v5"
-	"github.com/vishvananda/netlink"
 )
-
-// NetlinkLinkDown clears IFF_UP on iface (link_down).
-func NetlinkLinkDown(iface string) error {
-	l, err := netlink.LinkByName(iface)
-	if err != nil {
-		return err
-	}
-	return netlink.LinkSetDown(l)
-}
 
 // Login1 is the part of org.freedesktop.login1 lock_screen uses.
 type Login1 interface {
