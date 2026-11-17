@@ -21,7 +21,8 @@ const (
 	nonceTTL   = 30 * time.Second
 	failLimit  = 5
 	failWindow = 5 * time.Minute
-	maxNonces  = 64
+	maxNonces  = 4096 // all connections together (memory bound only)
+	connNonces = 4    // per connection: a new challenge evicts that connection's oldest
 	scryptN    = 1 << 15
 	scryptR    = 8
 	scryptP    = 1
@@ -70,10 +71,19 @@ type Authenticator struct {
 	mu      sync.Mutex
 	key     []byte
 	now     func() time.Time
-	nonces  map[string]time.Time
+	nonces  map[string]nonce
 	fails   []time.Time
 	onLimit func()
 	locked  time.Time // sensitive methods refused until then (SELF-006 under guard off)
+}
+
+// nonce is an outstanding challenge, bound to the connection that asked for it: a proof is
+// accepted only on that connection, and one connection holding many challenges evicts only its
+// own (a process of the operator's UID cannot starve the GUI of nonces, and with them of the way
+// out of a panic).
+type nonce struct {
+	at   time.Time
+	conn uint64
 }
 
 // LockFor refuses every proof for d, without counting the refusals as new failures.
@@ -97,11 +107,11 @@ func (a *Authenticator) LockedUntil() time.Time {
 // each time the failure budget is exhausted (the daemon engages panic).
 func NewAuthenticator(key []byte, now func() time.Time, onLimit func()) *Authenticator {
 	_ = unix.Mlock(key) // best effort; CAP_IPC_LOCK raises the limit (§19.3)
-	return &Authenticator{key: key, now: now, nonces: map[string]time.Time{}, onLimit: onLimit}
+	return &Authenticator{key: key, now: now, nonces: map[string]nonce{}, onLimit: onLimit}
 }
 
-// Challenge returns a fresh single-use nonce.
-func (a *Authenticator) Challenge() ([]byte, error) {
+// Challenge returns a fresh single-use nonce for connection conn.
+func (a *Authenticator) Challenge(conn uint64) ([]byte, error) {
 	n := make([]byte, NonceSize)
 	if _, err := rand.Read(n); err != nil {
 		return nil, err
@@ -109,23 +119,34 @@ func (a *Authenticator) Challenge() ([]byte, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	now := a.now()
-	for k, t := range a.nonces {
-		if now.Sub(t) > nonceTTL {
+	mine, oldest := 0, ""
+	for k, v := range a.nonces {
+		if now.Sub(v.at) > nonceTTL {
 			delete(a.nonces, k)
+			continue
 		}
+		if v.conn == conn {
+			mine++
+			if oldest == "" || v.at.Before(a.nonces[oldest].at) {
+				oldest = k
+			}
+		}
+	}
+	if mine >= connNonces {
+		delete(a.nonces, oldest)
 	}
 	if len(a.nonces) >= maxNonces {
 		return nil, errors.New("too many outstanding challenges")
 	}
-	a.nonces[string(n)] = now
+	a.nonces[string(n)] = nonce{at: now, conn: conn}
 	return n, nil
 }
 
-// Verify consumes the nonce and checks the MAC. Only a wrong MAC counts towards the budget: it
+// Verify consumes the nonce (issued to conn) and checks the MAC. Only a wrong MAC counts towards the budget: it
 // is the only failure that tests a passphrase. A missing proof or an unknown/expired nonce is a
 // client error, and counting it would let a slow dialog or a buggy client engage panic (and
 // close the network) without one wrong passphrase.
-func (a *Authenticator) Verify(method string, params json.RawMessage, p *Auth) error {
+func (a *Authenticator) Verify(conn uint64, method string, params json.RawMessage, p *Auth) error {
 	if !a.LockedUntil().IsZero() {
 		return ErrLocked
 	}
@@ -134,9 +155,13 @@ func (a *Authenticator) Verify(method string, params json.RawMessage, p *Auth) e
 	}
 	a.mu.Lock()
 	issued, ok := a.nonces[string(p.Nonce)]
+	if ok && issued.conn != conn {
+		a.mu.Unlock()
+		return ErrUnknownNonce // another connection's challenge: left for its owner
+	}
 	delete(a.nonces, string(p.Nonce))
 	now := a.now()
-	if !ok || now.Sub(issued) > nonceTTL || a.key == nil {
+	if !ok || now.Sub(issued.at) > nonceTTL || a.key == nil {
 		a.mu.Unlock()
 		return ErrUnknownNonce
 	}

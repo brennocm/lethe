@@ -1062,7 +1062,7 @@ JSON-RPC 2.0, uma mensagem por linha, máximo de 64 KiB por mensagem (acima diss
 
 O navegador comprometido roda com o UID do operador e, portanto, passaria no `SO_PEERCRED`. Por isso, métodos **sensíveis** exigem uma prova de conhecimento da passphrase da baseline:
 
-1. O cliente pede `auth.challenge` e recebe um nonce de 32 bytes (validade de 30 s, uso único).
+1. O cliente pede `auth.challenge` e recebe um nonce de 32 bytes (validade de 30 s, uso único), preso à conexão que o pediu: a prova só vale nessa conexão, e cada conexão tem no máximo 4 nonces pendentes (um novo descarta o mais antigo dela). Um processo que acumula desafios esgota só os próprios e não tira da GUI a saída do pânico. O cliente só fala com o daemon depois de conferir, por `SO_PEERCRED`, que quem escuta o socket é root.
 2. O cliente manda `HMAC-SHA256(K, nonce ‖ método ‖ params_jcs)`, onde `K = scrypt(passphrase, salt_sessão)`. O salt vai no `session.start`.
 3. O daemon confere com a `K` que mantém em memória protegida. Erros geram `ipc.denied`; depois de 5 erros em 5 min, abre-se SELF-006 CRITICAL e, com guarda `strict` ou `reactive`, o daemon entra em pânico. Com guarda `off`, as ações sensíveis ficam travadas por 5 min, sem bloqueio de rede (§10.6).
 

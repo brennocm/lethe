@@ -48,7 +48,7 @@ func newFixture(t *testing.T, operator int) *fixture {
 	t.Cleanup(auth.Close)
 	f.srv.SetAuthenticator(auth)
 	f.srv.Handle("auth.challenge", func(c *Call) (any, error) {
-		n, err := auth.Challenge()
+		n, err := auth.Challenge(c.Conn)
 		return map[string][]byte{"nonce": n}, err
 	})
 	f.srv.Handle("status.get", func(c *Call) (any, error) { return map[string]any{"uid": c.Peer.UID}, nil })
@@ -435,5 +435,36 @@ func TestAC14_ClientRefusesNonRootListener(t *testing.T) {
 	}
 	if n := <-got; n > 0 {
 		t.Fatalf("the impostor read %d bytes", n)
+	}
+}
+
+// A connection that hoards challenges evicts only its own: another connection still gets a
+// nonce and proves (the GUI keeps its way out of a panic), and a proof made on one connection's
+// nonce is refused on another's.
+func TestSELF006_ChallengesBoundToTheirConnection(t *testing.T) {
+	f := newFixture(t, os.Getuid())
+	hog := f.dial(t)
+	var first []byte
+	for i := 0; i < 200; i++ {
+		var ch struct{ Nonce []byte }
+		if err := hog.Call("auth.challenge", nil, nil, &ch); err != nil {
+			t.Fatalf("challenge %d: %v", i, err)
+		}
+		if i == 0 {
+			first = ch.Nonce
+		}
+	}
+	gui := f.dial(t)
+	proof, err := gui.Prove(f.key, "panic.release", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gui.Call("panic.release", map[string]any{}, proof, nil); err != nil {
+		t.Fatalf("the other connection cannot prove: %v", err)
+	}
+	// a proof over the hog's nonce, sent on the GUI's connection, is refused without counting
+	mac, _ := MAC(f.key, first, "panic.release", json.RawMessage(`{}`))
+	if err := gui.Call("panic.release", map[string]any{}, &Auth{Nonce: first, MAC: mac}, nil); err == nil {
+		t.Fatal("a nonce of another connection was accepted")
 	}
 }

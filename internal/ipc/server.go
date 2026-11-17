@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/sys/unix"
 
@@ -30,6 +31,7 @@ type Peer struct {
 type Call struct {
 	Ctx    context.Context
 	Peer   Peer
+	Conn   uint64 // the connection, unique for the server's life (binds challenges to it)
 	Req    Request
 	notify func(any) error
 	auth   *Authenticator
@@ -45,7 +47,7 @@ func (c *Call) Authorize() error {
 	if c.auth == nil {
 		return ErrNoProof
 	}
-	if err := c.auth.Verify(c.Req.Method, c.Req.Params, c.Req.Auth); err != nil {
+	if err := c.auth.Verify(c.Conn, c.Req.Method, c.Req.Params, c.Req.Auth); err != nil {
 		return err
 	}
 	c.authed = true
@@ -70,6 +72,7 @@ type Server struct {
 	SelfAuthorized map[string]bool
 
 	mu       sync.Mutex
+	conns    atomic.Uint64
 	auth     *Authenticator
 	handlers map[string]Handler
 	wg       sync.WaitGroup
@@ -223,6 +226,7 @@ func (s *Server) serveConn(ctx context.Context, c *net.UnixConn) {
 		return enc.Encode(v)
 	}
 	r := bufio.NewReaderSize(c, MaxMessage)
+	conn := s.conns.Add(1)
 	for {
 		line, err := r.ReadSlice('\n')
 		if errors.Is(err, bufio.ErrBufferFull) {
@@ -237,14 +241,14 @@ func (s *Server) serveConn(ctx context.Context, c *net.UnixConn) {
 		if len(line) == 0 {
 			continue
 		}
-		resp := s.dispatch(ctx, p, line, write)
+		resp := s.dispatch(ctx, p, conn, line, write)
 		if err := write(resp); err != nil {
 			return
 		}
 	}
 }
 
-func (s *Server) dispatch(ctx context.Context, p Peer, line []byte, write func(any) error) Response {
+func (s *Server) dispatch(ctx context.Context, p Peer, conn uint64, line []byte, write func(any) error) Response {
 	req, perr := DecodeRequest(line)
 	var id *uint64
 	if perr == nil || req.ID != 0 {
@@ -269,7 +273,7 @@ func (s *Server) dispatch(ctx context.Context, p Peer, line []byte, write func(a
 		s.denied(p, req.Method, "not the session agent")
 		return fail(CodeDenied, "only the session agent may call this method")
 	}
-	call := &Call{Ctx: ctx, Peer: p, Req: req, notify: write, auth: auth}
+	call := &Call{Ctx: ctx, Peer: p, Conn: conn, Req: req, notify: write, auth: auth}
 	if class == ClassSensitive && !s.SelfAuthorized[req.Method] {
 		if err := call.Authorize(); err != nil {
 			s.denied(p, req.Method, err.Error())

@@ -83,14 +83,14 @@ func matchQuery(q QueryParams, ev contracts.Event) bool {
 
 func (d *Daemon) routes() {
 	h := d.srv.Handle
-	h("auth.challenge", func(*ipc.Call) (any, error) {
+	h("auth.challenge", func(c *ipc.Call) (any, error) {
 		d.mu.Lock()
 		s := d.sess
 		d.mu.Unlock()
 		if s == nil {
 			return nil, errState(errNotArmed)
 		}
-		n, err := s.auth.Challenge()
+		n, err := s.auth.Challenge(c.Conn)
 		return map[string]any{"nonce": n}, err
 	})
 	h("status.get", func(*ipc.Call) (any, error) { return d.Status(), nil })
