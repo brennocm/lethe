@@ -34,7 +34,8 @@ const (
 	SrcDBus     SourceID = "dbus-system" // NetworkManager, GeoClue, timedate1, locale1
 	SrcAgent    SourceID = "agent"       // the session agent (low trust)
 	SrcClock    SourceID = "clock"
-	SrcFSWatch  SourceID = "fswatch" // inotify on the DNS configuration
+	SrcFSWatch  SourceID = "fswatch"  // inotify on the DNS configuration
+	SrcEgressIP SourceID = "egressip" // active exit IP queries (NET-011)
 )
 
 // Check is the static metadata every check exposes. Behaviour lives in per-check functions,

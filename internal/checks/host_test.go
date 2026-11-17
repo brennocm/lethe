@@ -2,6 +2,7 @@ package checks
 
 import (
 	"encoding/json"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -9,8 +10,10 @@ import (
 	"lethe/internal/baseline"
 	"lethe/internal/contracts"
 	"lethe/internal/discovery"
+	"lethe/internal/geo"
 	"lethe/internal/sensors/capture"
 	"lethe/internal/sensors/dbusmon"
+	"lethe/internal/sensors/egressip"
 	"lethe/internal/sensors/hostinfo"
 	"lethe/internal/sensors/procscan"
 )
@@ -270,5 +273,54 @@ func TestDNS004_ConfigChanged(t *testing.T) {
 	}
 	if (DNS004{}).Evaluate("") != nil {
 		t.Fatal("no path")
+	}
+}
+
+func TestNET011_ExitIP(t *testing.T) {
+	k := KnownFrom(&baseline.Baseline{Networks: []baseline.Network{{Name: "casa", PublicIPv4: "198.51.100.77", ASN: 64501}}})
+	db := geo.Map{
+		netip.MustParseAddr("203.0.113.9"):  {Country: "NL", ASN: 64500},
+		netip.MustParseAddr("203.0.113.10"): {Country: "DE", ASN: 64500},
+		netip.MustParseAddr("203.0.113.11"): {Country: "BR", ASN: 64501},
+	}
+	want := ExitExpect{Country: "nl", ASNs: []uint32{64500}}
+	ok := func(ip string) egressip.Result { return egressip.Result{Agreed: true, IP: netip.MustParseAddr(ip)} }
+	if fs := (NET011{}).Evaluate(ok("203.0.113.9"), k, db, want); fs != nil {
+		t.Fatalf("expected exit: %+v", fs)
+	}
+	f := onlyFinding(t, NET011{}.Evaluate(ok("198.51.100.77"), k, db, want), "NET-011", contracts.SeverityCritical)
+	if f.Data["matched"] != "baseline.networks[0].public_ipv4" || f.Sensitive["exit_ip"] == "" {
+		t.Fatalf("%+v", f)
+	}
+	raw, _ := json.Marshal(f.Data)
+	if strings.Contains(string(raw), "198.51.100.77") {
+		t.Fatal("the real IP is in the clear data")
+	}
+	if f := onlyFinding(t, NET011{}.Evaluate(ok("203.0.113.11"), k, db, want), "NET-011", contracts.SeverityCritical); f.Data["reason"] != "real_asn" {
+		t.Fatal(f.Data)
+	}
+	if f := onlyFinding(t, NET011{}.Evaluate(ok("203.0.113.10"), k, db, want), "NET-011", contracts.SeverityWarning); f.Data["country"] != "DE" {
+		t.Fatal(f.Data)
+	}
+	if f := onlyFinding(t, NET011{}.Evaluate(egressip.Result{Skipped: "no DNS server known in the tunnel"}, k, db, want), "NET-011", contracts.SeverityWarning); f.Data["reason"] != "skipped" {
+		t.Fatal(f.Data)
+	}
+	onlyFinding(t, NET011{}.Evaluate(egressip.Result{}, k, db, want), "NET-011", contracts.SeverityWarning)
+	if (NET011{}).Evaluate(ok("203.0.113.10"), k, nil, want) != nil {
+		t.Fatal("without a geo database the country is not judged")
+	}
+}
+
+func TestPER001_ExitCountry(t *testing.T) {
+	zones := map[string][]string{"Europe/Amsterdam": {"NL"}, "America/Sao_Paulo": {"BR"}}
+	if (PER001{}).Country("NL", "Europe/Amsterdam", "nl_NL.UTF-8", zones) != nil {
+		t.Fatal("coherent persona")
+	}
+	f := onlyFinding(t, PER001{}.Country("NL", "America/Sao_Paulo", "pt_BR.UTF-8", zones), "PER-001", contracts.SeverityWarning)
+	if len(f.Data["mismatch"].([]any)) != 2 {
+		t.Fatal(f.Data)
+	}
+	if (PER001{}).Country("NL", "Etc/Unknown", "C.UTF-8", zones) != nil || (PER001{}).Country("", "America/Sao_Paulo", "", zones) != nil {
+		t.Fatal("unknown parts are not compared")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -99,5 +100,19 @@ func TestPER002_ChromiumPolicy(t *testing.T) {
 	write(t, root, "etc/chromium/policies/managed/lethe.json", `{"WebRtcIPHandling": "disable_non_proxied_udp"}`)
 	if c := (Reader{Root: root}).Chromium(); c.WebRtcIPHandling != "disable_non_proxied_udp" {
 		t.Fatalf("%+v", c)
+	}
+}
+
+func TestPER001_ZoneCountries(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "usr/share/zoneinfo")
+	_ = os.MkdirAll(dir, 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "zone1970.tab"), []byte("# comment\nNL,BE,LU\t+5222+00454\tEurope/Brussels\nBR\t-2332-04637\tAmerica/Sao_Paulo\n"), 0o644)
+	z := ZoneCountries(root)
+	if strings.Join(z["Europe/Brussels"], ",") != "NL,BE,LU" || z["America/Sao_Paulo"][0] != "BR" {
+		t.Fatal(z)
+	}
+	if len(ZoneCountries(t.TempDir())) != 0 {
+		t.Fatal("no tz database")
 	}
 }
