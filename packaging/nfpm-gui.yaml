@@ -47,3 +47,10 @@ contents:
   - src: dist/stage/lethe-gui
     dst: /usr/bin/lethe-gui
     file_info: { mode: 0755, owner: root, group: root }
+  # the application menu entry and its icon: the operator opens lethe like any other app
+  - src: packaging/desktop/lethe-gui.desktop
+    dst: /usr/share/applications/lethe-gui.desktop
+    file_info: { mode: 0644, owner: root, group: root }
+  - src: apps/lethe-gui/internal/gui/lethe.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/lethe.svg
+    file_info: { mode: 0644, owner: root, group: root }

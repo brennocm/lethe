@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"image/png"
 	"os"
@@ -747,5 +748,16 @@ func TestM13_NoTrayHostClosingQuits(t *testing.T) {
 	v.Build()
 	if b.menu == nil {
 		t.Fatalf("the tray menu is missing with a tray host")
+	}
+}
+
+// The launcher icon is the SVG the package installs, and it parses.
+func TestM13_AppIconIsTheMenuIcon(t *testing.T) {
+	r := AppIcon()
+	if r.Name() != "lethe.svg" || !bytes.Contains(r.Content(), []byte("<svg")) {
+		t.Fatalf("app icon: %s", r.Name())
+	}
+	if err := xml.Unmarshal(r.Content(), new(struct{ XMLName xml.Name })); err != nil {
+		t.Fatalf("app icon is not valid XML: %v", err)
 	}
 }

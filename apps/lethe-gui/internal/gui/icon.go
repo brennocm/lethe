@@ -2,6 +2,7 @@ package gui
 
 import (
 	"bytes"
+	_ "embed"
 	"image"
 	"image/color"
 	"image/png"
@@ -74,3 +75,10 @@ func TrayIcon(c string, n int) fyne.Resource {
 	_ = png.Encode(&b, img)
 	return fyne.NewStaticResource("lethe-"+c+"-"+strconv.Itoa(n)+".png", b.Bytes())
 }
+
+//go:embed lethe.svg
+var appIconSVG []byte
+
+// AppIcon is the window and launcher icon; the package installs the same file for the
+// application menu (packaging/desktop).
+func AppIcon() fyne.Resource { return fyne.NewStaticResource("lethe.svg", appIconSVG) }

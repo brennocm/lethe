@@ -25,6 +25,7 @@ func Setup(a fyne.App, args []string) (*gui.UI, error) {
 		return nil, err
 	}
 	a.Settings().SetTheme(gui.Theme())
+	a.SetIcon(gui.AppIcon())
 	x11 := os.Getenv("XDG_SESSION_TYPE") == "x11" || (os.Getenv("WAYLAND_DISPLAY") == "" && os.Getenv("DISPLAY") != "")
 	opt := gui.Options{Lang: *lang, X11: x11}
 	opt.Home, _ = os.UserHomeDir()
