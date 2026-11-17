@@ -84,3 +84,9 @@ depends = ["deps:gui"]
 dir = "apps/lethe-gui"
 env = { CGO_ENABLED = "1" }
 run = "go build -ldflags='-s -w -buildid=' -o ../../bin/lethe-gui ."
+
+[tasks.gui]
+description = "Build the GUI (installing its build headers if missing) and open it"
+depends = ["build:gui"]
+raw = true
+run = "bin/lethe-gui"
