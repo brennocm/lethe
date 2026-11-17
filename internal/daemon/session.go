@@ -399,6 +399,7 @@ func (d *Daemon) executorEnv(s *session) response.Env {
 		GuardConfig: func() guard.Config { return s.gcfg }, // runs under d.mu
 		ProcRoot:    d.cfg.ProcRoot,
 		KillOnPanic: kill,
+		KillUID:     d.cfg.Operator.UID,
 		Egress:      func() []string { return s.gcfg.Egress },
 		LinkDown:    response.NetlinkLinkDown,
 		LockScreen: func() error {

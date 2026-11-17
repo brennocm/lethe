@@ -39,6 +39,9 @@ func (n *nullConn) AddRule(r *nftables.Rule) *nftables.Rule                   { 
 func (n *nullConn) ListTables() ([]*nftables.Table, error)                    { return nil, nil }
 func (n *nullConn) Flush() error                                              { n.flushed++; return n.err }
 
+// fixtureUID is the operator of the process fixtures; pids below 10 belong to root.
+const fixtureUID = 1000
+
 func procFixture(t *testing.T, procs map[int]string) string {
 	root := t.TempDir()
 	for pid, exe := range procs {
@@ -46,6 +49,11 @@ func procFixture(t *testing.T, procs map[int]string) string {
 		_ = os.MkdirAll(d, 0o755)
 		_ = os.Symlink(exe, filepath.Join(d, "exe"))
 		_ = os.WriteFile(filepath.Join(d, "comm"), []byte(filepath.Base(exe)+"\n"), 0o644)
+		uid := fixtureUID
+		if pid < 10 {
+			uid = 0
+		}
+		_ = os.WriteFile(filepath.Join(d, "status"), fmt.Appendf(nil, "Name:\tx\nUid:\t%d\t%d\t%d\t%d\n", uid, uid, uid, uid), 0o644)
 	}
 	return root
 }
@@ -91,11 +99,12 @@ func TestRESP_BlockAll(t *testing.T) {
 }
 
 func TestRESP_KillProcesses(t *testing.T) {
-	root := procFixture(t, map[int]string{100: "/usr/lib/firefox/firefox", 101: "/usr/bin/bash", 102: "/usr/bin/chromium", 1: "/usr/lib/systemd/systemd", 103: "/usr/lib/firefox/firefox"})
+	// 5 is a root firefox (a system service): never killed, even when it matches
+	root := procFixture(t, map[int]string{100: "/usr/lib/firefox/firefox", 101: "/usr/bin/bash", 102: "/usr/bin/chromium", 1: "/usr/lib/systemd/systemd", 103: "/usr/lib/firefox/firefox", 5: "/usr/lib/firefox/firefox"})
 	var killed []int
-	x := New(Env{ProcRoot: root, KillOnPanic: []procscan.Matcher{{Match: "exe", Value: "firefox"}, {Match: "exe", Value: "chromium"}, {Match: "exe", Value: "systemd"}},
+	x := New(Env{ProcRoot: root, KillUID: fixtureUID, KillOnPanic: []procscan.Matcher{{Match: "exe", Value: "firefox"}, {Match: "exe", Value: "chromium"}, {Match: "exe", Value: "systemd"}},
 		Protected: map[int]bool{103: true},
-		Kill: func(pid int, _ string) error {
+		Kill: func(pid int, _ string, _ int) error {
 			if pid == 102 {
 				return syscall.ESRCH // already gone: not an error
 			}
@@ -106,7 +115,7 @@ func TestRESP_KillProcesses(t *testing.T) {
 	if !r.OK || r.Count != 2 || len(killed) != 1 || killed[0] != 100 {
 		t.Fatalf("%+v killed=%v", r, killed)
 	}
-	x.env.Kill = func(int, string) error { return syscall.EPERM }
+	x.env.Kill = func(int, string, int) error { return syscall.EPERM }
 	if r := x.Run(engine.ActKillProcesses, contracts.Event{}); r.OK {
 		t.Fatal("EPERM must fail")
 	}
@@ -117,7 +126,7 @@ func TestRESP_KillProcesses(t *testing.T) {
 
 func TestRESP_KillOffenderOnlyWithHighConfidence(t *testing.T) {
 	var killed []int
-	x := New(Env{Kill: func(pid int, _ string) error { killed = append(killed, pid); return nil }, Protected: map[int]bool{77: true}})
+	x := New(Env{KillUID: fixtureUID, Kill: func(pid int, _ string, _ int) error { killed = append(killed, pid); return nil }, Protected: map[int]bool{77: true}})
 	ev := func(p contracts.Proc) contracts.Event { return contracts.Event{Data: map[string]any{"proc": p}} }
 	if r := x.Run(engine.ActKillOffender, ev(contracts.Proc{PID: 50, Confidence: contracts.ConfidenceLow})); r.OK {
 		t.Fatal("low confidence must not kill")
@@ -128,8 +137,14 @@ func TestRESP_KillOffenderOnlyWithHighConfidence(t *testing.T) {
 	if r := x.Run(engine.ActKillOffender, ev(contracts.Proc{PID: 1, Confidence: contracts.ConfidenceHigh})); r.OK {
 		t.Fatal("pid 1")
 	}
-	p := &contracts.Proc{PID: 51, Confidence: contracts.ConfidenceHigh}
-	if r := x.Run(engine.ActKillOffender, contracts.Event{Data: map[string]any{"proc": p}}); !r.OK || len(killed) != 1 || killed[0] != 51 {
+	if r := x.Run(engine.ActKillOffender, ev(contracts.Proc{PID: 60, UID: 0, Confidence: contracts.ConfidenceHigh})); r.OK {
+		t.Fatal("a root process (systemd-resolved, NetworkManager) must not be killed")
+	}
+	if r := x.Run(engine.ActKillOffender, ev(contracts.Proc{PID: 61, UID: fixtureUID, Confidence: contracts.ConfidenceHigh})); !r.OK || len(killed) != 1 || killed[0] != 61 {
+		t.Fatalf("the operator's process: %+v %v", r, killed)
+	}
+	p := &contracts.Proc{PID: 51, UID: fixtureUID, Confidence: contracts.ConfidenceHigh}
+	if r := x.Run(engine.ActKillOffender, contracts.Event{Data: map[string]any{"proc": p}}); !r.OK || len(killed) != 2 || killed[1] != 51 {
 		t.Fatalf("%+v %v", r, killed)
 	}
 }
@@ -188,14 +203,17 @@ func TestResponse_KillVerifiedChecksExe(t *testing.T) {
 	}
 	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
 	pid := cmd.Process.Pid
-	if err := KillVerified("/proc", pid, "/usr/bin/not-sleep"); !errors.Is(err, ErrPIDReused) {
+	if err := KillVerified("/proc", pid, "/usr/bin/not-sleep", os.Getuid()); !errors.Is(err, ErrPIDReused) {
 		t.Fatalf("mismatched exe: %v", err)
 	}
 	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := KillVerified("/proc", pid, exe); err != nil {
+	if err := KillVerified("/proc", pid, exe, os.Getuid()+1); !errors.Is(err, ErrPIDReused) {
+		t.Fatalf("another uid: %v", err)
+	}
+	if err := KillVerified("/proc", pid, exe, os.Getuid()); err != nil {
 		t.Fatal(err)
 	}
 	if err := cmd.Wait(); err == nil {

@@ -54,8 +54,12 @@ type Env struct {
 	Egress      func() []string
 	LinkDown    func(iface string) error
 	LockScreen  func() error
-	// Kill sends SIGKILL to pid if it still runs exe ("" = no check). Default: KillVerified.
-	Kill      func(pid int, exe string) error
+	// KillUID is the only UID whose processes may be killed: the operator's. Root's and the
+	// system services' processes are never killed (a leak by them is contained by the block, and
+	// in service mode the profile, which names what to kill, comes from a non-root operator).
+	KillUID int
+	// Kill sends SIGKILL to pid if it still runs exe and belongs to uid. Default: KillVerified.
+	Kill      func(pid int, exe string, uid int) error
 	Protected map[int]bool // never killed (self, agent, pid 1)
 	Now       func() time.Time
 	// LinkDownMode is guard.panic.link_down: auto | always | never.
@@ -72,7 +76,7 @@ func New(env Env) *Executor {
 		if procRoot == "" {
 			procRoot = "/proc"
 		}
-		env.Kill = func(pid int, exe string) error { return KillVerified(procRoot, pid, exe) }
+		env.Kill = func(pid int, exe string, uid int) error { return KillVerified(procRoot, pid, exe, uid) }
 	}
 	if env.Now == nil {
 		env.Now = time.Now
@@ -148,12 +152,12 @@ func (x *Executor) killMatching() (int, error) {
 	n := 0
 	var errs []error
 	for _, p := range ps {
-		if x.env.Protected[p.PID] {
+		if x.env.Protected[p.PID] || p.UID != x.env.KillUID {
 			continue
 		}
 		for _, m := range x.env.KillOnPanic {
 			if m.Matches(p) {
-				if err := x.env.Kill(p.PID, p.Exe); err != nil && !errors.Is(err, syscall.ESRCH) && !errors.Is(err, ErrPIDReused) {
+				if err := x.env.Kill(p.PID, p.Exe, p.UID); err != nil && !errors.Is(err, syscall.ESRCH) && !errors.Is(err, ErrPIDReused) {
 					errs = append(errs, fmt.Errorf("pid %d: %w", p.PID, err))
 				} else {
 					n++
@@ -181,7 +185,10 @@ func (x *Executor) killOffender(ev contracts.Event) (int, error) {
 	if x.env.Protected[p.PID] {
 		return 0, fmt.Errorf("pid %d is protected", p.PID)
 	}
-	if err := x.env.Kill(p.PID, p.Exe); err != nil {
+	if p.UID != x.env.KillUID {
+		return 0, fmt.Errorf("pid %d belongs to uid %d, not the operator: not killed (the block contains it)", p.PID, p.UID)
+	}
+	if err := x.env.Kill(p.PID, p.Exe, p.UID); err != nil {
 		return 0, err
 	}
 	return 1, nil
@@ -203,18 +210,25 @@ func (x *Executor) linkDown() (int, error) {
 	return n, errors.Join(errs...)
 }
 
-// ErrPIDReused: the pid now runs another executable than the one attributed or matched.
-var ErrPIDReused = errors.New("pid now belongs to another executable; not killed")
+// ErrPIDReused: the pid now runs another executable (or belongs to another user) than the one
+// attributed or matched.
+var ErrPIDReused = errors.New("pid now belongs to another executable or user; not killed")
 
-// KillVerified kills pid only if it still runs exe. Between the attribution (or the /proc scan)
-// and the kill the process may have exited and its pid been reused; the root daemon must not
-// SIGKILL a bystander. A pidfd pins the process, so the check and the signal see the same one.
-func KillVerified(procRoot string, pid int, exe string) error {
+// KillVerified kills pid only if it still runs exe and its real UID is uid. Between the
+// attribution (or the /proc scan) and the kill the process may have exited and its pid been
+// reused; the root daemon must not SIGKILL a bystander. A pidfd pins the process, so the checks
+// and the signal see the same one.
+func KillVerified(procRoot string, pid int, exe string, uid int) error {
 	fd, err := unix.PidfdOpen(pid, 0)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = unix.Close(fd) }()
+	if got, err := realUID(procRoot, pid); err != nil {
+		return err
+	} else if got != uid {
+		return ErrPIDReused
+	}
 	if exe != "" {
 		cur, err := os.Readlink(filepath.Join(procRoot, strconv.Itoa(pid), "exe"))
 		if err != nil {
@@ -225,4 +239,20 @@ func KillVerified(procRoot string, pid int, exe string) error {
 		}
 	}
 	return unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0)
+}
+
+// realUID reads the real UID of pid from /proc/<pid>/status.
+func realUID(procRoot string, pid int) (int, error) {
+	b, err := os.ReadFile(filepath.Join(procRoot, strconv.Itoa(pid), "status")) // #nosec G304 -- procfs
+	if err != nil {
+		return -1, err
+	}
+	for line := range strings.SplitSeq(string(b), "\n") {
+		if rest, ok := strings.CutPrefix(line, "Uid:"); ok {
+			if f := strings.Fields(rest); len(f) > 0 {
+				return strconv.Atoi(f[0])
+			}
+		}
+	}
+	return -1, errors.New("no Uid line in status")
 }
