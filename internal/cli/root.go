@@ -30,6 +30,6 @@ func newRoot(stdout, stderr io.Writer) *cobra.Command {
 	root.SetErr(stderr)
 	root.AddCommand(newVersionCmd(), newVerifyCmd(), newReportCmd(), newProfileCmd(), newBaselineCmd(), newDiscoverCmd(), newCleanupCmd(),
 		newRunCmd(), newDaemonCmd(), newAgentCmd(), newArmCmd(), newDisarmCmd(), newStatusCmd(), newEventsCmd(),
-		newAckCmd(), newPanicCmd(), newUnpanicCmd(), newPreflightCmd())
+		newAckCmd(), newPanicCmd(), newUnpanicCmd(), newPreflightCmd(), newSelftestCmd(), newSelftestDenyCmd(), newSetupCmd())
 	return root
 }
