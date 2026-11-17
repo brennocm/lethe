@@ -106,6 +106,7 @@ type Daemon struct {
 	srv      *ipc.Server
 	wake     chan struct{} // CheckNow: starts a NET-011 round
 	leakBusy atomic.Bool   // a DNS leak test is running (one at a time)
+	checkGap time.Duration // least time between rounds asked by check_now (tests shorten it)
 
 	mu       sync.Mutex
 	eng      *engine.Engine
@@ -242,7 +243,7 @@ func New(cfg Config) *Daemon {
 	if cfg.Boottime == nil {
 		cfg.Boottime = boottime
 	}
-	d := &Daemon{cfg: cfg, state: engine.StateReady, subs: map[int]chan contracts.Event{}, lastBeat: map[string]time.Time{}, ended: make(chan struct{}), wake: make(chan struct{}, 1)}
+	d := &Daemon{cfg: cfg, state: engine.StateReady, subs: map[int]chan contracts.Event{}, lastBeat: map[string]time.Time{}, ended: make(chan struct{}), wake: make(chan struct{}, 1), checkGap: checkNowGap}
 	d.eng = engine.New(clock{cfg.Now}, engine.Config{}, engine.StateReady)
 	d.srv = &ipc.Server{
 		OperatorUID:    cfg.Operator.UID,

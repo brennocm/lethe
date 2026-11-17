@@ -27,8 +27,14 @@ func (d *Daemon) activeOn(s *session) bool {
 }
 
 // activeLoop runs the rounds of session s until ctx ends.
+// checkNowGap is the least time between the start of a round and one asked by active.check_now:
+// a safe method, so any process of the operator can call it, and it must not become a stream of
+// queries to the exit IP services.
+const checkNowGap = 15 * time.Second
+
 func (d *Daemon) activeLoop(ctx context.Context, s *session) {
 	for {
+		started := time.Now()
 		d.activeRound(ctx, s)
 		ap := s.prof.ActiveChecks.EgressIP
 		wait := ap.IntervalMin
@@ -40,6 +46,13 @@ func (d *Daemon) activeLoop(ctx context.Context, s *session) {
 			return
 		case <-d.cfg.ActiveWake:
 		case <-d.wake:
+			if rest := d.checkGap - time.Since(started); rest > 0 {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(rest):
+				}
+			}
 		case <-time.After(wait):
 		}
 	}

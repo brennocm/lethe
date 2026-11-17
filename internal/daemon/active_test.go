@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/netip"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"lethe/internal/baseline"
 	"lethe/internal/checks"
@@ -158,5 +160,41 @@ func TestNET011_DNSLeakTestVerdicts(t *testing.T) {
 	close(release)
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+// check_now is a safe method: asking it over and over never makes rounds closer than the gap.
+func TestNET011_CheckNowKeepsAGap(t *testing.T) {
+	f := newFixture(t)
+	f.d.checkGap = 300 * time.Millisecond
+	var mu sync.Mutex
+	var at []time.Time
+	f.d.cfg.ActiveQuery = func(context.Context, egressip.Path, egressip.Config) egressip.Result {
+		mu.Lock()
+		at = append(at, time.Now())
+		mu.Unlock()
+		return egressip.Result{Skipped: "test"}
+	}
+	f.arm(t, "off")
+	f.d.sess.prof.ActiveChecks.EgressIP.IntervalMin = time.Hour
+	f.d.sess.prof.ActiveChecks.EgressIP.IntervalMax = time.Hour
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go f.d.activeLoop(ctx, f.d.sess)
+	deadline := time.Now().Add(800 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		_ = f.d.CheckNow()
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(at) < 2 || len(at) > 4 {
+		t.Fatalf("%d rounds in 800 ms with a 300 ms gap", len(at))
+	}
+	for i := 1; i < len(at); i++ {
+		if d := at[i].Sub(at[i-1]); d < 290*time.Millisecond {
+			t.Fatalf("rounds %v apart", d)
+		}
 	}
 }
