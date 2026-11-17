@@ -17,9 +17,11 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/godbus/dbus/v5"
 	"github.com/google/nftables"
 	"github.com/spf13/cobra"
 
+	"lethe/internal/agent"
 	"lethe/internal/buildinfo"
 	"lethe/internal/checks"
 	"lethe/internal/contracts"
@@ -30,6 +32,8 @@ import (
 	"lethe/internal/platform"
 	"lethe/internal/preflight"
 	"lethe/internal/profile"
+	"lethe/internal/sensors/dbusmon"
+	"lethe/internal/sensors/hostinfo"
 )
 
 // Socket locations (spec §17.1). LETHE_SOCKET overrides both (tests, unusual setups).
@@ -140,6 +144,7 @@ type armFlags struct {
 	noManual bool
 	secret   secretFlags
 	window   time.Duration // strict arm confirmation window of the profile (set by request)
+	lang     string        // ui.language of the profile (set by request)
 }
 
 // confirming tells the operator why the arm takes a while (spec §10.6 item 2).
@@ -189,7 +194,7 @@ func (f *armFlags) request(cmd *cobra.Command, op platform.Operator) (daemon.Arm
 	if err != nil {
 		return daemon.ArmRequest{}, fmt.Errorf("baseline: %w", err)
 	}
-	f.window = 0
+	f.window, f.lang = 0, p.UI.Language
 	if mode := cmp.Or(f.guard, p.Guard.Mode); mode == "strict" {
 		f.window = p.Guard.ArmWindow
 	}
@@ -238,7 +243,7 @@ func newRunCmd() *cobra.Command {
 			sock := portableSocket(op)
 			d := daemon.New(daemon.Config{
 				Operator: op, SocketPath: sock, ToolVersion: buildinfo.Version, Sensors: true,
-				Agent: []string{"agent", "--socket", sock}, AgentEnv: agentEnv(op, sock),
+				Agent: []string{"agent", "--socket", sock}, AgentEnv: agentEnv(op, sock, f.lang),
 				HardenAfterArm: true, Out: cmd.ErrOrStderr(), Resolved: resolved(),
 			})
 			defer d.Close()
@@ -302,9 +307,10 @@ func resolved() discovery.ResolvedClient {
 }
 
 // agentEnv is the minimal environment the session agent needs (bus, display, language).
-func agentEnv(op platform.Operator, sock string) []string {
-	env := []string{"HOME=" + op.Home, "LETHE_SOCKET=" + sock, "PATH=/usr/bin:/bin"}
-	for _, k := range []string{"LANG", "LC_ALL", "DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"} {
+func agentEnv(op platform.Operator, sock, lang string) []string {
+	env := []string{"HOME=" + op.Home, "LETHE_SOCKET=" + sock, "PATH=/usr/bin:/bin", "LETHE_LANG=" + lang}
+	for _, k := range []string{"LANG", "LC_ALL", "DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS",
+		"XDG_CONFIG_HOME", "XKB_DEFAULT_LAYOUT", "PIPEWIRE_REMOTE", "PIPEWIRE_RUNTIME_DIR"} {
 		if v := os.Getenv(k); v != "" {
 			env = append(env, k+"="+v)
 		}
@@ -358,33 +364,30 @@ func newAgentCmd() *cobra.Command {
 					return WithCode(ExitDaemonDown, err)
 				}
 			}
-			var c *ipc.Client
-			var err error
-			for range 50 { // the daemon may still be binding the socket
-				if c, err = ipc.Dial(sock, time.Second); err == nil {
-					break
+			dial := func() (*ipc.Client, error) {
+				var c *ipc.Client
+				var err error
+				for range 50 { // the daemon may still be binding the socket
+					if c, err = ipc.Dial(sock, time.Second); err == nil {
+						return c, nil
+					}
+					time.Sleep(100 * time.Millisecond)
 				}
-				time.Sleep(100 * time.Millisecond)
+				return nil, err
 			}
-			if err != nil {
-				return WithCode(ExitDaemonDown, err)
+			cfg := agent.Config{Dial: dial, Language: os.Getenv("LETHE_LANG"),
+				Out: func(format string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), format, a...) }}
+			if n, err := agent.NewDBusNotifier(); err == nil {
+				cfg.Notifier = n
+			} else {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "lethe agent: no session bus (%v): alerts only on the terminal\n", err)
 			}
-			defer func() { _ = c.Close() }()
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
-			t := time.NewTicker(time.Second)
-			defer t.Stop()
-			for {
-				_ = c.SetDeadline(time.Now().Add(5 * time.Second))
-				if err := c.Call("heartbeat", nil, nil, nil); err != nil {
-					return WithCode(ExitDaemonDown, err)
-				}
-				select {
-				case <-ctx.Done():
-					return nil
-				case <-t.C:
-				}
+			if err := agent.Run(ctx, cfg); err != nil {
+				return WithCode(ExitDaemonDown, err)
 			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&sock, "socket", "", "daemon socket")
@@ -735,7 +738,8 @@ func newPreflightCmd() *cobra.Command {
 				opt.Tor, opt.TorRequired = tc, checks.TorRequired(p.Egress.Type)
 			}
 			snap := discovery.Discover(discovery.NetlinkKernel{}, opt)
-			in := preflight.Input{Snapshot: &snap, Profile: p, Warnings: warns}
+			host := hostCollector(p).Collect()
+			in := preflight.Input{Snapshot: &snap, Profile: p, Warnings: warns, Host: &host, Now: time.Now()}
 			if !noManual {
 				if in.Manual, err = askManual(cmd.InOrStdin(), cmd.ErrOrStderr()); err != nil {
 					return err
@@ -763,6 +767,22 @@ func newPreflightCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&noManual, "no-manual", false, "skip the manual checklist (result at most WARN)")
 	_ = cmd.MarkFlagRequired("profile")
 	return cmd
+}
+
+// hostCollector reads the host state with the operator's rights. Without the passphrase the
+// baseline comparisons (HOST-004, HOST-008, NET-014) are not made here; the arm makes them.
+func hostCollector(p *profile.Profile) hostinfo.Collector {
+	return hostinfo.Collector{
+		Bus: func() dbusmon.Bus {
+			c, err := dbus.ConnectSystemBus()
+			if err != nil {
+				return nil
+			}
+			return c
+		},
+		PersonaProfiles: p.Browsers.PersonaProfiles,
+		StateDir:        filepath.Join(p.Storage.Dir, "state"),
+	}
 }
 
 func printPreflight(w io.Writer, r preflight.Report) {
