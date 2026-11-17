@@ -10,10 +10,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"math/big"
 	"net"
 	"net/http"
 	"net/netip"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,6 +36,18 @@ const (
 
 var exitNames = []string{"ip-a.lethe.test", "ip-b.lethe.test"}
 
+// leakDomain is the lab's DNS leak test domain; leakSeen holds the resolvers that asked for
+// N.ID.leakDomain, by ID.
+const leakDomain = "leak.lethe.test"
+
+var (
+	leakMu   sync.Mutex
+	leakSeen = map[string][]string{}
+)
+
+// exitCA is the PEM of the last exitServices' certificate (SSL_CERT_FILE of a CLI child).
+var exitCA []byte
+
 // exitServices starts a DNS server (A records for exitNames) and an HTTPS server answering the
 // caller's address, both in the vpn namespace, and returns the pool that trusts the server.
 func exitServices(t *testing.T, l *netlab.Lab) *x509.CertPool {
@@ -50,6 +65,7 @@ func exitServices(t *testing.T, l *netlab.Lab) *x509.CertPool {
 		t.Fatal(err)
 	}
 	cert, _ := x509.ParseCertificate(der)
+	exitCA = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 	pool := x509.NewCertPool()
 	pool.AddCert(cert)
 
@@ -69,6 +85,21 @@ func exitServices(t *testing.T, l *netlab.Lab) *x509.CertPool {
 	go serveDNS(dns)
 	srv := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, _ := net.SplitHostPort(r.RemoteAddr)
+		if id, ok := strings.CutPrefix(r.URL.Path, "/dnsleak/test/"); ok {
+			leakMu.Lock()
+			seen := leakSeen[id]
+			leakMu.Unlock()
+			if len(seen) == 0 {
+				_, _ = w.Write([]byte(`{"error":"No DNS servers found. Try again..."}`))
+				return
+			}
+			rows := `{"ip":"` + host + `","country":"","country_name":"","asn":"","org":"","type":"ip"}`
+			for _, ip := range seen {
+				rows += `,{"ip":"` + ip + `","country":"","country_name":"","asn":"","org":"","type":"dns"}`
+			}
+			_, _ = w.Write([]byte("[" + rows + "]"))
+			return
+		}
 		if r.Host == exitNames[0] {
 			_, _ = w.Write([]byte(`{"ip":"` + host + `"}`))
 			return
@@ -94,6 +125,15 @@ func serveDNS(pc net.PacketConn) {
 		a := q
 		a.QR, a.ResponseCode, a.Answers = true, layers.DNSResponseCodeNoErr, nil
 		qq := q.Questions[0]
+		if name := strings.TrimSuffix(string(qq.Name), "."); strings.HasSuffix(name, "."+leakDomain) {
+			parts := strings.Split(name, ".")
+			if len(parts) > 2 {
+				from, _, _ := net.SplitHostPort(from.String())
+				leakMu.Lock()
+				leakSeen[parts[1]] = append(leakSeen[parts[1]], from)
+				leakMu.Unlock()
+			}
+		}
 		known := false
 		for _, name := range exitNames {
 			known = known || string(qq.Name) == name

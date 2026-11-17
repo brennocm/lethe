@@ -49,6 +49,9 @@ active_checks:
       - https://check.torproject.org/api/ip
       - https://am.i.mullvad.net/json
   tunnel_dns: []                 # DNS do túnel para o check de IP de saída, se a descoberta não achar
+  dns_leak:                      # teste de vazamento de DNS (só quando o operador pede)
+    domain: bash.ws
+    api: https://bash.ws/dnsleak/test/%s?json
 
 processes:
   deny:                          # processos que revelam identidade

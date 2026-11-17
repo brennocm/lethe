@@ -53,6 +53,7 @@ type session struct {
 	dir, profile, baseline, socket string
 	pass                           []byte
 	ident                          *age.X25519Identity
+	env                            []string // extra environment of the CLI child
 }
 
 // newSession writes a strict profile for the lab and an encrypted baseline.

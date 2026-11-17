@@ -60,6 +60,7 @@ func runCLI(t *testing.T, s *session, out *syncBuffer, args ...string) *exec.Cmd
 	_ = pw.Close()
 	cmd := exec.Command(os.Args[0])
 	cmd.Env = append(os.Environ(), "LETHE_SOCKET="+s.socket, "LETHE_E2E_CLI="+strings.Join(append(args, "--passphrase-fd", "3"), "\x1f"))
+	cmd.Env = append(cmd.Env, s.env...)
 	cmd.ExtraFiles = []*os.File{pr}
 	cmd.Stdout, cmd.Stderr = out, out
 	if err := cmd.Start(); err != nil {

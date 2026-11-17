@@ -222,6 +222,14 @@
           "items": {
             "type": "string"
           }
+        },
+        "dns_leak": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "domain": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
+            "api": { "type": "string", "pattern": "^https://[^\\s]+$" }
+          }
         }
       }
     },

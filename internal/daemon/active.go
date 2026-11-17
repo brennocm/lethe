@@ -170,7 +170,8 @@ func (d *Daemon) DNSLeakTest(ctx context.Context) (contracts.DNSLeakResult, erro
 		return contracts.DNSLeakResult{}, errState(errNoActive)
 	}
 	path, name := d.activePathLocked(s)
-	cfg := egressip.LeakConfig{Config: egressip.Config{RootCAs: d.cfg.ActiveRootCAs}, Lookup: d.cfg.LeakLookup}
+	cfg := egressip.LeakConfig{Config: egressip.Config{RootCAs: d.cfg.ActiveRootCAs}, Lookup: d.cfg.LeakLookup,
+		Domain: s.prof.ActiveChecks.DNSLeak.Domain, API: s.prof.ActiveChecks.DNSLeak.API}
 	known := s.known
 	d.mu.Unlock()
 	out := contracts.DNSLeakResult{At: d.cfg.Now().UTC()}

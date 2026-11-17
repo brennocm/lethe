@@ -111,9 +111,17 @@ type ActiveChecks struct {
 	Enabled   bool     `yaml:"enabled"`
 	EgressIP  EgressIP `yaml:"egress_ip"`
 	TunnelDNS []string `yaml:"tunnel_dns"` // DNS servers reached through the tunnel (NET-011)
+	DNSLeak   DNSLeak  `yaml:"dns_leak"`   // the DNS leak test's service (spec §9.9)
 
 	// ParsedTunnelDNS is filled by Load.
 	ParsedTunnelDNS []netip.Addr `yaml:"-"`
+}
+
+// DNSLeak is the service of the DNS leak test: names N.ID.Domain, results at API (one %s for
+// the ID). Default bash.ws.
+type DNSLeak struct {
+	Domain string `yaml:"domain"`
+	API    string `yaml:"api"`
 }
 
 type EgressIP struct {
@@ -235,6 +243,12 @@ func (p *Profile) applyDefaults() {
 	if len(p.ActiveChecks.EgressIP.Endpoints) == 0 {
 		p.ActiveChecks.EgressIP.Endpoints = []string{"https://check.torproject.org/api/ip", "https://am.i.mullvad.net/json"}
 	}
+	if p.ActiveChecks.DNSLeak.Domain == "" {
+		p.ActiveChecks.DNSLeak.Domain = "bash.ws"
+	}
+	if p.ActiveChecks.DNSLeak.API == "" {
+		p.ActiveChecks.DNSLeak.API = "https://bash.ws/dnsleak/test/%s?json"
+	}
 	if p.Storage.Journald == "" {
 		p.Storage.Journald = "minimal"
 	}
@@ -287,6 +301,12 @@ func (p *Profile) check(home string) (warns, problems []string) {
 			continue
 		}
 		p.ActiveChecks.ParsedTunnelDNS = append(p.ActiveChecks.ParsedTunnelDNS, a.Unmap())
+	}
+	if api := p.ActiveChecks.DNSLeak.API; strings.Count(api, "%") != 1 || !strings.Contains(api, "%s") || !strings.HasPrefix(api, "https://") {
+		bad("active_checks.dns_leak.api: %q must be an https URL with one %%s for the test's ID", api)
+	}
+	if d := p.ActiveChecks.DNSLeak.Domain; strings.HasPrefix(d, ".") || strings.HasSuffix(d, ".") || !strings.Contains(d, ".") {
+		bad("active_checks.dns_leak.domain: %q must be a domain name", d)
 	}
 	if p.ActiveChecks.Enabled && len(p.ActiveChecks.EgressIP.Endpoints) < 2 {
 		bad("active_checks.egress_ip.endpoints needs at least 2 endpoints")

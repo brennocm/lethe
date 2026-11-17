@@ -243,3 +243,17 @@ func TestParse_ActiveChecksNeedTwoEndpoints(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// The DNS leak test's service: bash.ws by default; another one must be an https URL with one %s.
+func TestNET011_DNSLeakServiceInProfile(t *testing.T) {
+	p, _, err := Parse(Template, "/home/op")
+	if err != nil || p.ActiveChecks.DNSLeak.Domain != "bash.ws" || p.ActiveChecks.DNSLeak.API != "https://bash.ws/dnsleak/test/%s?json" {
+		t.Fatalf("%+v %v", p.ActiveChecks.DNSLeak, err)
+	}
+	for _, bad := range []string{"http://x.test/%s", "https://x.test/", "https://x.test/%s/%d"} {
+		raw := strings.Replace(string(Template), "api: https://bash.ws/dnsleak/test/%s?json", "api: \""+bad+"\"", 1)
+		if _, _, err := Parse([]byte(raw), "/home/op"); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"lethe/internal/cli"
+	"lethe/internal/contracts"
 	"lethe/internal/daemon"
 	"lethe/test/netlab"
 )
@@ -157,5 +159,83 @@ func TestE2E_M14_SeccompEnforce(t *testing.T) {
 	}
 	if dm := dump(t); strings.Contains(dm, "lethe") {
 		t.Fatalf("tables left:\n%s", dm)
+	}
+}
+
+// TestE2E_M14_SeccompActiveAndDNSLeak: the active checks under the enforcing filter. NET-011
+// rounds (at the arm and on check_now) leave through the tunnel with the tunnel's resolver, and
+// the DNS leak test resolves names through the system resolver, then fetches the result through
+// the tunnel. The daemon survives and leaves no seccomp record.
+func TestE2E_M14_SeccompActiveAndDNSLeak(t *testing.T) {
+	lab := netlab.New(t, true)
+	lab.WaitHandshake(t, 10*time.Second)
+	exitServices(t, lab)
+	km := openKmsg(t)
+	s := newSession(t)
+	ca := filepath.Join(s.dir, "ca.pem")
+	if err := os.WriteFile(ca, exitCA, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s.env = []string{"SSL_CERT_FILE=" + ca} // Go's system roots: the lab's CA only
+	raw, _ := os.ReadFile(s.profile)
+	prof := strings.NewReplacer(
+		"active_checks:\n  enabled: false", "active_checks:\n  enabled: true",
+		"https://check.torproject.org/api/ip", "https://"+exitNames[0]+"/json",
+		"https://am.i.mullvad.net/json", "https://"+exitNames[1]+"/",
+		"tunnel_dns: []", "tunnel_dns: ["+exitSrv+"]",
+		"domain: bash.ws", "domain: "+leakDomain,
+		"api: https://bash.ws/dnsleak/test/%s?json", "api: https://"+exitNames[0]+"/dnsleak/test/%s",
+	).Replace(string(raw))
+	if err := os.WriteFile(s.profile, []byte(prof), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out := &syncBuffer{}
+	cmd := runCLI(t, s, out, "run", "-p", s.profile, "--no-manual")
+	c := dialWait(t, s.socket)
+	status := func() daemon.Status {
+		var st daemon.Status
+		_ = c.Call("status.get", nil, nil, &st)
+		return st
+	}
+	alive := func() {
+		t.Helper()
+		if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+			t.Fatalf("the daemon died (seccomp %v):\n%s", km.records(nil), out.String())
+		}
+	}
+	waitFor(t, "ARMED, hardened, confirmed", func() bool {
+		st := status()
+		return st.State == "ARMED" && !st.Confirming && hardened(cmd.Process.Pid) == nil
+	})
+	for deadline := time.Now().Add(45 * time.Second); status().Exit == nil; time.Sleep(100 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			var evs []contracts.Event
+			_ = c.Call("events.query", map[string]any{"limit": 50}, nil, &evs)
+			for _, ev := range evs {
+				if ev.Check == "NET-011" || ev.Type == contracts.EvSensorDown {
+					t.Logf("%s %s %v", ev.Type, ev.Check, ev.Data)
+				}
+			}
+			t.Fatalf("no NET-011 round through the tunnel:\n%s", out.String())
+		}
+	}
+	if e := status().Exit; e.IP != exitIP || e.Path != netlab.DUTTunnel {
+		t.Fatalf("exit %+v", e)
+	}
+	if err := c.Call("active.check_now", nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	_ = c.SetDeadline(time.Now().Add(2 * time.Minute))
+	var res contracts.DNSLeakResult
+	if err := c.Call("dns.leak_test", nil, nil, &res); err != nil {
+		t.Fatalf("dns.leak_test: %v\n%s", err, out.String())
+	}
+	if res.Verdict == "" {
+		t.Fatalf("%+v", res)
+	}
+	t.Logf("DNS leak test in the lab: %s %s", res.Verdict, res.Detail)
+	alive()
+	if recs := km.records(nil); len(recs) != 0 {
+		t.Fatalf("seccomp records (syscall code): %v", recs)
 	}
 }
