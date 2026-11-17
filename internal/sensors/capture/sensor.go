@@ -123,6 +123,22 @@ func (s *Sensor) SetReadBuffer(n int) error {
 	return serr
 }
 
+// ReadBuffer reads SO_RCVBUF (the kernel reports twice the requested size; pass it back as is).
+func (s *Sensor) ReadBuffer() (int, error) {
+	rc, err := s.conn.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
+	var n int
+	var serr error
+	if err := rc.Control(func(fd uintptr) {
+		n, serr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUF) // #nosec G115 -- fd fits in int
+	}); err != nil {
+		return 0, err
+	}
+	return n / 2, serr
+}
+
 // Stats reads and resets the kernel counters.
 func (s *Sensor) Stats() (Stats, error) {
 	st, err := s.conn.Stats()

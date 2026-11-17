@@ -341,3 +341,15 @@ func (w *Writer) closeSegment() error {
 	}
 	return nil
 }
+
+// Unseal opens a value this writer sealed (selftest ST-DNS-001 proves the round trip in-process;
+// readers use Session.Field with the sensitive identity).
+func (w *Writer) Unseal(v any) (string, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return "", ErrClosed
+	}
+	pt, err := openField(w.sensKey, w.cfg.Session, v)
+	return string(pt), err
+}
