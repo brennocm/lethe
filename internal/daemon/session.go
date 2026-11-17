@@ -260,13 +260,14 @@ func (d *Daemon) armLocked(req ArmRequest) (ArmResult, preflight.Report, error) 
 }
 
 func (d *Daemon) armLockedOut(now time.Time) bool {
-	n := 0
+	recent := d.armFails[:0] // only the window counts; older failures are dropped
 	for _, t := range d.armFails {
 		if now.Sub(t) < armFailWindow {
-			n++
+			recent = append(recent, t)
 		}
 	}
-	return n >= armFailLimit
+	d.armFails = recent
+	return len(recent) >= armFailLimit
 }
 
 func preflightData(r preflight.Report) map[string]any {
