@@ -3,6 +3,7 @@ package egressip
 import (
 	"context"
 	"crypto/x509"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -115,9 +116,10 @@ func TestNET011_PlaceFromTheEndpoint(t *testing.T) {
 // The test resolves names through the given lookup (the system path) and fetches the result
 // through the tunnel path; resolvers and the exit come from the answer.
 func TestNET011_DNSLeakTest(t *testing.T) {
-	body := `[{"ip":"203.0.113.9","country":"NL","country_name":"Netherlands","asn":"AS64500 Example","type":"ip"},
-		{"ip":"198.51.100.53","country":"BR","country_name":"Brazil","asn":false,"type":"dns"},
-		{"ip":"","type":"conclusion"}]`
+	// the shape bash.ws answers (addresses replaced by documentation ones)
+	body := `[{"ip":"203.0.113.9","country":"nl","country_name":"Netherlands","asn":"AS64500 Example","org":"Example","type":"ip"},
+		{"ip":"198.51.100.53","country":"br","country_name":"Brazil","asn":"","org":"","type":"dns"},
+		{"ip":"DNS may be leaking.","country":"","country_name":"","asn":"","org":"","type":"conclusion"}]`
 	p, cfg, _ := servers(t, map[string]string{"/dnsleak/test/1234567": body, "/unused": ""})
 	var asked []string
 	res := DNSLeak(context.Background(), p, LeakConfig{
@@ -139,7 +141,10 @@ func TestNET011_DNSLeakTest(t *testing.T) {
 	}}); r.Skipped == "" {
 		t.Fatal("must skip")
 	}
-	if _, err := ParseLeak([]byte(`{"oops":1}`)); err == nil {
+	if _, err := ParseLeak([]byte(`{"oops":1}`)); !errors.Is(err, ErrLeakAPI) {
 		t.Fatal("bad answer accepted")
+	}
+	if _, err := ParseLeak([]byte(`{"error":"No DNS servers found. Try again..."}`)); !errors.Is(err, ErrLeakNone) || !strings.Contains(err.Error(), "No DNS servers") {
+		t.Fatalf("the API's own error: %v", err)
 	}
 }

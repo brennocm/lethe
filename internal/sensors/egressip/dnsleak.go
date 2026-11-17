@@ -51,8 +51,11 @@ const (
 	DefaultLeakAPI    = "https://bash.ws/dnsleak/test/%s?json"
 )
 
-// ErrLeakAPI is a malformed answer from the test's API.
-var ErrLeakAPI = errors.New("the DNS leak test answered something unexpected")
+// Errors of the test's API.
+var (
+	ErrLeakAPI  = errors.New("the DNS leak test answered something unexpected")
+	ErrLeakNone = errors.New("no lookup reached the test (the system resolver answered nothing or nothing left the machine)")
+)
 
 // DNSLeak runs the test.
 func DNSLeak(ctx context.Context, p Path, cfg LeakConfig) LeakResult {
@@ -110,11 +113,20 @@ func DNSLeak(ctx context.Context, p Path, cfg LeakConfig) LeakResult {
 	return res
 }
 
-// ParseLeak reads the API's JSON: a list of {ip, country, country_name, asn, type} where type is
-// ip (the address the web sees), dns (a resolver) or conclusion (ignored).
+// ParseLeak reads the API's JSON (format checked against bash.ws on 2026-11-17): a list of
+// {ip, country (lowercase ISO), country_name, asn ("AS64500 Name"), org, type} where type is ip
+// (the address the web sees), dns (a resolver) or conclusion (text in ip, ignored); or
+// {"error": "..."} when no lookup arrived.
 func ParseLeak(body []byte) (LeakResult, error) {
 	var rows []map[string]any
 	if err := json.Unmarshal(body, &rows); err != nil {
+		// no name reached the test's DNS: {"error":"No DNS servers found. Try again..."}
+		var e struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &e) == nil && e.Error != "" {
+			return LeakResult{}, fmt.Errorf("%w: %s", ErrLeakNone, Clean(e.Error))
+		}
 		return LeakResult{}, ErrLeakAPI
 	}
 	var res LeakResult
@@ -128,7 +140,7 @@ func ParseLeak(body []byte) (LeakResult, error) {
 		if err != nil {
 			continue
 		}
-		srv := LeakServer{IP: ip.Unmap(), Country: field(r, "country"), CountryName: field(r, "country_name"), ASN: field(r, "asn")}
+		srv := LeakServer{IP: ip.Unmap(), Country: strings.ToUpper(field(r, "country")), CountryName: field(r, "country_name"), ASN: field(r, "asn")}
 		if typ == "ip" {
 			if res.Exit == nil {
 				res.Exit = &srv

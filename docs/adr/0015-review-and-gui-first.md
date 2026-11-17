@@ -39,5 +39,5 @@ GUI first:
 ## Consequences
 - An operator who knows the passphrase can always release the network from the panel, with or without a working tunnel. An attacker without it cannot.
 - The DNS leak test makes the system resolver ask for `bash.ws` names. When DNS is leaking, whoever sees it learns that someone ran the test. The GUI says so before running it.
-- `bash.ws`'s JSON format is not documented. The parser accepts the fields the public scripts use and skips the round on anything else.
+- `bash.ws`'s JSON format has no documentation. It was checked against the live service on 2026-11-17: a list of `{ip, country (lowercase ISO), country_name, asn, org, type}`, or `{"error": ...}` when no lookup arrived. Anything else skips the test.
 - First-time setup (profile and baseline) is still `lethe setup` in a terminal. Moving it into the GUI, with no keys for the operator to handle, is the next spec change. It is listed in the review report.
