@@ -7,8 +7,6 @@ import (
 	"context"
 	"flag"
 	"os"
-	"path/filepath"
-	"strconv"
 
 	"fyne.io/fyne/v2/app"
 
@@ -16,16 +14,22 @@ import (
 )
 
 func main() {
-	sock := flag.String("socket", filepath.Join("/run/user", strconv.Itoa(os.Getuid()), "lethe", "lethe.sock"), "daemon socket")
+	sock := flag.String("socket", "", "daemon socket (default: the portable daemon's, then the service's)")
 	lang := flag.String("lang", os.Getenv("LETHE_LANG"), "pt-BR or en-US")
 	flag.Parse()
 	a := app.NewWithID("io.lethe.gui")
+	a.Settings().SetTheme(gui.Theme())
 	x11 := os.Getenv("XDG_SESSION_TYPE") == "x11" || (os.Getenv("WAYLAND_DISPLAY") == "" && os.Getenv("DISPLAY") != "")
-	u := gui.New(a, gui.Client{Socket: *sock}, gui.Options{Lang: *lang, X11: x11})
+	u := gui.New(a, gui.Client{Socket: *sock, Others: gui.Sockets(os.Getuid())}, gui.Options{Lang: *lang, X11: x11, Home: home()})
 	u.Build()
 	u.ShowPanel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go u.Run(ctx)
 	a.Run()
+}
+
+func home() string {
+	h, _ := os.UserHomeDir()
+	return h
 }

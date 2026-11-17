@@ -11,10 +11,10 @@ import (
 )
 
 // The GUI talks to the daemon only through IPC (spec §20.3): of the core it imports the
-// contracts, the IPC client and the operator texts (ADR 0013), never the daemon, the guard or
-// the sensors.
+// contracts, the IPC client, the operator texts (ADR 0013) and the profile parser, to find the
+// baseline a session starts with (ADR 0015); never the daemon, the guard or the sensors.
 func TestM13_GUIImportsOnlyContractsIPCAndTexts(t *testing.T) {
-	allowed := map[string]bool{"lethe/internal/contracts": true, "lethe/internal/ipc": true, "lethe/internal/i18n": true}
+	allowed := map[string]bool{"lethe/internal/contracts": true, "lethe/internal/ipc": true, "lethe/internal/i18n": true, "lethe/internal/profile": true}
 	root := filepath.Join("..", "..")
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") {

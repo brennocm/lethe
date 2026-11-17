@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -27,14 +28,47 @@ type Backend interface {
 	Disarm(pass []byte) error
 	Unpanic(pass []byte) error
 	Fullscreen(r contracts.FullscreenReport) error
+	Arm(req ArmRequest) (ArmResult, error)
+	CheckNow() error
+	DNSLeak(ctx context.Context) (contracts.DNSLeakResult, error)
 }
 
-// Client is the Backend over the daemon socket.
-type Client struct{ Socket string }
+// ArmRequest is session.arm's params (the daemon's ArmRequest: profile and baseline read by the
+// operator, the passphrase that decrypts the baseline, the guard chosen in the panel).
+type ArmRequest struct {
+	Profile    []byte `json:"profile"`
+	Baseline   []byte `json:"baseline"`
+	Passphrase []byte `json:"passphrase"`
+	Guard      string `json:"guard,omitempty"`
+}
+
+// ArmResult is the part of session.arm's answer the panel shows.
+type ArmResult struct {
+	Session string `json:"session"`
+}
+
+// Client is the Backend over the daemon socket. Without Socket it tries Others in order (the
+// portable daemon, then the service), so the panel finds whichever is running.
+type Client struct {
+	Socket string
+	Others []string
+}
 
 const callTimeout = 5 * time.Second
 
-func (c Client) dial() (*ipc.Client, error) { return ipc.Dial(c.Socket, 2*time.Second) }
+func (c Client) dial() (*ipc.Client, error) {
+	if c.Socket != "" {
+		return ipc.Dial(c.Socket, 2*time.Second)
+	}
+	err := errors.New("no daemon socket")
+	for _, s := range c.Others {
+		var cl *ipc.Client
+		if cl, err = ipc.Dial(s, 2*time.Second); err == nil {
+			return cl, nil
+		}
+	}
+	return nil, err
+}
 
 func (c Client) call(method string, params, out any) error {
 	cl, err := c.dial()
@@ -161,6 +195,41 @@ func (c Client) Disarm(pass []byte) error {
 // Unpanic implements Backend (sensitive).
 func (c Client) Unpanic(pass []byte) error {
 	return c.proved("panic.release", nil, pass, 30*time.Second, nil)
+}
+
+// Arm implements Backend. The arm waits for the preflight and, in strict, for the proof that the
+// tunnel works (guard.arm_confirm), hence the long deadline.
+func (c Client) Arm(req ArmRequest) (ArmResult, error) {
+	cl, err := c.dial()
+	if err != nil {
+		return ArmResult{}, err
+	}
+	defer func() { _ = cl.Close() }()
+	_ = cl.SetDeadline(time.Now().Add(3 * time.Minute))
+	var res ArmResult
+	return res, cl.Call("session.arm", req, nil, &res)
+}
+
+// CheckNow implements Backend.
+func (c Client) CheckNow() error { return c.call("active.check_now", nil, nil) }
+
+// DNSLeak implements Backend.
+func (c Client) DNSLeak(ctx context.Context) (contracts.DNSLeakResult, error) {
+	cl, err := c.dial()
+	if err != nil {
+		return contracts.DNSLeakResult{}, err
+	}
+	defer func() { _ = cl.Close() }()
+	_ = cl.SetDeadline(time.Now().Add(90 * time.Second))
+	go func() { <-ctx.Done(); _ = cl.Close() }()
+	var res contracts.DNSLeakResult
+	return res, cl.Call("dns.leak_test", nil, nil, &res)
+}
+
+// Sockets are where the daemon listens: the portable mode's (sudo lethe run, in the operator's
+// runtime directory) and the service's (lethed.service).
+func Sockets(uid int) []string {
+	return []string{fmt.Sprintf("/run/user/%d/lethe/lethe.sock", uid), "/run/lethe/lethe.sock"}
 }
 
 // Fullscreen implements Backend.

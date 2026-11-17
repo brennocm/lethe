@@ -5,6 +5,8 @@ import (
 	"context"
 	"image/png"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -15,6 +17,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"lethe/internal/contracts"
+	"lethe/internal/profile"
 )
 
 var t0 = time.Date(2026, 11, 16, 14, 0, 0, 0, time.UTC)
@@ -54,7 +57,17 @@ func (f *fake) Selftest(_ context.Context, full bool, pass []byte) (contracts.Se
 	f.mu.Unlock()
 	return contracts.SelftestResult{Passed: true}, nil
 }
-func (f *fake) Disarm(pass []byte) error  { f.log("disarm|" + string(pass)); return nil }
+func (f *fake) Disarm(pass []byte) error { f.log("disarm|" + string(pass)); return nil }
+func (f *fake) Arm(r ArmRequest) (ArmResult, error) {
+	f.log("arm|" + r.Guard + "|" + string(r.Passphrase) + "|" + string(r.Baseline))
+	return ArmResult{Session: "s-1"}, nil
+}
+func (f *fake) CheckNow() error { f.log("check_now"); return nil }
+func (f *fake) DNSLeak(context.Context) (contracts.DNSLeakResult, error) {
+	f.log("dns")
+	return contracts.DNSLeakResult{Verdict: "leak", Exit: &contracts.DNSLeakServer{IP: "203.0.113.9", Country: "NL"},
+		DNS: []contracts.DNSLeakServer{{Matched: "baseline.networks[0].resolvers", Country: "BR"}}}, nil
+}
 func (f *fake) Unpanic(pass []byte) error { f.log("unpanic|" + string(pass)); return nil }
 func (f *fake) Fullscreen(r contracts.FullscreenReport) error {
 	f.mu.Lock()
@@ -158,10 +171,12 @@ func overlaySecret(t *testing.T, w fyne.Window) *SecretEntry {
 			}
 		}
 	}
-	for _, o := range w.Canvas().Overlays().List() {
+	for _, o := range w.Canvas().Overlays().List() { // a dialog's entry first
 		walk(o)
 	}
-	walk(w.Content())
+	if found == nil {
+		walk(w.Content())
+	}
 	if found == nil {
 		t.Fatal("no passphrase entry")
 	}
@@ -303,5 +318,91 @@ func TestM13_ViewModel(t *testing.T) {
 	}
 	if a, _ := AckTarget(st); a.ID != "A-0003" {
 		t.Fatal(a)
+	}
+}
+
+// With no session the panel is the start form: the profile names the baseline, both are read
+// as the operator and sent with the passphrase and the protection chosen.
+func TestM13_StartSessionFromThePanel(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "baseline.age")
+	if err := os.WriteFile(base, []byte("sealed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prof := filepath.Join(dir, "lethe", "profile.yaml")
+	_ = os.MkdirAll(filepath.Dir(prof), 0o700)
+	raw := strings.Replace(string(profile.Template), "~/lethe/baseline.age", base, 1)
+	if err := os.WriteFile(prof, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := &trayApp{App: test.NewTempApp(t)}
+	f := &fake{}
+	u := New(a, f, Options{Lang: "pt-BR", Now: func() time.Time { return t0 }, Home: dir})
+	u.Build()
+	if !u.start.Visible() || u.work.Visible() || u.verdict.Text != "Nenhuma sessão em andamento" {
+		t.Fatal("no session: the start form")
+	}
+	u.guardSel.SetSelected(u.t("guard_strict"))
+	test.Type(u.startPass, "pw")
+	test.Tap(u.startBtn)
+	u.wg.Wait()
+	if c := f.got(); len(c) != 1 || c[0] != "arm|strict|pw|sealed" {
+		t.Fatalf("%q (flash %q)", c, u.flash.Text)
+	}
+	if u.startPass.Len() != 0 {
+		t.Fatal("the passphrase stays in the entry")
+	}
+	u.offline = os.ErrNotExist
+	u.Apply(contracts.Status{}, nil)
+	if u.verdict.Text != "O lethe não está rodando" || !strings.Contains(u.routeNote.Text, "systemctl") || u.start.Visible() {
+		t.Fatalf("offline: %q %q", u.verdict.Text, u.routeNote.Text)
+	}
+}
+
+// The route, the place of the exit and the DNS test, as the operator reads them.
+func TestNET011_RouteAndDNSTest(t *testing.T) {
+	st := armed()
+	st.Exit.IP, st.Exit.City, st.Exit.PlaceCountry, st.Exit.PlaceSource = "203.0.113.9", "Amsterdam", "Netherlands", "am.i.mullvad.net"
+	r := RouteOf(st, "pt-BR")
+	if r.Tunnel != "wg0" || r.Exit != "203.0.113.9  Amsterdam, Netherlands" || r.Tun != HopOK || r.Out != HopOK ||
+		!strings.Contains(r.Note, "am.i.mullvad.net") {
+		t.Fatalf("%+v", r)
+	}
+	st.Alerts = append(st.Alerts, contracts.AlertView{ID: "A-9", Check: "NET-011", Severity: "CRITICAL", State: "open"})
+	if r := RouteOf(st, "pt-BR"); r.Out != HopBroken || r.Exit != "seu IP real" {
+		t.Fatalf("%+v", r)
+	}
+	u, f, _ := setup(t, armed())
+	u.Apply(armed(), nil)
+	u.checkNow()
+	u.askDNS()
+	test.Tap(overlayButton(t, u.panel, "Rodar o teste"))
+	u.wg.Wait()
+	c := f.got()
+	slices.Sort(c)
+	if len(c) != 2 || c[0] != "check_now" || c[1] != "dns" {
+		t.Fatalf("%q", c)
+	}
+	text, imp := DNSText(contracts.DNSLeakResult{Verdict: "leak", DNS: []contracts.DNSLeakServer{{Matched: "baseline.networks[0].resolvers"}}}, "pt-BR")
+	if imp != widget.DangerImportance || !strings.Contains(text, "baseline.networks[0].resolvers") {
+		t.Fatalf("%q", text)
+	}
+}
+
+// In PANIC the block says why and offers both ways out: leave the panic, or end the session
+// (passphrase) when the tunnel cannot come back.
+func TestAC08_GUIShowsBothWaysOutOfPanic(t *testing.T) {
+	st, _ := critical()
+	u, f, _ := setup(t, st)
+	u.Apply(st, nil)
+	if !u.block.Visible() || !u.unpanicBtn.Visible() || !u.endBtn.Visible() || !strings.Contains(u.blockText.Text, "lethe unpanic") || u.blockWhat.Text != "toda a rede" {
+		t.Fatal("the block and its exits")
+	}
+	test.Tap(u.endBtn)
+	test.Type(overlaySecret(t, u.panel), "pw")
+	test.Tap(overlayButton(t, u.panel, "Confirmar"))
+	u.wg.Wait()
+	if c := f.got(); len(c) != 1 || c[0] != "disarm|pw" {
+		t.Fatalf("%q", c)
 	}
 }

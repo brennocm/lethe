@@ -2,8 +2,11 @@ package gui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image/color"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -13,10 +16,12 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 
 	"lethe/internal/contracts"
 	"lethe/internal/i18n"
+	"lethe/internal/profile"
 )
 
 // Options configure the UI.
@@ -24,6 +29,7 @@ type Options struct {
 	Lang string
 	X11  bool             // warn that same-UID programs can read the keyboard (spec §22 item 12)
 	Now  func() time.Time // nil = time.Now
+	Home string           // the operator's home: the default profile is Home/lethe/profile.yaml
 }
 
 const maxEvents = 500
@@ -35,21 +41,38 @@ type UI struct {
 	opt  Options
 	lang string
 
-	st  contracts.Status
-	evs []contracts.Event
+	st      contracts.Status
+	evs     []contracts.Event
+	offline error
 
-	panel      fyne.Window
-	header     *widget.Label
-	fpr        *widget.Label
-	exit       *widget.Label
-	lockdown   *widget.Label
-	flash      *widget.Label
+	panel     fyne.Window
+	top       *fyne.Container
+	body      *fyne.Container
+	verdict   *canvas.Text
+	header    *widget.Label // state, protection, session, time
+	route     *routeView
+	routeNote *widget.Label
+	routeActs *fyne.Container
+	dnsOut    *widget.Label
+	block     *fyne.Container
+	blockWhat *widget.Label
+	blockText *widget.Label
+	flash     *widget.Label
+	start     *fyne.Container // the session start form (no session)
+	work      *fyne.Container // checks and log (a session)
+	actions   *fyne.Container
+	profile   *widget.Entry
+	guardSel  *widget.RadioGroup
+	startPass *SecretEntry
+	startBtn  *widget.Button
+
 	rows       map[string]*widget.Label
 	timeline   *widget.List
 	shown      []contracts.Event
 	sevFilter  string
 	chkFilter  string
 	unpanicBtn *widget.Button
+	endBtn     *widget.Button
 	tray       *fyne.Menu
 	trayStatus *fyne.MenuItem
 
@@ -66,45 +89,67 @@ func New(a fyne.App, be Backend, opt Options) *UI {
 	if opt.Now == nil {
 		opt.Now = time.Now
 	}
+	a.Settings().SetTheme(Theme())
 	return &UI{app: a, be: be, opt: opt, lang: i18n.Norm(opt.Lang), rows: map[string]*widget.Label{}, alertSeen: map[string]time.Time{}}
 }
 
 func (u *UI) t(key string) string { return i18n.UI(u.lang, key) }
 
-// Build creates the panel and the tray menu (spec §16.1, §16.2).
+func wrapped(s string) *widget.Label {
+	l := widget.NewLabel(s)
+	l.Wrapping = fyne.TextWrapWord
+	return l
+}
+
+// Build creates the panel and the tray menu (spec §16.1, §16.2). The panel reads from the top:
+// the verdict (am I covered), the route the traffic takes, the block and its way out when there
+// is one, then the checks and the log; the actions sit at the bottom, panic apart from the rest.
 func (u *UI) Build() {
 	u.panel = u.app.NewWindow("lethe")
+	u.verdict = canvas.NewText("", colText)
+	u.verdict.TextSize = 24
+	u.verdict.TextStyle = fyne.TextStyle{Bold: true}
 	u.header = widget.NewLabel("")
-	u.header.TextStyle = fyne.TextStyle{Bold: true}
-	u.fpr = widget.NewLabel("")
-	u.exit = widget.NewLabel("")
-	u.lockdown = widget.NewLabel("")
-	u.lockdown.Wrapping = fyne.TextWrapWord
-	u.lockdown.Importance = widget.DangerImportance
-	u.flash = widget.NewLabel("")
-	u.flash.Wrapping = fyne.TextWrapWord
+	u.header.Importance = widget.LowImportance
+	u.header.Truncation = fyne.TextTruncateEllipsis
+	u.route = newRouteView()
+	u.routeNote = widget.NewLabel("")
+	u.routeNote.Importance = widget.LowImportance
+	u.dnsOut = wrapped("")
+	u.dnsOut.Hide()
+	u.routeActs = container.NewHBox(
+		widget.NewButton(u.t("check_now_btn"), u.checkNow),
+		widget.NewButton(u.t("dns_btn"), u.askDNS))
+	u.flash = wrapped("")
+	u.flash.Hide()
 
-	panicBtn := widget.NewButton(u.t("panic_btn"), u.askPanic)
-	panicBtn.Importance = widget.DangerImportance
+	u.blockWhat = wrapped("")
+	u.blockWhat.TextStyle = fyne.TextStyle{Bold: true}
+	u.blockText = wrapped("")
 	u.unpanicBtn = widget.NewButton(u.t("unpanic_btn"), func() { u.askPassphrase(u.panel, u.t("unpanic_ask"), u.be.Unpanic) })
+	u.unpanicBtn.Importance = widget.HighImportance
 	u.unpanicBtn.Hide()
-	buttons := container.NewHBox(panicBtn, u.unpanicBtn,
-		widget.NewButton(u.t("selftest_btn"), u.askSelftest),
-		widget.NewButton(u.t("ack_btn"), func() { u.askAck(u.panel) }),
-		widget.NewButton(u.t("disarm_btn"), func() { u.askPassphrase(u.panel, u.t("disarm_ask"), u.be.Disarm) }))
+	u.endBtn = widget.NewButton(u.t("end_btn"), u.askEnd)
+	u.block = container.NewStack(canvas.NewRectangle(colPanicBg),
+		container.NewPadded(container.NewVBox(u.blockWhat, u.blockText, container.NewHBox(u.unpanicBtn, u.endBtn))))
+	u.block.Hide()
 
-	var cards []fyne.CanvasObject
+	u.buildStart()
+
+	var groups []fyne.CanvasObject
 	grid := Grid(u.st, u.lang)
 	for _, cat := range Categories {
-		box := container.NewVBox()
+		title := widget.NewLabel(u.t("category_" + cat))
+		title.TextStyle = fyne.TextStyle{Bold: true}
+		box := container.NewVBox(title)
 		for _, r := range grid[cat] {
 			l := widget.NewLabel("")
+			l.Truncation = fyne.TextTruncateEllipsis
 			u.rows[r.ID] = l
 			box.Add(l)
 		}
-		cards = append(cards, widget.NewCard(u.t("category_"+cat), "", box))
+		groups = append(groups, box)
 	}
-
 	u.timeline = widget.NewList(func() int { return len(u.shown) },
 		func() fyne.CanvasObject { return widget.NewLabel("") },
 		func(i widget.ListItemID, o fyne.CanvasObject) {
@@ -119,12 +164,27 @@ func (u *UI) Build() {
 	chk := widget.NewEntry()
 	chk.SetPlaceHolder(u.t("filter_check"))
 	chk.OnChanged = func(s string) { u.chkFilter = s; u.refreshTimeline() }
-
-	top := container.NewVBox(u.header, u.fpr, u.exit, u.lockdown, buttons, u.flash)
+	checks := container.NewVScroll(container.NewGridWithColumns(2, groups...))
 	events := container.NewBorder(container.NewGridWithColumns(2, sev, chk), nil, nil, nil, u.timeline)
-	body := container.NewVSplit(container.NewVScroll(container.NewGridWithColumns(3, cards...)), events)
-	u.panel.SetContent(container.NewBorder(top, nil, nil, nil, body))
-	u.panel.Resize(fyne.NewSize(1000, 720))
+	split := container.NewHSplit(checks, events)
+	split.Offset = 0.55
+	u.work = container.NewStack(split)
+
+	panicBtn := widget.NewButton(u.t("panic_btn"), u.askPanic)
+	panicBtn.Importance = widget.DangerImportance
+	u.actions = container.NewBorder(nil, nil, panicBtn,
+		container.NewHBox(widget.NewButton(u.t("ack_btn"), func() { u.askAck(u.panel) }),
+			widget.NewButton(u.t("selftest_btn"), u.askSelftest),
+			widget.NewButton(u.t("end_btn"), u.askEnd)))
+
+	u.top = container.NewVBox(
+		u.verdict, u.header,
+		u.route.box,
+		container.NewBorder(nil, nil, nil, u.routeActs, u.routeNote),
+		u.dnsOut, u.block, u.flash, widget.NewSeparator())
+	u.body = container.NewStack(u.start, u.work)
+	u.panel.SetContent(container.NewPadded(container.NewBorder(u.top, container.NewVBox(widget.NewSeparator(), u.actions), nil, nil, u.body)))
+	u.panel.Resize(fyne.NewSize(1080, 760))
 
 	if desk, ok := u.app.(desktop.App); ok {
 		u.trayStatus = fyne.NewMenuItem("lethe", nil)
@@ -133,9 +193,9 @@ func (u *UI) Build() {
 			fyne.NewMenuItem(u.t("open_panel"), func() { u.panel.Show(); u.panel.RequestFocus() }),
 			fyne.NewMenuItem(u.t("panic_btn"), u.askPanic),
 			fyne.NewMenuItem(u.t("selftest_btn"), u.askSelftest),
-			fyne.NewMenuItem(u.t("disarm_btn"), func() {
+			fyne.NewMenuItem(u.t("end_btn"), func() {
 				u.panel.Show()
-				u.askPassphrase(u.panel, u.t("disarm_ask"), u.be.Disarm)
+				u.askEnd()
 			}))
 		desk.SetSystemTrayMenu(u.tray)
 		desk.SetSystemTrayIcon(TrayIcon("GRAY", 0))
@@ -144,88 +204,308 @@ func (u *UI) Build() {
 	u.Apply(u.st, nil)
 }
 
-// Run feeds the UI until ctx ends: status every second, the event stream and the heartbeat
-// (SELF-003). Every widget change goes through fyne.Do.
-func (u *UI) Run(ctx context.Context) {
-	if evs, err := u.be.Recent(maxEvents); err == nil {
-		fyne.Do(func() { u.Apply(u.st, evs) })
+// buildStart is the form shown with no session: the profile (the default place lethe setup
+// writes to, or another one picked by the operator; never remembered on disk, the path can name
+// the operation), the protection and the passphrase.
+func (u *UI) buildStart() {
+	u.profile = widget.NewEntry()
+	if u.opt.Home != "" {
+		u.profile.SetText(filepath.Join(u.opt.Home, "lethe", "profile.yaml"))
 	}
-	go u.stream(ctx)
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
-	for {
-		_ = u.be.Heartbeat()
-		st, err := u.be.Status()
-		fyne.Do(func() {
-			if err != nil {
-				u.header.SetText(u.t("disconnected") + ": " + err.Error())
-				return
+	pick := widget.NewButton(u.t("profile_pick"), func() {
+		d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
+			if err == nil && r != nil {
+				u.profile.SetText(r.URI().Path())
+				_ = r.Close()
 			}
-			u.Apply(st, nil)
-		})
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
+		}, u.panel)
+		d.SetFilter(storage.NewExtensionFileFilter([]string{".yaml", ".yml"}))
+		d.Show()
+	})
+	opts := []string{u.t("guard_profile"), u.t("guard_off"), u.t("guard_strict")}
+	u.guardSel = widget.NewRadioGroup(opts, nil)
+	u.guardSel.SetSelected(opts[0])
+	u.guardSel.Required = true
+	note := widget.NewLabel(u.t("guard_strict_note"))
+	note.Importance = widget.LowImportance
+	u.startPass = NewSecretEntry()
+	u.startBtn = widget.NewButton(u.t("start_btn"), u.startSession)
+	u.startBtn.Importance = widget.HighImportance
+	u.startPass.OnSubmit = u.startSession
+	title := widget.NewLabel(u.t("start_title"))
+	title.TextStyle = fyne.TextStyle{Bold: true}
+	form := container.NewVBox(title,
+		widget.NewLabel(u.t("profile_label")), container.NewBorder(nil, nil, nil, pick, u.profile),
+		widget.NewLabel(u.t("guard_label")), u.guardSel, note,
+		widget.NewLabel(u.t("passphrase")), u.startPass)
+	if u.opt.X11 {
+		x := wrapped(u.t("x11_warning"))
+		x.Importance = widget.LowImportance
+		form.Add(x)
+	}
+	form.Add(container.NewHBox(u.startBtn))
+	// a reading column: the form does not stretch across a wide window
+	u.start = container.NewHBox(container.New(&maxWidth{w: 560}, form))
+}
+
+// maxWidth lays its children out at most w wide.
+type maxWidth struct{ w float32 }
+
+func (m *maxWidth) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	w := min(size.Width, m.w)
+	for _, o := range objs {
+		o.Resize(fyne.NewSize(w, size.Height))
+		o.Move(fyne.NewPos(0, 0))
 	}
 }
 
-func (u *UI) stream(ctx context.Context) {
-	for ctx.Err() == nil {
-		ch, err := u.be.Subscribe(ctx)
-		if err == nil {
-			for ev := range ch {
-				fyne.Do(func() { u.Apply(u.st, []contracts.Event{ev}) })
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(2 * time.Second):
-		}
+func (m *maxWidth) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	var s fyne.Size
+	for _, o := range objs {
+		s = s.Max(o.MinSize())
 	}
+	return fyne.NewSize(max(s.Width, m.w), s.Height)
+}
+
+// startSession arms with the profile and the baseline it names, both read as the operator.
+func (u *UI) startSession() {
+	path := strings.TrimSpace(u.profile.Text)
+	if u.startPass.Len() == 0 || path == "" {
+		return
+	}
+	guard := map[string]string{u.t("guard_off"): "off", u.t("guard_strict"): "strict"}[u.guardSel.Selected]
+	pass := u.startPass.Take()
+	u.startBtn.Disable()
+	u.setFlash(u.t("start_running"))
+	u.wg.Add(1)
+	go func() {
+		defer u.wg.Done()
+		defer fyne.Do(u.startBtn.Enable)
+		req, err := ArmFiles(path, u.opt.Home)
+		if err != nil {
+			wipe(pass)
+			u.say(u.t("start_title"), err, "")
+			return
+		}
+		req.Passphrase, req.Guard = pass, guard
+		_, err = u.be.Arm(req)
+		wipe(pass)
+		u.say(u.t("start_title"), err, u.t("start_ok"))
+	}()
+}
+
+// ArmFiles reads the profile at path and the baseline it names (baseline.file).
+func ArmFiles(path, home string) (ArmRequest, error) {
+	raw, err := os.ReadFile(path) // #nosec G304 -- the operator's own profile, read with their rights
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return ArmRequest{}, fmt.Errorf(i18n.UI("", "profile_missing"), path)
+		}
+		return ArmRequest{}, err
+	}
+	p, _, err := profile.Parse(raw, home)
+	if err != nil {
+		return ArmRequest{}, err
+	}
+	if p.Baseline.File == "" {
+		return ArmRequest{}, errors.New("profile: baseline.file is required to start a session")
+	}
+	base, err := os.ReadFile(p.Baseline.File) // #nosec G703 G304 -- named by the operator's own profile, read with their rights
+	if err != nil {
+		return ArmRequest{}, fmt.Errorf("baseline: %w", err)
+	}
+	return ArmRequest{Profile: raw, Baseline: base}, nil
+}
+
+// checkNow asks for a NET-011 round now.
+func (u *UI) checkNow() {
+	u.wg.Add(1)
+	go func() {
+		defer u.wg.Done()
+		u.say(u.t("check_now_btn"), u.be.CheckNow(), u.t("check_now_ok"))
+	}()
+}
+
+// askDNS explains what the DNS test reveals before running it.
+func (u *UI) askDNS() {
+	dialog.NewCustomConfirm(u.t("dns_btn"), u.t("dns_run"), u.t("cancel"), wrapped(u.t("dns_ask")), func(yes bool) {
+		if !yes {
+			return
+		}
+		u.dnsOut.SetText(u.t("dns_running"))
+		u.dnsOut.Importance = widget.MediumImportance
+		u.dnsOut.Show()
+		u.wg.Add(1)
+		go func() {
+			defer u.wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			res, err := u.be.DNSLeak(ctx)
+			fyne.Do(func() { u.showDNS(res, err) })
+		}()
+	}, u.panel).Show()
+}
+
+func (u *UI) showDNS(r contracts.DNSLeakResult, err error) {
+	u.dnsOut.Show()
+	if err != nil {
+		u.dnsOut.Importance = widget.WarningImportance
+		u.dnsOut.SetText(fmt.Sprintf(u.t("dns_skipped"), err.Error()))
+		return
+	}
+	text, imp := DNSText(r, u.lang)
+	u.dnsOut.Importance = imp
+	u.dnsOut.SetText(text)
+}
+
+// DNSText is the DNS test's result as the panel shows it.
+func DNSText(r contracts.DNSLeakResult, lang string) (string, widget.Importance) {
+	t := func(k string) string { return i18n.UI(lang, k) }
+	var s string
+	imp := widget.SuccessImportance
+	switch r.Verdict {
+	case "ok":
+		s = t("dns_ok")
+	case "suspect":
+		s, imp = t("dns_suspect"), widget.WarningImportance
+	case "leak":
+		s, imp = t("dns_leak"), widget.DangerImportance
+	default:
+		return fmt.Sprintf(t("dns_skipped"), r.Detail), widget.WarningImportance
+	}
+	server := func(v contracts.DNSLeakServer) string {
+		who := v.IP
+		if v.Matched != "" {
+			who = v.Matched
+		}
+		var more []string
+		if v.Country != "" {
+			more = append(more, v.Country)
+		}
+		if v.ASN != "" {
+			more = append(more, v.ASN)
+		}
+		if len(more) > 0 {
+			who += " (" + strings.Join(more, ", ") + ")"
+		}
+		return who
+	}
+	if r.Exit != nil {
+		s += "\n" + t("dns_web_sees") + ": " + server(*r.Exit)
+	}
+	if len(r.DNS) > 0 {
+		var list []string
+		for _, d := range r.DNS {
+			list = append(list, server(d))
+		}
+		s += "\n" + t("dns_seen") + ": " + strings.Join(list, "; ")
+	}
+	return s, imp
+}
+
+// askEnd ends the session with the passphrase; in PANIC it says the block is lifted without the
+// tunnel re-check (spec §10.6 item 10).
+func (u *UI) askEnd() {
+	q := u.t("disarm_ask")
+	if u.st.State == "PANIC" {
+		q = u.t("end_panic_ask")
+	}
+	u.askPassphrase(u.panel, q, u.be.Disarm)
+}
+
+// Verdict is the panel's first line: whether the operator is covered, in their words.
+func Verdict(st contracts.Status, offline bool, lang string) (string, color.Color) {
+	t := func(k string) string { return i18n.UI(lang, k) }
+	switch {
+	case offline:
+		return t("verdict_offline"), colText2
+	case st.State == "PANIC" || st.Lockdown != nil:
+		return t("verdict_blocked"), colBrick
+	case st.Session == "":
+		return t("verdict_idle"), colText2
+	case st.Color == "RED":
+		return t("verdict_leak"), colBrick
+	case st.Color == "YELLOW":
+		return t("verdict_warn"), colOchre
+	}
+	return t("verdict_ok"), colGold
+}
+
+// StateLine is the line beside the verdict: state, protection and how long.
+func StateLine(st contracts.Status, now time.Time, lang string) string {
+	if st.Session == "" {
+		return ""
+	}
+	t := func(k string) string { return i18n.UI(lang, k) }
+	parts := []string{map[bool]string{true: t("state_panic"), false: t("state_armed")}[st.State == "PANIC"]}
+	if g := t("guard_mode_" + st.Guard); st.Guard != "" && g != "guard_mode_"+st.Guard {
+		parts = append(parts, g)
+	}
+	if st.StartedAt != nil {
+		parts = append(parts, fmt.Sprintf(t("since"), span(now.Sub(*st.StartedAt))))
+	}
+	return strings.Join(parts, ", ")
 }
 
 // Apply shows st and adds evs (UI thread).
 func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 	u.st = st
 	u.evs = MergeEvents(u.evs, evs, maxEvents)
-	h := fmt.Sprintf("● %s", st.State)
-	if st.Guard != "" {
-		h += fmt.Sprintf("   %s: %s", u.t("guard"), st.Guard)
+	text, col := Verdict(st, u.offline != nil, u.lang)
+	u.verdict.Text, u.verdict.Color = text, col
+	u.verdict.Refresh()
+	u.header.SetText(StateLine(st, u.opt.Now(), u.lang))
+	u.route.set(RouteOf(st, u.lang))
+	note := RouteOf(st, u.lang).Note
+	if u.offline != nil {
+		note = u.t("offline_how")
 	}
-	if st.Session != "" {
-		h += fmt.Sprintf("   %s: %s", u.t("session"), st.Session)
-		if st.StartedAt != nil {
-			h += " (" + span(u.opt.Now().Sub(*st.StartedAt)) + ")"
+	u.routeNote.SetText(note)
+	session := st.Session != "" && u.offline == nil
+	if session && st.State != "PANIC" { // in panic nothing leaves: no check to run
+		u.routeActs.Show()
+	} else {
+		u.routeActs.Hide()
+	}
+	if session {
+		u.start.Hide()
+		u.work.Show()
+		u.actions.Show()
+	} else {
+		u.routeActs.Hide()
+		u.dnsOut.Hide()
+		u.work.Hide()
+		u.actions.Hide()
+		if u.offline == nil {
+			u.start.Show()
+		} else {
+			u.start.Hide()
 		}
 	}
-	u.header.SetText(h)
-	u.header.Importance = map[string]widget.Importance{"GREEN": widget.SuccessImportance, "YELLOW": widget.WarningImportance,
-		"RED": widget.DangerImportance}[st.Color]
-	u.header.Refresh()
-	u.fpr.SetText(st.Fingerprint)
-	u.exit.SetText(exitText(st, u.lang))
-	if st.Lockdown != nil {
-		u.lockdown.SetText(u.t("lockdown") + ": " + st.Lockdown.What + "\n" + st.Lockdown.Why + "\n" + u.t("how_out") + ": " + st.Lockdown.Exit)
-		u.lockdown.Show()
+	if l := st.Lockdown; l != nil {
+		u.blockWhat.SetText(l.What)
+		u.blockText.SetText(u.t("why") + ": " + l.Why + "\n" + u.t("how_out") + ": " + l.Exit)
+		u.block.Show()
 	} else {
-		u.lockdown.Hide()
+		u.block.Hide()
 	}
 	if st.State == "PANIC" {
 		u.unpanicBtn.Show()
 	} else {
 		u.unpanicBtn.Hide()
 	}
-	for cat, rows := range Grid(st, u.lang) {
-		_ = cat
+	if session {
+		u.endBtn.Show()
+	} else {
+		u.endBtn.Hide()
+	}
+	for _, rows := range Grid(st, u.lang) {
 		for _, r := range rows {
 			l, ok := u.rows[r.ID]
 			if !ok {
 				continue
 			}
-			text := r.ID + "  " + r.Title + " — " + r.State
+			text := r.ID + "  " + r.Title + ": " + r.State
 			if r.Severity != "" {
 				text += fmt.Sprintf(" (%s ×%d)", r.Severity, r.Count)
 			}
@@ -243,6 +523,7 @@ func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 		}
 	}
 	u.refreshTimeline()
+	u.relayout()
 	if u.trayStatus != nil {
 		u.trayStatus.Label = fmt.Sprintf("lethe: %s · %d", st.State, OpenCount(st))
 		u.tray.Refresh()
@@ -251,21 +532,6 @@ func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 		}
 	}
 	u.syncAlert()
-}
-
-func exitText(st contracts.Status, lang string) string {
-	e := st.Exit
-	if e == nil {
-		return ""
-	}
-	s := i18n.UI(lang, "exit") + ": " + e.Path
-	if e.Country != "" {
-		s += " · " + e.Country
-	}
-	if e.ASN != 0 {
-		s += fmt.Sprintf(" · AS%d", e.ASN)
-	}
-	return s + " · " + e.At.Local().Format("15:04:05")
 }
 
 func (u *UI) refreshTimeline() {
@@ -304,7 +570,7 @@ func (u *UI) syncAlert() {
 		u.alertWin = u.app.NewWindow("lethe — " + u.t("alert_banner"))
 		u.alertWin.SetCloseIntercept(func() {}) // only the acknowledgement closes it
 		u.alertBody = container.NewVBox()
-		bg := canvas.NewRectangle(color.NRGBA{0xb0, 0x10, 0x10, 0xff})
+		bg := canvas.NewRectangle(colPanicBg)
 		u.alertWin.SetContent(container.NewStack(bg, container.NewPadded(container.NewVScroll(u.alertBody))))
 	}
 	if u.alertID == a.ID {
@@ -327,7 +593,7 @@ func (u *UI) syncAlert() {
 }
 
 func white(s string, size float32, bold bool) *canvas.Text {
-	t := canvas.NewText(s, color.White)
+	t := canvas.NewText(s, colText)
 	t.TextSize, t.TextStyle = size, fyne.TextStyle{Bold: bold}
 	return t
 }
@@ -408,7 +674,34 @@ func (u *UI) say(what string, err error, ok string) {
 	if err != nil {
 		msg = what + ": " + err.Error()
 	}
-	fyne.Do(func() { u.flash.SetText(msg) })
+	fyne.Do(func() { u.setFlash(msg) })
+}
+
+// setFlash shows the outcome of the last action; an empty one takes no room.
+func (u *UI) setFlash(msg string) {
+	u.flash.SetText(msg)
+	if msg == "" {
+		u.flash.Hide()
+	} else {
+		u.flash.Show()
+	}
+	u.relayout()
+}
+
+// relayout lays the panel out again after a part was shown or hidden: the top's height changes
+// and the body under it has to move.
+func (u *UI) relayout() {
+	if c := u.panel.Content(); c != nil {
+		c.Refresh()
+		if box, ok := c.(*fyne.Container); ok {
+			box.Layout.Layout(box.Objects, box.Size())
+			for _, o := range box.Objects {
+				if in, ok := o.(*fyne.Container); ok && in.Layout != nil {
+					in.Layout.Layout(in.Objects, in.Size())
+				}
+			}
+		}
+	}
 }
 
 func (u *UI) askPanic() { u.askPanicOn(u.panel)() }
@@ -432,7 +725,7 @@ func (u *UI) askPanicOn(w fyne.Window) func() {
 func (u *UI) askAck(w fyne.Window) {
 	a, ok := AckTarget(u.st)
 	if !ok {
-		u.flash.SetText(u.t("no_alerts"))
+		u.setFlash(u.t("no_alerts"))
 		return
 	}
 	critical := a.Severity == string(contracts.SeverityCritical)
@@ -498,7 +791,7 @@ func (u *UI) askPassphraseMsg(w fyne.Window, question, okMsg string, act func([]
 func (u *UI) askSelftest() {
 	var d dialog.Dialog
 	run := func(full bool, p []byte) {
-		fyne.Do(func() { u.flash.SetText(u.t("selftest_running")) })
+		fyne.Do(func() { u.setFlash(u.t("selftest_running")) })
 		u.wg.Add(1)
 		go func() {
 			defer u.wg.Done()
