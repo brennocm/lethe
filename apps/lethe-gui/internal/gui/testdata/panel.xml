@@ -2,10 +2,10 @@
 	<content>
 		<container pos="4,4" size="992x712">
 			<container pos="4,4" size="984x704">
-				<container pos="0,157" size="984x501">
-					<container size="984x501">
-						<widget size="984x501" type="*container.Split">
-							<widget size="538x501" type="*widget.Scroll">
+				<container pos="0,196" size="984x462">
+					<container size="984x462">
+						<widget size="984x462" type="*container.Split">
+							<widget size="538x462" type="*widget.Scroll">
 								<container size="538x1754">
 									<container size="267x582">
 										<widget size="267x35" type="*widget.Label">
@@ -270,23 +270,23 @@
 										</widget>
 									</container>
 								</container>
-								<widget pos="0,501" size="538x0" type="*widget.Shadow">
+								<widget pos="0,462" size="538x0" type="*widget.Shadow">
 									<linearGradient endColor="shadow" pos="0,-8" size="538x8"/>
 								</widget>
-								<widget pos="532,0" size="6x501" type="*widget.scrollBarArea">
-									<widget pos="3,0" size="3x143" type="*widget.scrollBar">
-										<rectangle fillColor="scrollbar" radius="3" size="3x143"/>
+								<widget pos="532,0" size="6x462" type="*widget.scrollBarArea">
+									<widget pos="3,0" size="3x121" type="*widget.scrollBar">
+										<rectangle fillColor="scrollbar" radius="3" size="3x121"/>
 									</widget>
 								</widget>
 							</widget>
-							<widget pos="538,0" size="5x501" type="*container.divider">
-								<rectangle fillColor="shadow" size="5x501"/>
-								<rectangle fillColor="foreground" pos="2,242" size="1x16"/>
+							<widget pos="538,0" size="5x462" type="*container.divider">
+								<rectangle fillColor="shadow" size="5x462"/>
+								<rectangle fillColor="foreground" pos="2,223" size="1x16"/>
 							</widget>
-							<container pos="543,0" size="440x501">
-								<widget pos="0,39" size="440x462" type="*widget.List">
-									<widget size="440x462" type="*widget.Scroll">
-										<container size="440x462">
+							<container pos="543,0" size="440x462">
+								<widget pos="0,39" size="440x423" type="*widget.List">
+									<widget size="440x423" type="*widget.Scroll">
+										<container size="440x423">
 											<widget size="440x35" type="*widget.listItem">
 												<widget size="440x35" type="*widget.Label">
 													<widget size="440x35" type="*widget.RichText">
@@ -327,21 +327,28 @@
 						</widget>
 					</container>
 				</container>
-				<container size="984x153">
+				<container size="984x192">
 					<text bold color="warning" size="984x32" textSize="24">Protegido, com avisos</text>
 					<widget pos="0,36" size="984x35" type="*widget.Label">
 						<widget size="984x35" type="*widget.RichText">
 							<text color="disabled" pos="8,8" size="247x19">Armado, proteção estrita, há 01:15:00</text>
 						</widget>
 					</widget>
-					<container pos="0,75" size="984x32">
+					<widget pos="0,75" size="984x35" type="*widget.Label">
+						<widget size="984x35" type="*widget.focusSelectable">
+						</widget>
+						<widget size="984x35" type="*widget.RichText">
+							<text pos="8,8" size="557x19">Impressão digital da chave da sessão (anote fora desta máquina): ed25519:4f2a 9c1b</text>
+						</widget>
+					</widget>
+					<container pos="0,114" size="984x32">
 						<text pos="0,6" size="95x20" textSize="15">Esta máquina</text>
 						<line pos="107,16" size="397x0" strokeColor="focus" strokeWidth="3"/>
 						<text monospace pos="517,7" size="27x17" textSize="15">wg0</text>
 						<line pos="556,16" size="397x0" strokeColor="focus" strokeWidth="3"/>
 						<text monospace pos="965,7" size="18x17" textSize="15">NL</text>
 					</container>
-					<container pos="0,112" size="984x36">
+					<container pos="0,151" size="984x36">
 						<widget size="661x36" type="*widget.Label">
 							<widget size="661x36" type="*widget.RichText">
 								<text color="disabled" pos="8,8" size="142x19">Verificado às 13:58:00</text>
@@ -366,7 +373,7 @@
 							</container>
 						</container>
 					</container>
-					<widget pos="0,152" size="984x1" type="*widget.Separator">
+					<widget pos="0,191" size="984x1" type="*widget.Separator">
 						<rectangle fillColor="inputBorder" size="984x1"/>
 					</widget>
 				</container>

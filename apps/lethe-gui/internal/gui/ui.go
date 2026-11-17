@@ -65,6 +65,7 @@ type UI struct {
 	body      *fyne.Container
 	verdict   *canvas.Text
 	header    *widget.Label // state, protection, session, time
+	fpLine    *widget.Label // the session key's fingerprint, to write down outside the machine
 	route     *routeView
 	routeNote *widget.Label
 	routeActs *fyne.Container
@@ -134,6 +135,10 @@ func (u *UI) Build() {
 	u.header = widget.NewLabel("")
 	u.header.Importance = widget.LowImportance
 	u.header.Truncation = fyne.TextTruncateEllipsis
+	u.fpLine = widget.NewLabel("")
+	u.fpLine.Selectable = true
+	u.fpLine.Wrapping = fyne.TextWrapWord
+	u.fpLine.Hide()
 	u.route = newRouteView()
 	u.routeNote = widget.NewLabel("")
 	u.routeNote.Importance = widget.LowImportance
@@ -210,7 +215,7 @@ func (u *UI) Build() {
 			widget.NewButton(u.t("end_btn"), u.askEnd)))
 
 	u.top = container.NewVBox(
-		u.verdict, u.header,
+		u.verdict, u.header, u.fpLine,
 		u.route.box,
 		container.NewBorder(nil, nil, nil, container.NewHBox(u.routeActs, u.svcBtn, u.cleanOff), u.routeNote),
 		u.dnsOut, u.block, u.flash, widget.NewSeparator())
@@ -545,6 +550,15 @@ func StateLine(st contracts.Status, now time.Time, lang string) string {
 	return strings.Join(parts, ", ")
 }
 
+// FingerprintLine is the session key's fingerprint as the panel shows it (spec §10.6: written
+// down outside the machine at the arm, it is what lethe verify checks). Empty with no session.
+func FingerprintLine(st contracts.Status, lang string) string {
+	if st.Session == "" || st.Fingerprint == "" {
+		return ""
+	}
+	return fmt.Sprintf(i18n.UI(lang, "fingerprint_line"), st.Fingerprint)
+}
+
 // Apply shows st and adds evs (UI thread).
 func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 	u.st = st
@@ -553,6 +567,12 @@ func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 	u.verdict.Text, u.verdict.Color = text, col
 	u.verdict.Refresh()
 	u.header.SetText(StateLine(st, u.opt.Now(), u.lang))
+	if fp := FingerprintLine(st, u.lang); fp != "" {
+		u.fpLine.SetText(fp)
+		u.fpLine.Show()
+	} else {
+		u.fpLine.Hide()
+	}
 	u.route.set(RouteOf(st, u.lang))
 	note := RouteOf(st, u.lang).Note
 	if u.offline != nil {

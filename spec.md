@@ -1003,7 +1003,7 @@ Toda saída com `--json` segue schemas em `internal/contracts/`. A saída humana
 
 ### 16.2 Painel
 
-- **Veredito:** uma linha que responde "estou coberto?" (Protegido, Protegido com avisos, Vazamento detectado, Rede bloqueada pelo lethe, Nenhuma sessão, O lethe não está rodando, com o comando que o inicia), seguida do estado, do modo do guarda e do tempo de sessão.
+- **Veredito:** uma linha que responde "estou coberto?" (Protegido, Protegido com avisos, Vazamento detectado, Rede bloqueada pelo lethe, Nenhuma sessão, O lethe não está rodando, com o comando que o inicia), seguida do estado, do modo do guarda e do tempo de sessão, e da impressão digital da chave da sessão (selecionável), para o operador anotar fora da máquina.
 - **Rota:** esta máquina, o túnel e onde a web vê o operador (IP, cidade e país do último check ativo, §9.9), cada trecho colorido pelo estado; botões "Verificar agora" (`active.check_now`) e "Testar vazamento de DNS" (`dns.leak_test`, explicado antes de rodar). Escondidos no pânico.
 - **Bloqueio:** quando a rede está bloqueada, o quadro com o quê, por quê e como sair (§10.6 item 5), com os botões "Sair do pânico" e "Encerrar sessão" (§10.6 item 10).
 - **Iniciar sessão** (sem sessão): perfil (padrão `~/lethe/profile.yaml`, outro pelo seletor de arquivo, nunca lembrado em disco), proteção (como no perfil, só observar ou estrita) e passphrase. O GUI lê perfil e baseline com os direitos do operador e chama `session.arm`.

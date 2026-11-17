@@ -761,3 +761,17 @@ func TestM13_AppIconIsTheMenuIcon(t *testing.T) {
 		t.Fatalf("app icon is not valid XML: %v", err)
 	}
 }
+
+// The panel shows the session key's fingerprint while armed (the operator writes it down for
+// lethe verify), and nothing without a session.
+func TestM13_PanelShowsTheSessionFingerprint(t *testing.T) {
+	u, _, _ := setup(t, armed())
+	u.Apply(armed(), nil)
+	if !u.fpLine.Visible() || !strings.Contains(u.fpLine.Text, armed().Fingerprint) || !strings.Contains(u.fpLine.Text, "anote fora") {
+		t.Fatalf("fingerprint line: %v %q", u.fpLine.Visible(), u.fpLine.Text)
+	}
+	u.Apply(contracts.Status{State: "READY", Color: "GRAY"}, nil)
+	if u.fpLine.Visible() {
+		t.Fatalf("fingerprint shown with no session")
+	}
+}
