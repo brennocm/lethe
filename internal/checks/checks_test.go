@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"lethe/internal/i18n"
+
 	"lethe/internal/contracts"
 	"lethe/internal/discovery"
 	"lethe/internal/sensors/capture"
@@ -261,5 +263,12 @@ func TestM9_EveryCheckHasATitle(t *testing.T) {
 	}
 	if Title("XXX-000", "pt-BR") != "XXX-000" {
 		t.Fatal("unknown id")
+	}
+	for _, c := range Registry() {
+		for _, l := range i18n.Langs {
+			if tx := i18n.CheckText(l, c.ID()); tx.Meaning == "" || tx.Todo == "" {
+				t.Fatalf("%s has no meaning or todo in %s (internal/i18n)", c.ID(), l)
+			}
+		}
 	}
 }

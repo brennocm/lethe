@@ -1,0 +1,264 @@
+# Operator texts in en-US (spec §16.6). Same keys as pt-BR.toml.
+
+[ui]
+state = "State"
+guard = "Guard"
+session = "Session"
+exit = "Exit"
+alerts = "Alerts"
+events = "Events"
+logs = "Daemon"
+no_alerts = "No open alerts."
+no_events = "No events yet."
+keys = "p panic · a acknowledge · s selftest · q quit (keeps armed)"
+alert_keys = "a acknowledge · p panic"
+alert_banner = "CRITICAL ALERT"
+actions_done = "Actions already taken"
+what_now = "What to do now"
+ack_reason = "Reason for the acknowledgement (Enter confirms, Esc cancels): "
+ack_pass = "Baseline passphrase (Enter confirms, Esc cancels): "
+ack_ok = "Alert acknowledged."
+panic_ask = "Engage PANIC? It blocks the whole network. [y/N]"
+panic_ok = "PANIC engaged: the network is blocked. To leave: lethe unpanic."
+selftest_ask = "[c] complete selftest: includes RESP-001 (cuts the network ~1 s), asks the passphrase"
+selftest_ask2 = "[r] quick selftest, no RESP-001 · Esc cancels"
+selftest_running = "Selftest running…"
+selftest_passed = "Selftest passed"
+selftest_failed = "Selftest failed"
+quit_note = "TUI closed; the session stays armed."
+disconnected = "No connection to the daemon"
+lockdown = "Lockdown"
+how_out = "How to get out"
+none = "none"
+sensors_down = "Sensors down"
+
+[actions]
+alert_tray = "Tray alert."
+alert_sound = "Alert sound."
+alert_fullscreen = "Full-screen alert."
+block_all = "Network blocked."
+kill_processes = "Listed programs closed."
+kill_offender = "Offending program closed."
+link_down = "Physical interface brought down."
+lock_screen = "Screen locked."
+failed = "failed"
+
+[NET-001]
+title = "Traffic outside the tunnel"
+meaning = "A packet left through the physical interface without going through the VPN/Tor: the destination saw your real IP."
+todo = "Stop what you are doing in the program involved. Check the tunnel; if you do not know the cause, press p (panic)."
+
+[NET-002]
+title = "Leak blocked by the guard"
+meaning = "A program tried to leave outside the tunnel and the guard blocked it. Nothing left, but something is set up to leak."
+todo = "See the process and destination in the event and close or reconfigure the program."
+
+[NET-003]
+title = "IPv6 outside the tunnel"
+meaning = "There is IPv6 routed through the physical interface, outside the tunnel."
+todo = "Disable IPv6 on the physical interface or use a VPN that carries IPv6."
+
+[NET-004]
+title = "Effective route outside the tunnel"
+meaning = "The route the kernel picks for the internet does not go through the tunnel."
+todo = "Reconnect the VPN and check the default route before going on."
+
+[NET-005]
+title = "Route change"
+meaning = "The routes changed during the session."
+todo = "Check whether it was the VPN reconnecting. If not, investigate before going on."
+
+[NET-006]
+title = "New interface or link up"
+meaning = "A network interface appeared or came up during the session."
+todo = "Check where it came from (cable, USB, Wi-Fi, phone) and disconnect it if unexpected."
+
+[NET-007]
+title = "Wi-Fi network change"
+meaning = "The machine switched Wi-Fi networks during the session."
+todo = "Check which network you are on and whether the tunnel is still up."
+
+[NET-008]
+title = "Real MAC in use"
+meaning = "The interface uses its factory MAC address, which identifies the device on the local network."
+todo = "Turn on MAC randomization before using networks that are not yours."
+
+[NET-009]
+title = "LAN broadcast with identifiers"
+meaning = "The machine announces names or services on the local network (mDNS, LLMNR, NetBIOS, SSDP)."
+todo = "Disable the announcing service (avahi, shares) for this session."
+
+[NET-010]
+title = "Socket on the physical interface"
+meaning = "A program bound a socket to the physical interface, bypassing the tunnel."
+todo = "See the process in the event and close it unless it is the VPN client."
+
+[NET-011]
+title = "Unexpected exit IP"
+meaning = "The active check saw an exit IP that is not the tunnel's expected one (or could not check)."
+todo = "If it is your real network's IP, stop and press p. If the country or ASN differs, check the VPN server."
+
+[NET-012]
+title = "STUN/WebRTC outside the tunnel"
+meaning = "STUN/WebRTC traffic left or tried to leave outside the tunnel, exposing the real IP in calls and browsers."
+todo = "Disable WebRTC in the browser or close the calling app."
+
+[NET-013]
+title = "Interface-bound connectivity check"
+meaning = "The system tests connectivity through the physical interface, outside the tunnel."
+todo = "Disable NetworkManager's connectivity check for this session."
+
+[NET-014]
+title = "DHCP sends the hostname"
+meaning = "The DHCP client sends the machine's name to the local network."
+todo = "Configure DHCP not to send the hostname."
+
+[DNS-001]
+title = "DNS outside the tunnel"
+meaning = "A DNS query left outside the tunnel: the provider saw which names you resolved."
+todo = "Check the resolver in use and use the tunnel's DNS. If you do not know the cause, press p."
+
+[DNS-002]
+title = "Provider resolver configured"
+meaning = "The configured resolver is your real provider's."
+todo = "Switch to the tunnel's DNS before going on."
+
+[DNS-003]
+title = "Resolver on a physical link"
+meaning = "There is a DNS resolver tied to the physical interface."
+todo = "Remove DNS from the physical interface or make the tunnel the only link with DNS."
+
+[DNS-004]
+title = "DNS configuration changed"
+meaning = "The system DNS configuration changed during the session."
+todo = "Check who changed it (VPN, NetworkManager) and whether DNS is still the tunnel's."
+
+[TUN-001]
+title = "Tunnel missing or down"
+meaning = "The expected tunnel is not up."
+todo = "Do not use the network until the tunnel is back. Reconnect the VPN/Tor."
+
+[TUN-002]
+title = "Stale WireGuard handshake"
+meaning = "WireGuard has not renewed its handshake for a long time: the tunnel may be dead."
+todo = "Reconnect the VPN and check the server."
+
+[TUN-003]
+title = "Tor without a circuit"
+meaning = "Tor has no circuit ready."
+todo = "Wait for the bootstrap to finish or restart Tor before browsing."
+
+[TUN-004]
+title = "Kill switch changed"
+meaning = "The kill switch firewall rules changed during the session."
+todo = "Check who changed the rules. If it was neither you nor the VPN, press p."
+
+[TUN-005]
+title = "Split tunneling active"
+meaning = "Part of the traffic is set to leave outside the tunnel."
+todo = "Disable split tunneling in the VPN."
+
+[TUN-006]
+title = "Unexpected endpoint"
+meaning = "The tunnel connects to a server outside the expected country or ASN, or to an unconfirmed endpoint."
+todo = "Check the VPN server and confirm the endpoint if it is the right one."
+
+[TUN-007]
+title = "Invisible legacy firewall"
+meaning = "There are legacy iptables rules that lethe cannot fully see."
+todo = "Migrate the rules to nftables or check them by hand."
+
+[TUN-008]
+title = "Unsupported pluggable transport"
+meaning = "Tor uses a pluggable transport whose traffic lethe cannot recognize."
+todo = "Use a supported transport or confirm the endpoint by hand."
+
+[HOST-001]
+title = "Deny-listed process"
+meaning = "A program the profile forbids in this session is running."
+todo = "Close the program."
+
+[HOST-002]
+title = "Camera or microphone in use"
+meaning = "Some program is using the camera or the microphone."
+todo = "Check which program and close it if unexpected."
+
+[HOST-003]
+title = "Screen sharing or remote access"
+meaning = "Screen sharing or a remote access tool is active."
+todo = "End the sharing or the remote access."
+
+[HOST-004]
+title = "Real hostname"
+meaning = "The machine's name is the baseline's, which identifies you."
+todo = "Change the hostname before using networks that are not yours."
+
+[HOST-005]
+title = "Timezone or locale outside the profile"
+meaning = "The machine's timezone or language does not match the persona."
+todo = "Set the timezone and language to the profile's."
+
+[HOST-006]
+title = "Unencrypted disk or swap"
+meaning = "There is an unencrypted disk or swap: whatever is written there can be read."
+todo = "Use an encrypted disk or turn swap off for this session."
+
+[HOST-007]
+title = "Time synchronization"
+meaning = "Time synchronization may leave outside the tunnel or expose the timezone."
+todo = "Check the time service (timesyncd, chrony) and the server it uses."
+
+[HOST-008]
+title = "Known Wi-Fi with autoconnect"
+meaning = "A baseline Wi-Fi network may connect on its own."
+todo = "Turn off autoconnect for that network in this session."
+
+[HOST-009]
+title = "Geolocation service active"
+meaning = "The system location service is active and may reveal where you are."
+todo = "Disable GeoClue/location for this session."
+
+[PER-001]
+title = "Incoherent persona"
+meaning = "Exit country, timezone, language or keyboard do not tell the same story."
+todo = "Fix what is off (see the field in the event) before going on."
+
+[PER-002]
+title = "Browser configuration"
+meaning = "The browser has a setting that leaks identity (WebRTC, its own DNS, language)."
+todo = "Fix the setting named in the event."
+
+[PER-003]
+title = "Personal browser profile"
+meaning = "A browser opened your personal profile in this session."
+todo = "Close it and use the persona's profile."
+
+[SELF-001]
+title = "Sensor stopped"
+meaning = "A lethe sensor stopped: what it watches is not being seen."
+todo = "Check the reason in the event. Without the sensor, treat the session as unwatched."
+
+[SELF-002]
+title = "Capture packet loss"
+meaning = "The capture lost packets: a leak may have gone unseen."
+todo = "Reduce the traffic or increase the capture buffer."
+
+[SELF-003]
+title = "Agent or GUI disconnected"
+meaning = "The session agent or the GUI stopped answering: alerts may not reach the screen."
+todo = "Reopen the GUI or restart the session."
+
+[SELF-004]
+title = "Selftest out of date"
+meaning = "There is no recent passed complete selftest."
+todo = "Run lethe selftest."
+
+[SELF-005]
+title = "Clock changed"
+meaning = "The system clock changed during the session."
+todo = "Check who changed the clock."
+
+[SELF-006]
+title = "Passphrase attempts"
+meaning = "There were several wrong passphrases on sensitive actions."
+todo = "If it was not you, someone is tampering with the session: press p."

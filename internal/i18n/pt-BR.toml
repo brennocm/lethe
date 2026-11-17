@@ -1,0 +1,266 @@
+# Textos de operador em pt-BR (spec §16.6). Cada check tem title (curto), meaning (o que
+# significa) e todo (o que fazer agora). Formato: subconjunto de TOML lido por internal/i18n
+# (seções [nome] e linhas chave = "texto"). Toda chave daqui precisa existir em en-US.toml.
+
+[ui]
+state = "Estado"
+guard = "Guarda"
+session = "Sessão"
+exit = "Saída"
+alerts = "Alertas"
+events = "Eventos"
+logs = "Daemon"
+no_alerts = "Nenhum alerta aberto."
+no_events = "Nenhum evento ainda."
+keys = "p pânico · a reconhecer · s selftest · q sair (sem desarmar)"
+alert_keys = "a reconhecer · p pânico"
+alert_banner = "ALERTA CRÍTICO"
+actions_done = "Ações já executadas"
+what_now = "O que fazer agora"
+ack_reason = "Motivo do reconhecimento (Enter confirma, Esc cancela): "
+ack_pass = "Passphrase da baseline (Enter confirma, Esc cancela): "
+ack_ok = "Alerta reconhecido."
+panic_ask = "Entrar em PÂNICO? Bloqueia toda a rede. [s/N]"
+panic_ok = "PÂNICO ativo: a rede está bloqueada. Para sair: lethe unpanic."
+selftest_ask = "[c] selftest completo: inclui RESP-001 (corta a rede ~1 s) e pede a passphrase"
+selftest_ask2 = "[r] selftest rápido, sem RESP-001 · Esc cancela"
+selftest_running = "Selftest em andamento…"
+selftest_passed = "Selftest aprovado"
+selftest_failed = "Selftest reprovado"
+quit_note = "TUI fechada; a sessão segue armada."
+disconnected = "Sem conexão com o daemon"
+lockdown = "Bloqueio"
+how_out = "Como sair"
+none = "nenhum"
+sensors_down = "Sensores parados"
+
+[actions]
+alert_tray = "Alerta na bandeja."
+alert_sound = "Som de alerta."
+alert_fullscreen = "Alerta em tela cheia."
+block_all = "Rede bloqueada."
+kill_processes = "Programas da lista encerrados."
+kill_offender = "Programa causador encerrado."
+link_down = "Interface física derrubada."
+lock_screen = "Tela bloqueada."
+failed = "falhou"
+
+[NET-001]
+title = "Tráfego fora do túnel"
+meaning = "Um pacote saiu pela interface física sem passar pela VPN/Tor: o destino viu o seu IP real."
+todo = "Pare o que estiver fazendo no programa envolvido. Confira o túnel; se não souber a causa, aperte p (pânico)."
+
+[NET-002]
+title = "Vazamento bloqueado pelo guarda"
+meaning = "Um programa tentou sair fora do túnel e o guarda bloqueou. Nada saiu, mas algo está configurado para vazar."
+todo = "Veja o processo e o destino no evento e feche ou reconfigure o programa."
+
+[NET-003]
+title = "IPv6 fora do túnel"
+meaning = "Há IPv6 com rota pela interface física, fora do túnel."
+todo = "Desative o IPv6 na interface física ou use uma VPN que leve IPv6."
+
+[NET-004]
+title = "Rota efetiva fora do túnel"
+meaning = "A rota que o kernel escolhe para a internet não passa pelo túnel."
+todo = "Reconecte a VPN e confira a rota padrão antes de continuar."
+
+[NET-005]
+title = "Mudança de rota"
+meaning = "As rotas mudaram durante a sessão."
+todo = "Confira se foi a VPN reconectando. Se não, investigue antes de continuar."
+
+[NET-006]
+title = "Interface nova ou link up"
+meaning = "Uma interface de rede apareceu ou subiu durante a sessão."
+todo = "Confira de onde veio (cabo, USB, Wi-Fi, celular) e desconecte se não for esperada."
+
+[NET-007]
+title = "Mudança de rede Wi-Fi"
+meaning = "A máquina trocou de rede Wi-Fi durante a sessão."
+todo = "Confira em que rede está e se o túnel continua de pé."
+
+[NET-008]
+title = "MAC real em uso"
+meaning = "A interface usa o endereço MAC de fábrica, que identifica o aparelho na rede local."
+todo = "Ative a randomização de MAC antes de usar redes que não são suas."
+
+[NET-009]
+title = "Broadcast na LAN com identificadores"
+meaning = "A máquina anuncia nomes ou serviços na rede local (mDNS, LLMNR, NetBIOS, SSDP)."
+todo = "Desative o serviço que anuncia (avahi, compartilhamentos) nesta sessão."
+
+[NET-010]
+title = "Socket na interface física"
+meaning = "Um programa prendeu um socket na interface física, contornando o túnel."
+todo = "Veja o processo no evento e feche-o se não for o cliente da VPN."
+
+[NET-011]
+title = "IP de saída inesperado"
+meaning = "A verificação ativa viu um IP de saída que não é o esperado do túnel (ou não conseguiu verificar)."
+todo = "Se for o IP da sua rede real, pare e aperte p. Se for país ou ASN diferente, confira o servidor da VPN."
+
+[NET-012]
+title = "STUN/WebRTC fora do túnel"
+meaning = "Tráfego STUN/WebRTC saiu ou tentou sair fora do túnel, o que expõe o IP real em chamadas e navegadores."
+todo = "Desative o WebRTC no navegador ou feche o aplicativo de chamada."
+
+[NET-013]
+title = "Checagem de conectividade presa à interface"
+meaning = "O sistema testa a conectividade pela interface física, fora do túnel."
+todo = "Desative a checagem de conectividade do NetworkManager nesta sessão."
+
+[NET-014]
+title = "DHCP envia o hostname"
+meaning = "O cliente DHCP manda o nome da máquina para a rede local."
+todo = "Configure o DHCP para não enviar o hostname."
+
+[DNS-001]
+title = "DNS fora do túnel"
+meaning = "Uma consulta de DNS saiu fora do túnel: o provedor viu quais nomes você resolveu."
+todo = "Confira o resolvedor em uso e use o DNS do túnel. Se não souber a causa, aperte p."
+
+[DNS-002]
+title = "Resolvedor do provedor configurado"
+meaning = "O resolvedor configurado é o do seu provedor real."
+todo = "Troque para o DNS do túnel antes de continuar."
+
+[DNS-003]
+title = "Resolvedor em link físico"
+meaning = "Há um resolvedor de DNS associado à interface física."
+todo = "Remova o DNS da interface física ou faça o túnel ser o único link com DNS."
+
+[DNS-004]
+title = "Configuração de DNS alterada"
+meaning = "A configuração de DNS do sistema mudou durante a sessão."
+todo = "Confira quem mudou (VPN, NetworkManager) e se o DNS ainda é o do túnel."
+
+[TUN-001]
+title = "Túnel ausente ou caído"
+meaning = "O túnel esperado não está de pé."
+todo = "Não use a rede até o túnel voltar. Reconecte a VPN/Tor."
+
+[TUN-002]
+title = "Handshake WireGuard velho"
+meaning = "O WireGuard não renova o handshake há muito tempo: o túnel pode estar morto."
+todo = "Reconecte a VPN e confira o servidor."
+
+[TUN-003]
+title = "Tor sem circuito"
+meaning = "O Tor não tem circuito pronto."
+todo = "Espere o bootstrap terminar ou reinicie o Tor antes de navegar."
+
+[TUN-004]
+title = "Kill switch alterado"
+meaning = "As regras de firewall do kill switch mudaram durante a sessão."
+todo = "Confira quem mudou as regras. Se não foi você nem a VPN, aperte p."
+
+[TUN-005]
+title = "Split tunneling ativo"
+meaning = "Parte do tráfego está configurada para sair fora do túnel."
+todo = "Desative o split tunneling na VPN."
+
+[TUN-006]
+title = "Endpoint inesperado"
+meaning = "O túnel conecta a um servidor fora do país ou do ASN esperados, ou a um endpoint não confirmado."
+todo = "Confira o servidor da VPN e confirme o endpoint se for o certo."
+
+[TUN-007]
+title = "Firewall legado invisível"
+meaning = "Há regras de iptables legado que o lethe não consegue ver por inteiro."
+todo = "Migre as regras para nftables ou confira-as à mão."
+
+[TUN-008]
+title = "Transporte plugável não suportado"
+meaning = "O Tor usa um transporte plugável cujo tráfego o lethe não sabe reconhecer."
+todo = "Use um transporte suportado ou confirme o endpoint à mão."
+
+[HOST-001]
+title = "Processo da lista de negação"
+meaning = "Está rodando um programa que o perfil proíbe nesta sessão."
+todo = "Feche o programa."
+
+[HOST-002]
+title = "Câmera ou microfone em uso"
+meaning = "Algum programa está usando a câmera ou o microfone."
+todo = "Confira qual programa e feche-o se não for esperado."
+
+[HOST-003]
+title = "Compartilhamento de tela ou acesso remoto"
+meaning = "Há compartilhamento de tela ou uma ferramenta de acesso remoto ativa."
+todo = "Encerre o compartilhamento ou o acesso remoto."
+
+[HOST-004]
+title = "Hostname real"
+meaning = "O nome da máquina é o da baseline, que identifica você."
+todo = "Troque o hostname antes de usar redes que não são suas."
+
+[HOST-005]
+title = "Fuso ou idioma fora do perfil"
+meaning = "O fuso horário ou o idioma da máquina não batem com a persona."
+todo = "Ajuste o fuso e o idioma ao perfil."
+
+[HOST-006]
+title = "Disco ou swap sem cifra"
+meaning = "Há disco ou swap sem criptografia: o que ficar gravado pode ser lido."
+todo = "Use disco cifrado ou desative o swap nesta sessão."
+
+[HOST-007]
+title = "Sincronização de horário"
+meaning = "A sincronização de horário pode sair fora do túnel ou expor o fuso."
+todo = "Confira o serviço de horário (timesyncd, chrony) e o servidor usado."
+
+[HOST-008]
+title = "Rede Wi-Fi conhecida com autoconnect"
+meaning = "Uma rede Wi-Fi da baseline pode se conectar sozinha."
+todo = "Desative o autoconnect dessa rede nesta sessão."
+
+[HOST-009]
+title = "Serviço de geolocalização ativo"
+meaning = "O serviço de localização do sistema está ativo e pode revelar onde você está."
+todo = "Desative o GeoClue/localização nesta sessão."
+
+[PER-001]
+title = "Persona incoerente"
+meaning = "País de saída, fuso, idioma ou teclado não contam a mesma história."
+todo = "Ajuste o que estiver fora (veja o campo no evento) antes de continuar."
+
+[PER-002]
+title = "Configuração de navegador"
+meaning = "O navegador tem uma configuração que vaza identidade (WebRTC, DNS próprio, idioma)."
+todo = "Corrija a configuração apontada no evento."
+
+[PER-003]
+title = "Perfil pessoal do navegador"
+meaning = "Um navegador abriu o seu perfil pessoal nesta sessão."
+todo = "Feche-o e use o perfil da persona."
+
+[SELF-001]
+title = "Sensor parado"
+meaning = "Um sensor do lethe parou: aquilo que ele vigia não está sendo visto."
+todo = "Confira o motivo no evento. Sem o sensor, trate a sessão como não vigiada."
+
+[SELF-002]
+title = "Perda de pacotes na captura"
+meaning = "A captura perdeu pacotes: um vazamento pode ter passado sem ser visto."
+todo = "Reduza o tráfego ou aumente o buffer de captura."
+
+[SELF-003]
+title = "Agente ou GUI desconectados"
+meaning = "O agente da sessão ou a GUI pararam de responder: alertas podem não aparecer na tela."
+todo = "Reabra a GUI ou reinicie a sessão."
+
+[SELF-004]
+title = "Selftest desatualizado"
+meaning = "Não há selftest completo aprovado recente."
+todo = "Rode lethe selftest."
+
+[SELF-005]
+title = "Relógio alterado"
+meaning = "O relógio do sistema mudou durante a sessão."
+todo = "Confira quem alterou o relógio."
+
+[SELF-006]
+title = "Tentativas de passphrase"
+meaning = "Houve várias passphrases erradas em ações sensíveis."
+todo = "Se não foi você, alguém está mexendo na sessão: aperte p."
