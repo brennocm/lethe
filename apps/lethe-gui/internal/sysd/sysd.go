@@ -43,15 +43,25 @@ func Cleanup(ctx context.Context) error {
 	return startUnit(ctx, CleanupUnit)
 }
 
+// startUnit starts unit and waits for systemd to finish the job: StartUnit returns when the job
+// is queued, so success is read from the JobRemoved signal ("done"), not from the call.
 func startUnit(ctx context.Context, unit string) error {
 	conn, err := dbus.ConnectSystemBus(dbus.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("system bus: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
+	mgr := conn.Object("org.freedesktop.systemd1", "/org/freedesktop/systemd1")
+	if err := conn.AddMatchSignal(dbus.WithMatchInterface("org.freedesktop.systemd1.Manager"), dbus.WithMatchMember("JobRemoved")); err != nil {
+		return err
+	}
+	sigs := make(chan *dbus.Signal, 32)
+	conn.Signal(sigs)
+	if err := mgr.CallWithContext(ctx, "org.freedesktop.systemd1.Manager.Subscribe", 0).Err; err != nil {
+		return err
+	}
 	var job dbus.ObjectPath
-	call := conn.Object("org.freedesktop.systemd1", "/org/freedesktop/systemd1").
-		CallWithContext(ctx, "org.freedesktop.systemd1.Manager.StartUnit", dbus.FlagAllowInteractiveAuthorization, unit, "replace")
+	call := mgr.CallWithContext(ctx, "org.freedesktop.systemd1.Manager.StartUnit", dbus.FlagAllowInteractiveAuthorization, unit, "replace")
 	if err := call.Store(&job); err != nil {
 		var de dbus.Error
 		if errors.As(err, &de) && de.Name == "org.freedesktop.systemd1.NoSuchUnit" {
@@ -59,5 +69,33 @@ func startUnit(ctx context.Context, unit string) error {
 		}
 		return err
 	}
-	return nil
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("%s: no answer from systemd: %w", unit, ctx.Err())
+		case sig := <-sigs:
+			if sig == nil {
+				return fmt.Errorf("%s: system bus closed", unit)
+			}
+			if r, ok := JobResult(sig, job); ok {
+				if r != "done" {
+					return fmt.Errorf("%s: %s (journalctl -u %s)", unit, r, unit)
+				}
+				return nil
+			}
+		}
+	}
+}
+
+// JobResult reads a JobRemoved signal (id, job, unit, result) for job.
+func JobResult(sig *dbus.Signal, job dbus.ObjectPath) (string, bool) {
+	if sig.Name != "org.freedesktop.systemd1.Manager.JobRemoved" || len(sig.Body) != 4 {
+		return "", false
+	}
+	p, ok := sig.Body[1].(dbus.ObjectPath)
+	r, ok2 := sig.Body[3].(string)
+	if !ok || !ok2 || p != job {
+		return "", false
+	}
+	return r, true
 }
