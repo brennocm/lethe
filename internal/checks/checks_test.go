@@ -264,6 +264,17 @@ func TestM9_EveryCheckHasATitle(t *testing.T) {
 	if Title("XXX-000", "pt-BR") != "XXX-000" {
 		t.Fatal("unknown id")
 	}
+	// The other way round too: a text for a check that does not exist would put it on the GUI
+	// grid as "ok" while nothing watches it (fail-silent, principle 1).
+	reg := map[string]bool{}
+	for _, c := range Registry() {
+		reg[c.ID()] = true
+	}
+	for _, id := range i18n.CheckIDs() {
+		if !reg[id] {
+			t.Errorf("internal/i18n has %s, which is not in the registry", id)
+		}
+	}
 	for _, c := range Registry() {
 		for _, l := range i18n.Langs {
 			if tx := i18n.CheckText(l, c.ID()); tx.Meaning == "" || tx.Todo == "" {

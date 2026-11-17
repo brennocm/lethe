@@ -34,6 +34,32 @@ how_out = "Como sair"
 none = "nenhum"
 sensors_down = "Sensores parados"
 
+panel = "Painel"
+open_panel = "Abrir painel"
+panic_btn = "Pânico"
+selftest_btn = "Selftest"
+ack_btn = "Reconhecer"
+disarm_btn = "Desarmar"
+unpanic_btn = "Sair do pânico"
+confirm = "Confirmar"
+cancel = "Cancelar"
+reason = "Motivo"
+passphrase = "Passphrase da baseline"
+x11_warning = "No X11, outros programas da sua sessão podem ler o teclado. Se puder, digite a passphrase no terminal (lethe ack, lethe unpanic)."
+disarm_ask = "Desarmar a sessão? O guarda sai e o log é fechado."
+unpanic_ask = "Sair do pânico? O lethe confere o túnel antes de liberar a rede."
+selftest_full = "Completo (inclui RESP-001)"
+selftest_quick = "Rápido (sem RESP-001)"
+filter_all = "Todas"
+filter_check = "Check (ex.: NET-001)"
+ok_state = "ok"
+category_NET = "Rede"
+category_DNS = "DNS"
+category_TUN = "Túnel"
+category_HOST = "Máquina"
+category_PER = "Persona"
+category_SELF = "O próprio lethe"
+
 [actions]
 alert_tray = "Alerta na bandeja."
 alert_sound = "Som de alerta."
@@ -48,7 +74,7 @@ failed = "falhou"
 [NET-001]
 title = "Tráfego fora do túnel"
 meaning = "Um pacote saiu pela interface física sem passar pela VPN/Tor: o destino viu o seu IP real."
-todo = "Pare o que estiver fazendo no programa envolvido. Confira o túnel; se não souber a causa, aperte p (pânico)."
+todo = "Pare o que estiver fazendo no programa envolvido. Confira o túnel; se não souber a causa, acione o pânico."
 
 [NET-002]
 title = "Vazamento bloqueado pelo guarda"
@@ -98,7 +124,7 @@ todo = "Veja o processo no evento e feche-o se não for o cliente da VPN."
 [NET-011]
 title = "IP de saída inesperado"
 meaning = "A verificação ativa viu um IP de saída que não é o esperado do túnel (ou não conseguiu verificar)."
-todo = "Se for o IP da sua rede real, pare e aperte p. Se for país ou ASN diferente, confira o servidor da VPN."
+todo = "Se for o IP da sua rede real, pare e acione o pânico. Se for país ou ASN diferente, confira o servidor da VPN."
 
 [NET-012]
 title = "STUN/WebRTC fora do túnel"
@@ -118,17 +144,9 @@ todo = "Configure o DHCP para não enviar o hostname."
 [DNS-001]
 title = "DNS fora do túnel"
 meaning = "Uma consulta de DNS saiu fora do túnel: o provedor viu quais nomes você resolveu."
-todo = "Confira o resolvedor em uso e use o DNS do túnel. Se não souber a causa, aperte p."
+todo = "Confira o resolvedor em uso e use o DNS do túnel. Se não souber a causa, acione o pânico."
 
-[DNS-002]
-title = "Resolvedor do provedor configurado"
-meaning = "O resolvedor configurado é o do seu provedor real."
-todo = "Troque para o DNS do túnel antes de continuar."
 
-[DNS-003]
-title = "Resolvedor em link físico"
-meaning = "Há um resolvedor de DNS associado à interface física."
-todo = "Remova o DNS da interface física ou faça o túnel ser o único link com DNS."
 
 [DNS-004]
 title = "Configuração de DNS alterada"
@@ -153,7 +171,7 @@ todo = "Espere o bootstrap terminar ou reinicie o Tor antes de navegar."
 [TUN-004]
 title = "Kill switch alterado"
 meaning = "As regras de firewall do kill switch mudaram durante a sessão."
-todo = "Confira quem mudou as regras. Se não foi você nem a VPN, aperte p."
+todo = "Confira quem mudou as regras. Se não foi você nem a VPN, acione o pânico."
 
 [TUN-005]
 title = "Split tunneling ativo"
@@ -263,4 +281,4 @@ todo = "Confira quem alterou o relógio."
 [SELF-006]
 title = "Tentativas de passphrase"
 meaning = "Houve várias passphrases erradas em ações sensíveis."
-todo = "Se não foi você, alguém está mexendo na sessão: aperte p."
+todo = "Se não foi você, alguém está mexendo na sessão: acione o pânico."

@@ -9,6 +9,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -92,6 +93,19 @@ func CheckText(lang, id string) Check {
 		c.Todo = ""
 	}
 	return c
+}
+
+// CheckIDs lists the checks that have texts, sorted (the GUI grid).
+func CheckIDs() []string {
+	once.Do(load)
+	var ids []string
+	for sec := range tables[Default] {
+		if sec != "ui" && sec != "actions" {
+			ids = append(ids, sec)
+		}
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 // Parse reads the TOML subset.

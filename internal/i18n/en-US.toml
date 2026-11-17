@@ -32,6 +32,32 @@ how_out = "How to get out"
 none = "none"
 sensors_down = "Sensors down"
 
+panel = "Panel"
+open_panel = "Open panel"
+panic_btn = "Panic"
+selftest_btn = "Selftest"
+ack_btn = "Acknowledge"
+disarm_btn = "Disarm"
+unpanic_btn = "Leave panic"
+confirm = "Confirm"
+cancel = "Cancel"
+reason = "Reason"
+passphrase = "Baseline passphrase"
+x11_warning = "On X11, other programs in your session can read the keyboard. If you can, type the passphrase in the terminal (lethe ack, lethe unpanic)."
+disarm_ask = "Disarm the session? The guard goes away and the log is closed."
+unpanic_ask = "Leave panic? lethe checks the tunnel before freeing the network."
+selftest_full = "Complete (includes RESP-001)"
+selftest_quick = "Quick (no RESP-001)"
+filter_all = "All"
+filter_check = "Check (e.g. NET-001)"
+ok_state = "ok"
+category_NET = "Network"
+category_DNS = "DNS"
+category_TUN = "Tunnel"
+category_HOST = "Machine"
+category_PER = "Persona"
+category_SELF = "lethe itself"
+
 [actions]
 alert_tray = "Tray alert."
 alert_sound = "Alert sound."
@@ -46,7 +72,7 @@ failed = "failed"
 [NET-001]
 title = "Traffic outside the tunnel"
 meaning = "A packet left through the physical interface without going through the VPN/Tor: the destination saw your real IP."
-todo = "Stop what you are doing in the program involved. Check the tunnel; if you do not know the cause, press p (panic)."
+todo = "Stop what you are doing in the program involved. Check the tunnel; if you do not know the cause, engage the panic."
 
 [NET-002]
 title = "Leak blocked by the guard"
@@ -96,7 +122,7 @@ todo = "See the process in the event and close it unless it is the VPN client."
 [NET-011]
 title = "Unexpected exit IP"
 meaning = "The active check saw an exit IP that is not the tunnel's expected one (or could not check)."
-todo = "If it is your real network's IP, stop and press p. If the country or ASN differs, check the VPN server."
+todo = "If it is your real network's IP, stop and engage the panic. If the country or ASN differs, check the VPN server."
 
 [NET-012]
 title = "STUN/WebRTC outside the tunnel"
@@ -116,17 +142,9 @@ todo = "Configure DHCP not to send the hostname."
 [DNS-001]
 title = "DNS outside the tunnel"
 meaning = "A DNS query left outside the tunnel: the provider saw which names you resolved."
-todo = "Check the resolver in use and use the tunnel's DNS. If you do not know the cause, press p."
+todo = "Check the resolver in use and use the tunnel's DNS. If you do not know the cause, engage the panic."
 
-[DNS-002]
-title = "Provider resolver configured"
-meaning = "The configured resolver is your real provider's."
-todo = "Switch to the tunnel's DNS before going on."
 
-[DNS-003]
-title = "Resolver on a physical link"
-meaning = "There is a DNS resolver tied to the physical interface."
-todo = "Remove DNS from the physical interface or make the tunnel the only link with DNS."
 
 [DNS-004]
 title = "DNS configuration changed"
@@ -151,7 +169,7 @@ todo = "Wait for the bootstrap to finish or restart Tor before browsing."
 [TUN-004]
 title = "Kill switch changed"
 meaning = "The kill switch firewall rules changed during the session."
-todo = "Check who changed the rules. If it was neither you nor the VPN, press p."
+todo = "Check who changed the rules. If it was neither you nor the VPN, engage the panic."
 
 [TUN-005]
 title = "Split tunneling active"
@@ -261,4 +279,4 @@ todo = "Check who changed the clock."
 [SELF-006]
 title = "Passphrase attempts"
 meaning = "There were several wrong passphrases on sensitive actions."
-todo = "If it was not you, someone is tampering with the session: press p."
+todo = "If it was not you, someone is tampering with the session: engage the panic."
