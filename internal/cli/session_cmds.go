@@ -229,7 +229,6 @@ func newRunCmd() *cobra.Command {
 		Short: "Portable mode: start the daemon in the foreground and arm",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_ = noGUI // the GUI (M13) is never started yet
 			if os.Geteuid() != 0 {
 				return WithCode(ExitPrivileges, errors.New("run needs root (sudo lethe run ...)"))
 			}
@@ -252,7 +251,7 @@ func newRunCmd() *cobra.Command {
 			}
 			d := daemon.New(daemon.Config{
 				Operator: op, SocketPath: sock, ToolVersion: buildinfo.Version, Sensors: true,
-				Agent: []string{"agent", "--socket", sock}, AgentEnv: agentEnv(op, sock, f.lang),
+				Agent: []string{"agent", "--socket", sock}, AgentEnv: agentEnv(op, sock, f.lang, guiPath(op, noGUI || tui, cmd.ErrOrStderr())),
 				HardenAfterArm: true, Out: daemonOut, Resolved: resolved(),
 			})
 			defer d.Close()
@@ -330,8 +329,11 @@ func resolved() discovery.ResolvedClient {
 }
 
 // agentEnv is the minimal environment the session agent needs (bus, display, language).
-func agentEnv(op platform.Operator, sock, lang string) []string {
+func agentEnv(op platform.Operator, sock, lang, gui string) []string {
 	env := []string{"HOME=" + op.Home, "LETHE_SOCKET=" + sock, "PATH=/usr/bin:/bin", "LETHE_LANG=" + lang}
+	if gui != "" {
+		env = append(env, "LETHE_GUI="+gui)
+	}
 	for _, k := range []string{"LANG", "LC_ALL", "DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS",
 		"XDG_CONFIG_HOME", "XKB_DEFAULT_LAYOUT", "PIPEWIRE_REMOTE", "PIPEWIRE_RUNTIME_DIR"} {
 		if v := os.Getenv(k); v != "" {
@@ -404,6 +406,11 @@ func newAgentCmd() *cobra.Command {
 				cfg.Notifier = n
 			} else {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "lethe agent: no session bus (%v): alerts only on the terminal\n", err)
+			}
+			if os.Getenv("LETHE_GUI") != "" {
+				if g, err := agent.NewSystemdGUI(); err == nil {
+					cfg.GUI = g
+				}
 			}
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
@@ -842,4 +849,27 @@ func runTUI(ctx context.Context, cmd *cobra.Command, sock string, f armFlags, lo
 	}
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), i18n.UI(f.lang, "quit_note"))
 	return true, nil
+}
+
+// guiPath is lethe-gui next to this binary, when the GUI should open and the file is safe to
+// start (the agent checks it again). Without it the alerts stay on the agent's notifications
+// and the terminal.
+func guiPath(op platform.Operator, off bool, w io.Writer) string {
+	if off {
+		return ""
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	p := filepath.Join(filepath.Dir(exe), "lethe-gui")
+	if _, err := os.Stat(p); err != nil {
+		_, _ = fmt.Fprintln(w, "lethe: sem lethe-gui ao lado do binário: alertas pelas notificações e pelo terminal (ou use --tui)")
+		return ""
+	}
+	if err := agent.CheckGUIBinary(p, op.UID); err != nil {
+		_, _ = fmt.Fprintf(w, "lethe: GUI não aberta: %v\n", err)
+		return ""
+	}
+	return p
 }

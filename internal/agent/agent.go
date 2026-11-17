@@ -47,6 +47,7 @@ type Config struct {
 	BeatEvery time.Duration                  // 1 s
 	FactEvery time.Duration                  // 5 s
 	Out       func(format string, a ...any)  // diagnostics (nil = none)
+	GUI       GUILauncher                    // starts LETHE_GUI (nil = never)
 }
 
 // Run keeps the agent alive until ctx ends or the daemon goes away.
@@ -77,6 +78,9 @@ func Run(ctx context.Context, cfg Config) error {
 	defer func() { _ = ctl.Close() }()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if stop := startGUI(cfg); stop != nil {
+		defer stop()
+	}
 	if cfg.Notifier != nil {
 		go func() {
 			if err := notifyLoop(ctx, cfg); err != nil {
