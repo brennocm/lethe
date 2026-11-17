@@ -225,18 +225,19 @@ func (d *Daemon) ShrinkCapture(iface string, n int) error {
 	return c.SetReadBuffer(n)
 }
 
-// selftestDNSFile is the watched test file of ST-DNS-004 (never the real resolv.conf).
+// selftestDNSName is the watched test file of ST-DNS-004 in storage.dir/state (never the real
+// resolv.conf).
+const selftestDNSName = "selftest-resolv.conf"
+
 func selftestDNSFile(s *session) string {
-	return filepath.Join(s.prof.Storage.Dir, "state", "selftest-resolv.conf")
+	return filepath.Join(s.prof.Storage.Dir, "state", selftestDNSName)
 }
 
 // dnsWatcher watches the DNS configuration files and the selftest file (DNS-004).
 func (d *Daemon) dnsWatcher(s *session) (*fswatch.Watcher, error) {
 	st := selftestDNSFile(s)
-	if err := os.MkdirAll(filepath.Dir(st), 0o700); err == nil {
-		if _, err := os.Lstat(st); errors.Is(err, os.ErrNotExist) {
-			_ = os.WriteFile(st, []byte("# lethe selftest (ST-DNS-004)\n"), 0o600)
-		}
+	if _, err := os.Lstat(st); errors.Is(err, os.ErrNotExist) {
+		_ = d.replaceFile(s, "# lethe selftest (ST-DNS-004)\n")
 	}
 	return fswatch.New(append(append([]string{}, d.cfg.DNSFiles...), st)...)
 }

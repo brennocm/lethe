@@ -64,3 +64,54 @@ func containsSlash(s string) bool {
 	}
 	return false
 }
+
+// OpenDir opens path as a directory, creating it (mode perm) when missing. The path itself may be
+// a symlink the operator chose (storage.dir); what is created inside goes through MkdirAt.
+func OpenDir(path string, perm uint32) (*os.File, error) {
+	if err := os.MkdirAll(path, os.FileMode(perm)); err != nil {
+		return nil, err
+	}
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, &os.PathError{Op: "open", Path: path, Err: err}
+	}
+	return os.NewFile(uintptr(fd), path), nil // #nosec G115 -- fd from open(2)
+}
+
+// WriteFileAt replaces name inside dir atomically, never following a symlink: a temporary file
+// is created with O_EXCL|O_NOFOLLOW (a planted .name.tmp -> /etc/shadow is removed, not
+// written through), owned by uid/gid when they are >= 0, synced and renamed over name. Root
+// writes into directories the operator owns (storage.dir/state) only through this.
+func WriteFileAt(dir *os.File, name string, data []byte, perm uint32, uid, gid int) error {
+	if name == "" || name == "." || name == ".." || containsSlash(name) {
+		return fmt.Errorf("bad file name %q", name)
+	}
+	dfd := int(dir.Fd()) // #nosec G115 -- fd
+	tmp := "." + name + ".tmp"
+	if err := unix.Unlinkat(dfd, tmp, 0); err != nil && !errors.Is(err, unix.ENOENT) {
+		return &os.PathError{Op: "unlink", Path: dir.Name() + "/" + tmp, Err: err}
+	}
+	fd, err := unix.Openat(dfd, tmp, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, perm)
+	if err != nil {
+		return &os.PathError{Op: "create", Path: dir.Name() + "/" + tmp, Err: err}
+	}
+	f := os.NewFile(uintptr(fd), dir.Name()+"/"+tmp) // #nosec G115 -- fd from openat(2)
+	_, err = f.Write(data)
+	if err == nil && (uid >= 0 || gid >= 0) {
+		err = unix.Fchown(fd, uid, gid)
+	}
+	if err == nil {
+		err = f.Sync()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = unix.Renameat(dfd, tmp, dfd, name)
+	}
+	if err != nil {
+		_ = unix.Unlinkat(dfd, tmp, 0)
+		return fmt.Errorf("write %s/%s: %w", dir.Name(), name, err)
+	}
+	return nil
+}

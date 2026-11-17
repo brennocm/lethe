@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
-	"path/filepath"
 	"slices"
 	"time"
 
@@ -19,6 +18,7 @@ import (
 	"lethe/internal/contracts"
 	"lethe/internal/engine"
 	"lethe/internal/guard"
+	"lethe/internal/platform"
 	"lethe/internal/sensors/capture"
 )
 
@@ -283,23 +283,48 @@ func selftestData(r SelftestResult) map[string]any {
 // writeSelftestFile records the result for SELF-004, owned by the operator (the preflight
 // without the daemon reads it with the operator's rights).
 func (d *Daemon) writeSelftestFile(s *session, r SelftestResult) error {
-	dir := filepath.Join(s.prof.Storage.Dir, "state")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
 	raw, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return err
 	}
-	tmp := filepath.Join(dir, ".selftest.json.tmp")
-	if err := os.WriteFile(tmp, append(raw, '\n'), 0o600); err != nil {
+	dir, err := d.stateDir(s)
+	if err != nil {
 		return err
 	}
-	if os.Geteuid() == 0 && d.cfg.Operator.UID > 0 {
-		_ = os.Chown(dir, d.cfg.Operator.UID, d.cfg.Operator.GID)
-		_ = os.Chown(tmp, d.cfg.Operator.UID, d.cfg.Operator.GID)
+	defer func() { _ = dir.Close() }()
+	uid, gid := d.stateOwner()
+	return platform.WriteFileAt(dir, "selftest.json", append(raw, '\n'), 0o600, uid, gid)
+}
+
+// stateDir opens storage.dir/state, which the operator owns and reads (SELF-004). The daemon is
+// root and the operator's processes may plant symlinks there, so the directory is created,
+// opened and chowned through descriptors that never follow one, and files are written only with
+// platform.WriteFileAt.
+func (d *Daemon) stateDir(s *session) (*os.File, error) {
+	st, err := platform.OpenDir(s.prof.Storage.Dir, 0o700)
+	if err != nil {
+		return nil, fmt.Errorf("storage: %w", err)
 	}
-	return os.Rename(tmp, filepath.Join(dir, "selftest.json"))
+	defer func() { _ = st.Close() }()
+	dir, err := platform.MkdirAt(st, "state", 0o700)
+	if err != nil {
+		return nil, fmt.Errorf("storage: %w", err)
+	}
+	if uid, gid := d.stateOwner(); uid >= 0 {
+		if err := platform.SecureDir(dir, uid, gid, 0o700); err != nil {
+			_ = dir.Close()
+			return nil, fmt.Errorf("storage: %w", err)
+		}
+	}
+	return dir, nil
+}
+
+// stateOwner is the operator when the daemon runs as root (-1, -1 otherwise: keep the owner).
+func (d *Daemon) stateOwner() (int, int) {
+	if os.Geteuid() == 0 && d.cfg.Operator.UID > 0 {
+		return d.cfg.Operator.UID, d.cfg.Operator.GID
+	}
+	return -1, -1
 }
 
 // stEgress is the egress interface the traffic cases use: the first one with a capture.
@@ -408,7 +433,7 @@ func (d *Daemon) runCase(ctx context.Context, s *session, id string, resp bool) 
 		d.addProbe(s, p)
 		defer d.endProbe(p)
 		start := time.Now()
-		if err := replaceFile(path, "# lethe selftest (ST-DNS-004) "+randHex(4)+"\n"); err != nil {
+		if err := d.replaceFile(s, "# lethe selftest (ST-DNS-004) "+randHex(4)+"\n"); err != nil {
 			return CaseResult{Result: CaseFail, Reason: err.Error()}
 		}
 		return waitHit(ctx, p, start)
@@ -717,13 +742,15 @@ func randHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-// replaceFile writes content atomically (rename), as resolv.conf managers do.
-func replaceFile(path, content string) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0o600); err != nil {
+// replaceFile writes the ST-DNS-004 file atomically (rename), as resolv.conf managers do.
+func (d *Daemon) replaceFile(s *session, content string) error {
+	dir, err := d.stateDir(s)
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	defer func() { _ = dir.Close() }()
+	uid, gid := d.stateOwner()
+	return platform.WriteFileAt(dir, selftestDNSName, []byte(content), 0o600, uid, gid)
 }
 
 // stunBinding is a STUN Binding Request (RFC 5389): type 1, no attributes, magic cookie.
