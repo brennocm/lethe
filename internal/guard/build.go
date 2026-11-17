@@ -44,6 +44,7 @@ type Config struct {
 	Bridges    map[string][]string
 	L2         bool // kernel has the netdev egress hook (>= 5.16)
 	KeepTunnel bool
+	Exceptions []Exception // selftest flows, first in output and L2 (§18.1); strict only
 }
 
 // ErrNoEgress: a netdev chain needs at least one device; the generator never guesses.
@@ -181,7 +182,11 @@ func Strict(cfg Config) (Ruleset, error) {
 		return Ruleset{}, err
 	}
 	f := l3{nftables.TableFamilyINet}
-	out := []Rule{ruleIfAccept("oifname", "lo"), ruleIfSetAccept("oifname", sets["tunnel_ifaces"]), ruleIfSetAccept("oifname", sets["internal_ifaces"])}
+	out, err := exceptionRules(cfg, f, true)
+	if err != nil {
+		return Ruleset{}, err
+	}
+	out = append(out, ruleIfAccept("oifname", "lo"), ruleIfSetAccept("oifname", sets["tunnel_ifaces"]), ruleIfSetAccept("oifname", sets["internal_ifaces"]))
 	out = append(out, allowRules(f, cfg, sets, withLAN)...)
 	out = append(out, ruleLimitLog("LETHE-BLOCK "), ruleDrop())
 	fwd := []Rule{ruleIfSetAccept("oifname", sets["tunnel_ifaces"]), ruleIfSetAccept("oifname", sets["internal_ifaces"]),
@@ -228,6 +233,13 @@ func l2Table(cfg Config, panic bool) (*Table, error) {
 	case panic && !cfg.KeepTunnel:
 		policy = nftables.ChainPolicyDrop
 	default:
+		if !panic {
+			ex, err := exceptionRules(cfg, f, false) // no socket UID at the netdev hook
+			if err != nil {
+				return nil, err
+			}
+			rules = append(rules, ex...)
+		}
 		rules = append(rules, ruleEtherAccept(unix.ETH_P_ARP, "arp"))
 		if !panic {
 			rules = append(rules, ruleEtherAccept(0x888e, "0x888e"))

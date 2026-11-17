@@ -335,3 +335,36 @@ func TestGuard_Probe(t *testing.T) {
 		t.Fatal("permission errors must surface (bridge)")
 	}
 }
+
+// ST-NET-001 in strict: the exception is first, carries skuid 0 in inet (not at netdev), and
+// only documentation destinations are accepted.
+func TestAC11_SelftestException(t *testing.T) {
+	c := fullConfig()
+	c.Exceptions = []Exception{{Proto: unix.IPPROTO_UDP, Sport: 40001, Dst: netip.MustParseAddrPort("192.0.2.1:9")}}
+	rs, err := Strict(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := rs.Find(nftables.TableFamilyINet, TableStrict).Chains[0].Rules[0].Text
+	if out != "meta skuid 0 ip daddr 192.0.2.1 meta l4proto udp th sport 40001 th dport 9 accept # selftest" {
+		t.Fatal(out)
+	}
+	l2 := rs.Find(nftables.TableFamilyNetdev, TableL2).Chains[0].Rules[0].Text
+	if l2 != "ip daddr 192.0.2.1 meta l4proto udp th sport 40001 th dport 9 accept # selftest" {
+		t.Fatal(l2)
+	}
+	for _, bad := range []Exception{
+		{Proto: unix.IPPROTO_UDP, Sport: 1, Dst: netip.MustParseAddrPort("8.8.8.8:53")},
+		{Proto: unix.IPPROTO_ICMP, Sport: 1, Dst: netip.MustParseAddrPort("192.0.2.1:9")},
+		{Proto: unix.IPPROTO_UDP, Dst: netip.MustParseAddrPort("192.0.2.1:9")},
+	} {
+		c.Exceptions = []Exception{bad}
+		if _, err := Strict(c); err == nil {
+			t.Fatalf("accepted %+v", bad)
+		}
+	}
+	p, _ := Panic(fullConfig())
+	if strings.Contains(p.Render(), "selftest") {
+		t.Fatal("panic never carries exceptions")
+	}
+}
