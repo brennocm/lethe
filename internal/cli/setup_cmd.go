@@ -272,7 +272,7 @@ func (w *wizard) offerStrict(profPath, dataDir string) error {
 	if err != nil {
 		return fmt.Errorf("internal: strict profile is invalid: %w", err)
 	}
-	if err := replaceFile(profPath, []byte(text)); err != nil {
+	if err := setup.ReplaceFile(profPath, []byte(text)); err != nil {
 		return err
 	}
 	w.say("Perfil em strict. Preflight com o strict (o que vai ser permitido):\n")

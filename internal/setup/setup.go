@@ -23,6 +23,9 @@ import (
 	"lethe/internal/sensors/egressip"
 )
 
+// Network is a real network of the baseline (the GUI names it through this package only).
+type Network = baseline.Network
+
 // Egress types the assistant offers.
 var Egresses = []string{"auto", "wireguard", "openvpn", "tor", "vpn+tor"}
 
@@ -301,4 +304,62 @@ func LiveDetect(ctx context.Context, askIP bool) Detected {
 		direct := egressip.Path{Dial: (&net.Dialer{Timeout: 15 * time.Second}).DialContext}
 		return egressip.Query(ctx, direct, egressip.Config{Endpoints: eps})
 	})
+}
+
+// ErrNetworkKnown: the baseline already has a network with this name or public IP.
+var ErrNetworkKnown = errors.New("a baseline já tem uma rede com esse nome ou esse IP público")
+
+// AddNetwork opens the baseline at path with pass, adds n and writes it back in place (atomic:
+// a new file, synced, renamed over the old one). It returns how many networks it now has. The
+// new network counts from the next session (the daemon reads the baseline at arm).
+func AddNetwork(path string, pass []byte, n baseline.Network, work int) (int, error) {
+	enc, err := os.ReadFile(path) // #nosec G304 -- the operator's own baseline
+	if err != nil {
+		return 0, err
+	}
+	b, err := baseline.Decrypt(enc, pass)
+	if err != nil {
+		return 0, err
+	}
+	n.Name = strings.TrimSpace(n.Name)
+	if n.Name == "" {
+		return 0, errors.New("nome da rede: diga como você chama esta rede (ex.: escritório)")
+	}
+	for _, o := range b.Networks {
+		if strings.EqualFold(o.Name, n.Name) || (n.PublicIPv4 != "" && o.PublicIPv4 == n.PublicIPv4) || (n.PublicIPv6 != "" && o.PublicIPv6 == n.PublicIPv6) {
+			return 0, ErrNetworkKnown
+		}
+	}
+	if err := b.AddNetwork(n); err != nil {
+		return 0, err
+	}
+	if work == 0 {
+		work = baseline.DefaultWorkFactor
+	}
+	out, err := baseline.Encrypt(b, pass, work)
+	if err != nil {
+		return 0, err
+	}
+	return len(b.Networks), ReplaceFile(path, out)
+}
+
+// ReplaceFile writes data next to path (0600, synced) and renames it over path, then syncs the
+// directory: a crash leaves the old file or the new one, never half of either.
+func ReplaceFile(path string, data []byte) error {
+	tmp := path + ".tmp"
+	_ = os.Remove(tmp)
+	if err := WriteNew(tmp, data); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	d, err := os.Open(filepath.Dir(path)) // #nosec G304 -- the file's own directory
+	if err != nil {
+		return nil // the rename happened; only its durability is unconfirmed
+	}
+	defer func() { _ = d.Close() }()
+	_ = d.Sync()
+	return nil
 }

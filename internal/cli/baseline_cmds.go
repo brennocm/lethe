@@ -142,7 +142,7 @@ func newBaselineAddNetworkCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := replaceFile(args[0], enc); err != nil {
+			if err := setup.ReplaceFile(args[0], enc); err != nil {
 				return err
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "baseline updated: %d networks\n", len(b.Networks))

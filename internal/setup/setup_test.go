@@ -113,3 +113,38 @@ func TestM10_SetupLiveDetectStaysLocal(t *testing.T) {
 		t.Fatalf("%+v", d)
 	}
 }
+
+// Another network goes into the baseline with its passphrase; a duplicate name or IP and a wrong
+// passphrase change nothing.
+func TestM10_SetupAddNetwork(t *testing.T) {
+	home := t.TempDir()
+	a := Defaults(home)
+	a.WorkLimit = 10
+	a.Network.PublicIPv4 = "203.0.113.7"
+	if _, err := Create(a, home, []byte("lab passphrase"), time.Now(), "test"); err != nil {
+		t.Fatal(err)
+	}
+	_, base, _ := Paths(a.Dir)
+	before, _ := os.ReadFile(base)
+	if _, err := AddNetwork(base, []byte("wrong passphrase"), baseline.Network{Name: "escritório"}, 10); err == nil {
+		t.Fatal("wrong passphrase accepted")
+	}
+	if _, err := AddNetwork(base, []byte("lab passphrase"), baseline.Network{Name: "outra", PublicIPv4: "203.0.113.7"}, 10); !errors.Is(err, ErrNetworkKnown) {
+		t.Fatalf("same public IP: %v", err)
+	}
+	if after, _ := os.ReadFile(base); string(after) != string(before) {
+		t.Fatal("a refused change touched the file")
+	}
+	n, err := AddNetwork(base, []byte("lab passphrase"), baseline.Network{Name: "escritório", PublicIPv4: "198.51.100.20", Resolvers: []string{"198.51.100.53"}}, 10)
+	if err != nil || n != 2 {
+		t.Fatalf("%d %v", n, err)
+	}
+	enc, _ := os.ReadFile(base)
+	b, err := baseline.Decrypt(enc, []byte("lab passphrase"))
+	if err != nil || len(b.Networks) != 2 || b.Networks[1].Resolvers[0] != "198.51.100.53" {
+		t.Fatalf("%v %+v", err, b)
+	}
+	if _, err := os.Stat(base + ".tmp"); err == nil {
+		t.Fatal("temporary file left behind")
+	}
+}

@@ -52,13 +52,3 @@ func newProfileCmd() *cobra.Command {
 	cmd.AddCommand(initCmd, validate)
 	return cmd
 }
-
-// replaceFile atomically replaces path with data (same directory temp file + rename), mode 0600.
-func replaceFile(path string, data []byte) error {
-	tmp := path + ".tmp"
-	_ = os.Remove(tmp)
-	if err := setup.WriteNew(tmp, data); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
-}
