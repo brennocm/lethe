@@ -12,9 +12,11 @@ import (
 	"lethe/internal/baseline"
 	"lethe/internal/checks"
 	"lethe/internal/contracts"
+	"lethe/internal/guard"
 	"lethe/internal/sensors/capture"
 	"lethe/internal/sensors/dbusmon"
 	"lethe/internal/sensors/hostinfo"
+	"lethe/internal/sensors/nftmon"
 	"lethe/internal/sensors/procscan"
 )
 
@@ -231,6 +233,19 @@ func TestM9_AgentReportSchema(t *testing.T) {
 	} {
 		if contracts.ValidateJSON("agent_report", []byte(bad)) == nil {
 			t.Fatalf("accepted %s", bad)
+		}
+	}
+}
+
+// nftmon leaves out exactly the tables the guard creates.
+func TestTUN004_OwnTablesMatchTheGuard(t *testing.T) {
+	all := guard.All()
+	if len(all) != len(nftmon.Own) {
+		t.Fatalf("guard %v, nftmon %v", all, nftmon.Own)
+	}
+	for _, r := range all {
+		if !nftmon.Own[r.String()] {
+			t.Fatalf("%s is not in nftmon.Own", r)
 		}
 	}
 }

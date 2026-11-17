@@ -33,7 +33,12 @@ type Table struct {
 	OutputDrop bool   // an output-hook chain drops (policy or rule): a kill switch
 }
 
-// Snapshot lists every table whose name does not start with "lethe", sorted by name.
+// Own are lethe's own tables ("family name"), the only ones Snapshot leaves out. Any other
+// table counts, even one named lethe_*: the selftest table (ST-TUN-004) must be seen, and a
+// third party cannot hide a table behind the prefix.
+var Own = map[string]bool{"inet lethe": true, "inet lethe_panic": true, "netdev lethe_l2": true, "bridge lethe": true}
+
+// Snapshot lists every table except lethe's own (Own), sorted by name.
 func Snapshot(c Lister) ([]Table, error) {
 	tables, err := c.ListTables()
 	if err != nil {
@@ -45,7 +50,7 @@ func Snapshot(c Lister) ([]Table, error) {
 	}
 	var out []Table
 	for _, t := range tables {
-		if strings.HasPrefix(t.Name, "lethe") {
+		if Own[family(t.Family)+" "+t.Name] {
 			continue
 		}
 		tb, err := describe(c, t, chains)

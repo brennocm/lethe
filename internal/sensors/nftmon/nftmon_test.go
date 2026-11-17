@@ -1,6 +1,7 @@
 package nftmon
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/nftables"
@@ -52,5 +53,23 @@ func TestTUN004_Snapshot(t *testing.T) {
 	c, _ := Snapshot(f)
 	if c[0].Hash == a[0].Hash || c[0].OutputDrop {
 		t.Fatalf("a changed verdict must change the hash and drop detection: %+v", c)
+	}
+}
+
+// A table named lethe_* that is not one of lethe's own counts (ST-TUN-004, no hiding place).
+func TestTUN004_PrefixIsNoHidingPlace(t *testing.T) {
+	f := killswitch(1)
+	f.tables = append(f.tables, &nftables.Table{Family: nftables.TableFamilyINet, Name: "lethe_selftest"},
+		&nftables.Table{Family: nftables.TableFamilyIPv4, Name: "lethe"})
+	got, err := Snapshot(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, x := range got {
+		names = append(names, x.Name)
+	}
+	if strings.Join(names, ",") != "inet killswitch,inet lethe_selftest,ip lethe" {
+		t.Fatal(names)
 	}
 }
