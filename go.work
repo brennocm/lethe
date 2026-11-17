@@ -1,0 +1,8 @@
+go 1.27.4
+
+// For editors and gopls. The mise tasks run with GOWORK=off: the core's ./... must not reach the
+// GUI module, whose main needs cgo and the OpenGL headers (spec §19.2).
+use (
+	.
+	./apps/lethe-gui
+)

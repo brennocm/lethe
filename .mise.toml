@@ -5,6 +5,7 @@ golangci-lint = "2.14.0"
 [env]
 CGO_ENABLED = "0"
 GOFLAGS = "-trimpath"
+GOWORK = "off" # each module on its own; go.work is for editors (ADR 0013)
 
 [tasks.check]
 description = "Definition of done: format, lint, boundaries, vet, unit tests"
@@ -13,6 +14,17 @@ run = [
   "golangci-lint run ./...",
   "go vet ./...",
   "go test -race=false -count=1 ./...",
+  "mise run check:gui",
+]
+
+[tasks."check:gui"]
+description = "GUI module without cgo: format, lint, vet and the Fyne test-driver tests (main builds in CI)"
+dir = "apps/lethe-gui"
+run = [
+  "golangci-lint fmt --diff ./...",
+  "golangci-lint run ./internal/...",
+  "go vet ./internal/...",
+  "go test -count=1 ./internal/...",
 ]
 
 [tasks."check:all"]
@@ -23,6 +35,7 @@ run = [
   "go build ./...",
   "go run golang.org/x/tools/cmd/deadcode@v0.52.0 -tags e2e -test ./...",
   "go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...",
+  "cd apps/lethe-gui && CGO_ENABLED=1 go test -race -count=1 ./internal/... && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./internal/...",
   "go run ./scripts/trace-matrix",
 ]
 
@@ -45,3 +58,9 @@ run = "./scripts/fuzz.sh"
 [tasks.build]
 description = "Static release build of the lethe binary"
 run = "go build -ldflags='-s -w -buildid=' -o bin/lethe ./apps/lethe"
+
+[tasks."build:gui"]
+description = "lethe-gui (cgo + OpenGL/X11/Wayland headers: libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev)"
+dir = "apps/lethe-gui"
+env = { CGO_ENABLED = "1" }
+run = "go build -ldflags='-s -w -buildid=' -o ../../bin/lethe-gui ."
