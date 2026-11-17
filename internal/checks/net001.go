@@ -1,6 +1,8 @@
 package checks
 
 import (
+	"strings"
+
 	"lethe/internal/contracts"
 	"lethe/internal/sensors/capture"
 )
@@ -28,6 +30,12 @@ func FromFrame(f capture.Frame, proc contracts.Proc) Finding {
 	out := Finding{Check: f.Leak.Check, Severity: f.Leak.Severity, Data: d}
 	if f.Leak.QName != "" {
 		out.Sensitive = map[string]string{"qname": f.Leak.QName}
+	}
+	if len(f.Leak.Names) > 0 {
+		if out.Sensitive == nil {
+			out.Sensitive = map[string]string{}
+		}
+		out.Sensitive["names"] = strings.Join(f.Leak.Names, "\n")
 	}
 	return out
 }

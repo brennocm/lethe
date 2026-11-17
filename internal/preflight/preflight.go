@@ -3,10 +3,13 @@
 package preflight
 
 import (
+	"time"
+
 	"lethe/internal/checks"
 	"lethe/internal/contracts"
 	"lethe/internal/discovery"
 	"lethe/internal/profile"
+	"lethe/internal/sensors/hostinfo"
 )
 
 // Result of a preflight (or of one check in it).
@@ -61,6 +64,11 @@ type Input struct {
 	Guard    string   // effective guard mode ("" = the profile's)
 	Warnings []string // profile.Load warnings
 	Manual   []Answer // nil = not asked
+	// Host is the host reading (nil = host checks not run). Known is the part of the baseline
+	// the host checks compare with (empty when the preflight runs without the passphrase).
+	Host  *hostinfo.State
+	Known checks.Known
+	Now   time.Time
 }
 
 // Run evaluates the automatic checks implemented so far and folds in the manual answers.
@@ -104,6 +112,18 @@ func Run(in Input) Report {
 	add("TUN-005", checks.TUN005{}.Evaluate(in.Snapshot))
 	add("TUN-007", checks.TUN007{}.Evaluate(in.Snapshot))
 	add("TUN-008", checks.TUN008{}.Evaluate(guardMode, in.Snapshot))
+	if in.Host != nil {
+		hi := checks.HostRules(in.Profile, checks.HostInput{State: *in.Host, Snapshot: in.Snapshot, Known: in.Known, Now: in.Now})
+		res := checks.EvaluateHost(hi)
+		for _, id := range checks.HostChecks {
+			if fs, ok := res[id]; ok {
+				add(id, fs)
+			}
+		}
+		for _, e := range in.Host.Errors {
+			r.Warnings = append(r.Warnings, "host source unavailable: "+e)
+		}
+	}
 	for _, u := range in.Snapshot.Unavailable {
 		r.Warnings = append(r.Warnings, "source unavailable: "+u)
 	}

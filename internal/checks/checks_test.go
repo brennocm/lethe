@@ -252,3 +252,14 @@ func TestSELF006_Finding(t *testing.T) {
 		t.Fatalf("%+v", f)
 	}
 }
+
+func TestM9_EveryCheckHasATitle(t *testing.T) {
+	for _, c := range Registry() {
+		if Title(c.ID(), "pt-BR") == c.ID() || Title(c.ID(), "en-US") == c.ID() {
+			t.Fatalf("%s has no title", c.ID())
+		}
+	}
+	if Title("XXX-000", "pt-BR") != "XXX-000" {
+		t.Fatal("unknown id")
+	}
+}

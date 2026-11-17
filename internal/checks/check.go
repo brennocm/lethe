@@ -29,6 +29,11 @@ const (
 	SrcNFTMon   SourceID = "nftmon"
 	SrcTorctl   SourceID = "torctl"
 	SrcIPC      SourceID = "ipc" // the daemon's own IPC server (proof failures)
+	SrcProcscan SourceID = "procscan"
+	SrcHostinfo SourceID = "hostinfo"    // files and sysfs (no heartbeat: read on demand)
+	SrcDBus     SourceID = "dbus-system" // NetworkManager, GeoClue, timedate1, locale1
+	SrcAgent    SourceID = "agent"       // the session agent (low trust)
+	SrcClock    SourceID = "clock"
 )
 
 // Check is the static metadata every check exposes. Behaviour lives in per-check functions,
@@ -48,13 +53,20 @@ type Finding struct {
 	Severity  contracts.Severity
 	Data      map[string]any
 	Sensitive map[string]string
+	// Agent marks a finding derived from the session agent's report (low trust, principle 9):
+	// it is journaled with source agent and may raise an alert, never clear one.
+	Agent bool
 }
 
 // Alert builds the check.alert event (seq, ts, session and chain are filled downstream).
 func (f Finding) Alert() contracts.Event {
+	src := contracts.SourceDaemon
+	if f.Agent {
+		src = contracts.SourceAgent
+	}
 	return contracts.Event{
 		V: 1, Type: contracts.EvCheckAlert, Check: f.Check, Severity: f.Severity,
-		Source: contracts.SourceDaemon, Data: f.Data,
+		Source: src, Data: f.Data,
 	}
 }
 
