@@ -24,6 +24,7 @@ type Status struct {
 	UseBridges         bool
 	Bridges            []Bridge
 	Guards             []netip.AddrPort // first hops of built circuits and live entry guards, sorted
+	Socks              []netip.AddrPort // TCP SOCKS listeners (NET-011 asks through them, socks5h)
 }
 
 // Transports returns the distinct pluggable transports of the configured bridges (only when
@@ -173,6 +174,11 @@ func (c *Conn) Status(ctx context.Context) (Status, error) {
 		st.Guards = append(st.Guards, ap)
 	}
 	sort.Slice(st.Guards, func(i, j int) bool { return st.Guards[i].Compare(st.Guards[j]) < 0 })
+	if li, err := c.GetInfo(ctx, "net/listeners/socks"); err == nil {
+		st.Socks = ParseListeners(li["net/listeners/socks"])
+	} else if !isUnrecognized(err) {
+		return Status{}, err
+	}
 	return st, nil
 }
 
@@ -222,3 +228,16 @@ func parseNS(doc string) []netip.AddrPort {
 }
 
 func unmap(ap netip.AddrPort) netip.AddrPort { return netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port()) }
+
+// ParseListeners reads a net/listeners/* value: quoted addresses separated by spaces; unix
+// sockets are left out.
+func ParseListeners(v string) []netip.AddrPort {
+	var out []netip.AddrPort
+	for _, f := range strings.Fields(v) {
+		f = strings.Trim(f, `"`)
+		if ap, err := netip.ParseAddrPort(f); err == nil {
+			out = append(out, ap)
+		}
+	}
+	return out
+}

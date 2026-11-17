@@ -308,3 +308,10 @@ func TestTorctl_RejectsInjection(t *testing.T) {
 		t.Fatal("space in key")
 	}
 }
+
+func TestNET011_ParseSocksListeners(t *testing.T) {
+	got := ParseListeners(`"127.0.0.1:9050" "unix:/run/tor/socks" "[::1]:9150"`)
+	if len(got) != 2 || got[0].String() != "127.0.0.1:9050" || got[1].String() != "[::1]:9150" {
+		t.Fatal(got)
+	}
+}

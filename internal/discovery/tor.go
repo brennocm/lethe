@@ -28,6 +28,7 @@ type TorState struct {
 	Transports         []string    `json:"transports"`
 	Guards             []string    `json:"guards"` // ip:port
 	Bridges            []TorBridge `json:"bridges"`
+	Socks              []string    `json:"socks"` // TCP SOCKS listeners
 }
 
 // TorBridge is one configured bridge.
@@ -39,7 +40,7 @@ type TorBridge struct {
 // torState queries the source and adds the guards (and, with UseBridges, the bridge addresses)
 // to the endpoints as TCP. A failure leaves Reachable false; the caller records the gap.
 func torState(src TorSource, endpoints map[string]bool) (*TorState, bool) {
-	ts := &TorState{Transports: []string{}, Guards: []string{}, Bridges: []TorBridge{}}
+	ts := &TorState{Transports: []string{}, Guards: []string{}, Bridges: []TorBridge{}, Socks: []string{}}
 	st, err := src.Status()
 	if err != nil {
 		return ts, false
@@ -64,6 +65,9 @@ func torState(src TorSource, endpoints map[string]bool) (*TorState, bool) {
 		if st.UseBridges {
 			add(b.Addr)
 		}
+	}
+	for _, sp := range st.Socks {
+		ts.Socks = append(ts.Socks, sp.String())
 	}
 	return ts, true
 }

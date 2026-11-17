@@ -450,7 +450,8 @@
         "use_bridges",
         "transports",
         "guards",
-        "bridges"
+        "bridges",
+        "socks"
       ],
       "properties": {
         "reachable": {
@@ -495,6 +496,12 @@
                 "type": "string"
               }
             }
+          }
+        },
+        "socks": {
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         }
       }
