@@ -354,9 +354,14 @@ func newDaemonCmd() *cobra.Command {
 			if os.Geteuid() != 0 {
 				return WithCode(ExitPrivileges, errors.New("the daemon runs as root"))
 			}
-			op, err := platform.CurrentOperator(os.Getenv)
+			// run through sudo by hand: the sudo caller; under lethed.service: LETHE_OPERATOR
+			getOp := platform.ServiceOperator
+			if os.Getenv("SUDO_UID") != "" {
+				getOp = platform.CurrentOperator
+			}
+			op, err := getOp(os.Getenv)
 			if err != nil {
-				return err
+				return WithCode(ExitRequirement, err)
 			}
 			if sock == "" {
 				sock = serviceSocket

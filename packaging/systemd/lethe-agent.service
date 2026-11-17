@@ -1,0 +1,22 @@
+# The session agent of service mode (spec §5.1): notifications, sound, the GUI and the
+# graphical-session sensors, as the operator. Enable it for the operator only:
+#   systemctl --user enable --now lethe-agent.service
+[Unit]
+Description=lethe session agent
+Documentation=file:/usr/share/doc/lethe/service-mode.md
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+Environment=LETHE_SOCKET=/run/lethe/lethe.sock
+Environment=LETHE_GUI=/usr/bin/lethe-gui
+ExecStart=/usr/bin/lethe agent --socket /run/lethe/lethe.sock
+# the daemon restarts between sessions; the agent reconnects
+Restart=always
+RestartSec=5s
+NoNewPrivileges=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=graphical-session.target

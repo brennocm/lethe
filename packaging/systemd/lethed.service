@@ -1,0 +1,45 @@
+# lethe in service mode (spec §5.2, §19.3). One session per process: the daemon exits when the
+# session ends and systemd starts a fresh one for the next `lethe arm`.
+#
+# Before enabling it, declare the operator and the storage directory in a drop-in:
+#   sudo systemctl edit lethed
+#     [Service]
+#     Environment=LETHE_OPERATOR=<user>
+#     ReadWritePaths=<storage.dir of the profile>
+# Without LETHE_OPERATOR the daemon refuses to start and says why; without ReadWritePaths the
+# arm fails because ProtectSystem leaves storage.dir read-only. See docs/runbooks/service-mode.md.
+[Unit]
+Description=lethe OpSec monitor (service mode)
+Documentation=file:/usr/share/doc/lethe/service-mode.md
+After=network-pre.target dbus.service
+Wants=network-pre.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/lethe daemon
+Restart=always
+RestartSec=1s
+# The tables stay when the daemon dies: the network stays closed and `lethe status` names
+# `sudo lethe cleanup`. Nothing here removes them behind the operator's back.
+KillMode=mixed
+TimeoutStopSec=20s
+RuntimeDirectory=lethe
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+UMask=0077
+
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_KILL CAP_SYS_PTRACE CAP_DAC_READ_SEARCH CAP_IPC_LOCK
+AmbientCapabilities=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_PACKET AF_INET AF_INET6
+LockPersonality=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target
