@@ -239,7 +239,7 @@ O agente de sessão é um **sensor de baixa confiança** (princípio 9): roda co
 | Modo | Como | Uso |
 |---|---|---|
 | Portátil (padrão) | `sudo ./lethe run -p op.yaml`: sobe o daemon em primeiro plano, re-executa a si mesmo como `SUDO_UID` para o agente e abre a GUI (ou a TUI, com `--tui`). A GUI é o `lethe-gui` ao lado do binário; quem a abre é o agente, pedindo ao systemd do usuário (D-Bus, `StartTransientUnit`) uma unidade transitória, porque o lethe não executa outros programas (princípio 10). Sem `lethe-gui` ou sem systemd de usuário, os alertas ficam nas notificações do agente e no terminal | Instalação na hora |
-| Serviço | `lethed.service` + `lethe arm/disarm`; o agente sobe por unidade de usuário (`lethe-agent.service`, `systemctl --user`) | Máquinas dedicadas |
+| Serviço | `lethed.service` + `lethe arm/disarm`; o agente sobe por unidade de usuário (`lethe-agent.service`, `systemctl --user`). O operador é declarado num drop-in (`Environment=LETHE_OPERATOR=<usuário>`, com o `ReadWritePaths` do `storage.dir`); sem ele o daemon não sobe e diz por quê | Máquinas dedicadas |
 
 ### 5.3 Fluxo de dados e camadas de código
 
@@ -1106,7 +1106,8 @@ Tabela pass/fail com a latência de detecção por caso, gravada no log e em `st
 
 - Builds reprodutíveis: `CGO_ENABLED=0` para `lethe` (binário estático), `-trimpath`, `-buildvcs=true`, toolchain fixada em `.mise.toml`, `SOURCE_DATE_EPOCH`. O `lethe-gui` usa cgo (OpenGL), num módulo Go separado.
 - Binários e pacotes assinados (minisign ou Sigstore/cosign; o dono do projeto assina, o agente não tem a chave). `lethe version` mostra o SHA-256 do próprio binário.
-- SBOM CycloneDX por release (`cyclonedx-gomod`).
+- SBOM CycloneDX por release (`cyclonedx-gomod`), dos dois binários; a tabela de licenças de `docs/THIRD_PARTY.md` sai dele e o `check:all` falha se ela divergir.
+- `scripts/release VERSION` gera `dist/VERSION` (binários amd64/arm64, deb e rpm pelo nfpm, SBOM, `SHA256SUMS`), sem assinar; `scripts/repro-check` compila o HEAD duas vezes, de clones em caminhos diferentes e com cache vazio, e exige bytes idênticos (os SBOMs ficam fora da comparação, porque têm data).
 - Distribuição por repositório interno da instituição, nunca por download público na hora da operação.
 
 ### 19.3 Privilégios
@@ -1125,7 +1126,7 @@ Depois de inicializar como root (abrir sockets, ler a baseline, fazer fork do ag
 | `CAP_IPC_LOCK` | `mlock` além do `RLIMIT_MEMLOCK` |
 
 2. aplica `PR_SET_NO_NEW_PRIVS`, `PR_SET_DUMPABLE=0` e `RLIMIT_CORE=0`;
-3. aplica seccomp em duas fases. **Fase 1 (já no M8):** uma denylist, em todas as threads (`SECCOMP_FILTER_FLAG_TSYNC`), das syscalls que o daemon nunca usa e que servem para escalar ou sair do confinamento (`open_by_handle_at`, módulos de kernel, `kexec_*`, `mount`, `pivot_root`, `chroot`, `setns`, `unshare`, `ptrace`, `process_vm_writev`, `bpf`, `perf_event_open`, `keyctl`, `userfaultfd`, `reboot`, `swapon`/`swapoff`, ajuste de relógio, entre outras), respondendo `EPERM`; ela nunca mata o processo, então não derruba uma sessão por causa de uma syscall esquecida. **Fase 2 (M14):** primeiro em modo `SECCOMP_RET_LOG` para levantar as syscalls na suíte e2e, depois em allowlist (`SECCOMP_RET_KILL_PROCESS`).
+3. aplica seccomp em duas fases. **Fase 1 (já no M8):** uma denylist, em todas as threads (`SECCOMP_FILTER_FLAG_TSYNC`), das syscalls que o daemon nunca usa e que servem para escalar ou sair do confinamento (`open_by_handle_at`, módulos de kernel, `kexec_*`, `mount`, `pivot_root`, `chroot`, `setns`, `unshare`, `ptrace`, `process_vm_writev`, `bpf`, `perf_event_open`, `keyctl`, `userfaultfd`, `reboot`, `swapon`/`swapoff`, ajuste de relógio, entre outras), respondendo `EPERM`; ela nunca mata o processo, então não derruba uma sessão por causa de uma syscall esquecida. **Fase 2 (M14):** primeiro em modo `SECCOMP_RET_LOG` para levantar as syscalls na suíte e2e, depois em allowlist (`SECCOMP_RET_KILL_PROCESS`). Um filtro só faz as duas fases: a denylist responde `EPERM`, a allowlist libera e o resto mata o processo. `LETHE_SECCOMP=log` troca a morte por `SECCOMP_RET_LOG`, para coletar o que falta; qualquer outro valor impõe. Um daemon morto deixa as tabelas, então a rede fica fechada e o `lethe status` aponta `sudo lethe cleanup` (ADR 0014).
 
 **Em Go, as capabilities são por thread do sistema.** O descarte DEVE usar `kernel.org/pub/linux/libs/security/libcap/cap` (aplica em todas as threads via `psx`), nunca `syscall` direto.
 
