@@ -676,3 +676,60 @@ func TestM10_RegisterNetworkFromThePanel(t *testing.T) {
 		t.Fatal("a baseline value in the panel")
 	}
 }
+
+// Past sessions from the start form: newest first, a missing report says so, and the text shown
+// loses control and bidi characters.
+func TestM13_ReportsFromThePanel(t *testing.T) {
+	home := t.TempDir()
+	a0 := lsetup.Defaults(home)
+	a0.WorkLimit = 10
+	prof, err := lsetup.Create(a0, home, []byte("lab passphrase"), t0, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l, err := Reports(prof, home); err != nil || len(l) != 0 {
+		t.Fatalf("no sessions yet: %v %v", l, err)
+	}
+	_, _, data := lsetup.Paths(a0.Dir)
+	for i, id := range []string{"S-old", "S-new", "S-cut"} {
+		dir := filepath.Join(data, "sessions", id)
+		_ = os.MkdirAll(dir, 0o750)
+		if id != "S-cut" {
+			p := filepath.Join(dir, "report.md")
+			_ = os.WriteFile(p, []byte("# Relatório "+id+"\x1b[31m\u202e\n"), 0o640)
+			_ = os.Chtimes(p, t0.Add(time.Duration(i)*time.Hour), t0.Add(time.Duration(i)*time.Hour))
+		}
+	}
+	l, err := Reports(prof, home)
+	if err != nil || len(l) != 3 {
+		t.Fatalf("%v %v", l, err)
+	}
+	ids := []string{}
+	for _, r := range l {
+		if r.ID != "S-cut" {
+			ids = append(ids, r.ID)
+		} else if r.Path != "" {
+			t.Fatal("a session cut short has no report")
+		}
+	}
+	if strings.Join(ids, ",") != "S-new,S-old" {
+		t.Fatalf("newest first: %v", ids)
+	}
+	first := ""
+	for _, r := range l {
+		if r.Path != "" && first == "" {
+			first = r.Path
+		}
+	}
+	text, err := readReport(first)
+	if err != nil || strings.ContainsAny(text, "\x1b\u202e") || !strings.Contains(text, "Relatório") {
+		t.Fatalf("%q %v", text, err)
+	}
+	a := &trayApp{App: test.NewTempApp(t)}
+	u := New(a, &fake{}, Options{Lang: "pt-BR", Now: func() time.Time { return t0 }, Home: home})
+	u.Build()
+	u.showReports()
+	if len(u.panel.Canvas().Overlays().List()) == 0 {
+		t.Fatalf("no reports dialog (flash %q)", u.flash.Text)
+	}
+}

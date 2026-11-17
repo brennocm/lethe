@@ -276,7 +276,7 @@ func (u *UI) buildStart() {
 		form.Add(x)
 	}
 	u.addNetBtn = widget.NewButton(u.t("addnet_btn"), u.askAddNetwork)
-	form.Add(container.NewHBox(u.startBtn, u.addNetBtn))
+	form.Add(container.NewHBox(u.startBtn, u.addNetBtn, widget.NewButton(u.t("reports_btn"), u.showReports)))
 	u.refreshStrict()
 	// a reading column: the form does not stretch across a wide window
 	u.start = container.NewHBox(container.New(&maxWidth{w: 560}, form))
