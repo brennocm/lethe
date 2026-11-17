@@ -608,8 +608,8 @@ NET-002 (tentativa bloqueada no estrito) é WARNING por definição: o guarda fu
   1. todos os CRITICAL da sessão reconhecidos;
   2. nova rodada dos checks de estado (NET-003, NET-004, DNS-002, TUN-001, TUN-003) passando. Como a rede está bloqueada, só checks locais entram aqui;
   3. passphrase (§17.3).
-- Com `guard.panic.keep_tunnel: true`, o pânico mantém só o túnel (igual ao estrito sem exceções de LAN). O padrão é **bloquear tudo**, inclusive o túnel.
-- `guard.panic.link_down: auto | always | never` (padrão `auto` = usar `link_down` quando o kernel não tem `netdev egress`).
+- Com `guard.panic.keep_tunnel: true`, o pânico mantém só o túnel (igual ao estrito sem exceções de LAN). Sem a chave, o padrão do parser continua sendo **bloquear tudo**, inclusive o túnel; o perfil gerado (`lethe profile init`, `lethe setup`, assistente da GUI) vem com `true`, porque sem o túnel a VPN não reconecta, a reconferência do unpanic nunca passa e o operador fica sem saída a não ser encerrar a sessão (ADR 0015).
+- `guard.panic.link_down: auto | always | never` (padrão `auto` = usar `link_down` quando o kernel não tem `netdev egress`, exceto com `keep_tunnel: true`, em que derrubar o link físico derrubaria também o transporte do túnel).
 
 ### 10.6 Proteção contra trancamento (princípio 11)
 

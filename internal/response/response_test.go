@@ -82,6 +82,17 @@ func TestRESP_BlockAll(t *testing.T) {
 	if !r.OK || len(downs) != 1 || r.Count != 1 {
 		t.Fatalf("%+v downs=%v", r, downs)
 	}
+	// keep_tunnel: auto does not take the link down (the tunnel's transport goes through it)
+	x.env.GuardConfig = func() guard.Config { return guard.Config{Egress: []string{"eth0"}, KeepTunnel: true} }
+	downs = nil
+	if r := x.Run(engine.ActBlockAll, contracts.Event{}); !r.OK || len(downs) != 0 {
+		t.Fatalf("keep_tunnel + auto took the link down: %+v %v", r, downs)
+	}
+	x.env.LinkDownMode = "always"
+	if x.Run(engine.ActBlockAll, contracts.Event{}); len(downs) != 1 {
+		t.Fatal("always means always")
+	}
+	x.env.GuardConfig = func() guard.Config { return guard.Config{Egress: []string{"eth0"}} }
 	x.env.LinkDownMode = "never"
 	downs = nil
 	x.Run(engine.ActBlockAll, contracts.Event{})

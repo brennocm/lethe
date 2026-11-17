@@ -38,7 +38,7 @@ guard:
   mode: off                      # off | reactive | strict (recomendado)
   arm_confirm: 30s               # no strict, o túnel tem esse tempo para provar que funciona (0 = sem janela)
   panic:
-    keep_tunnel: false           # true: o pânico mantém só o túnel
+    keep_tunnel: true            # o pânico mantém só o túnel: a VPN pode reconectar e "Sair do pânico" funciona; false bloqueia até o túnel
     link_down: auto              # auto | always | never
 
 active_checks:

@@ -133,7 +133,9 @@ func (x *Executor) blockAll(r *Result) error {
 		return err
 	}
 	applyErr := guard.Apply(c, rs)
-	if x.env.LinkDownMode == "always" || (x.env.LinkDownMode != "never" && !cfg.L2) {
+	// auto: link_down stands in for the missing L2 layer, but not when the panic keeps the
+	// tunnel: taking the physical link down would drop the tunnel's transport too.
+	if x.env.LinkDownMode == "always" || (x.env.LinkDownMode != "never" && !cfg.L2 && !cfg.KeepTunnel) {
 		n, lerr := x.linkDown()
 		r.Count = n
 		applyErr = errors.Join(applyErr, lerr)

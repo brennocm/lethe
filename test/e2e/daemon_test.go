@@ -77,6 +77,7 @@ func newSession(t *testing.T) *session {
 		"dir: ~/lethe/data", "dir: "+filepath.Join(home, "data"),
 		"mode: off ", "mode: strict ", // the lab exercises the guard; the template starts in off
 		"active_checks:\n  enabled: true", "active_checks:\n  enabled: false", // no exit-IP queries (NET-011 has its own e2e)
+		"keep_tunnel: true ", "keep_tunnel: false ", // the full-block panic (keep_tunnel has its own e2e)
 	).Replace(string(profile.Template))
 	if err := os.WriteFile(s.profile, []byte(prof), 0o600); err != nil {
 		t.Fatal(err)
