@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Builds the SBOMs of both binaries in a temporary directory and checks (or, with -write,
+# regenerates) the module table of docs/THIRD_PARTY.md from them.
+#   scripts/licenses [-write]
+set -euo pipefail
+cd "$(dirname "$0")/.."
+d=$(mktemp -d)
+trap 'rm -rf "$d"' EXIT
+scripts/sbom "$d"
+go run ./scripts/third-party "$@" "$d"/lethe.cdx.json "$d"/lethe-gui.cdx.json
