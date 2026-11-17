@@ -38,7 +38,7 @@ release (spec §19.2). The Go standard library is BSD-3-Clause.
 | `github.com/go-gl/glfw/v3.4/glfw` | v0.1.0-pre.2 | BSD-3-Clause | lethe-gui |
 | `github.com/go-text/render` | v0.2.1 | Unlicense OR BSD-3-Clause | lethe-gui |
 | `github.com/go-text/typesetting` | v0.3.5 | Unlicense OR BSD-3-Clause | lethe-gui |
-| `github.com/goccy/go-yaml` | v1.19.2 | MIT | lethe |
+| `github.com/goccy/go-yaml` | v1.19.2 | MIT | lethe, lethe-gui |
 | `github.com/godbus/dbus/v5` | v5.2.4 | BSD-2-Clause | lethe, lethe-gui |
 | `github.com/google/nftables` | v0.3.0 | Apache-2.0 | lethe |
 | `github.com/gopacket/gopacket` | v1.7.7 | BSD-3-Clause | lethe |
