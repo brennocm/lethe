@@ -1,0 +1,28 @@
+# lethe-gui package: the Fyne GUI (cgo), next to /usr/bin/lethe so `lethe run` and the agent find
+# it (ADR 0013). Built only where the OpenGL/X11/Wayland headers exist (the gui CI job).
+name: lethe-gui
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+version_schema: semver
+release: "1"
+section: net
+priority: optional
+maintainer: lethe maintainers
+description: Tray, panel and full-screen alerts for lethe.
+license: see /usr/share/doc/lethe/THIRD_PARTY.md
+depends:
+  - lethe (= ${VERSION}-1)
+overrides:
+  rpm:
+    depends:
+      - lethe = ${VERSION}-1
+      - mesa-libGL
+  deb:
+    depends:
+      - lethe (= ${VERSION}-1)
+      - libgl1
+contents:
+  - src: dist/stage/lethe-gui
+    dst: /usr/bin/lethe-gui
+    file_info: { mode: 0755, owner: root, group: root }

@@ -28,6 +28,14 @@ jobs:
       - uses: jdx/mise-action@v2
       - run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       - run: mise run build:gui
+  release:
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      # unsigned: signing and publishing are the owner's (docs/runbooks/release.md)
+      - run: mise run release:repro
   e2e:
     runs-on: ubuntu-latest
     needs: check

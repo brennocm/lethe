@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Release build (spec §19.2): static lethe for amd64 and arm64, deb and rpm, a CycloneDX SBOM and
+# SHA256SUMS in dist/<version>/. Reproducible: CGO_ENABLED=0, -trimpath, -buildvcs, no build id,
+# the pinned toolchain and SOURCE_DATE_EPOCH from the commit, so two builds give the same bytes
+# (scripts/repro-check). Signing and publishing are the owner's (docs/runbooks/release.md).
+#
+#   scripts/release VERSION [--gui] [--allow-dirty]
+set -euo pipefail
+cd "$(dirname "$0")/.."
+version=${1:?usage: scripts/release VERSION [--gui] [--allow-dirty]}
+shift
+gui=0 dirty=0
+for a in "$@"; do
+  case $a in
+    --gui) gui=1 ;;
+    --allow-dirty) dirty=1 ;;
+    *) echo "release: unknown option $a" >&2; exit 2 ;;
+  esac
+done
+[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "release: VERSION must be semver (1.2.3)" >&2; exit 2; }
+if [[ $dirty == 0 && -n $(git status --porcelain --untracked-files=no) ]]; then
+  echo "release: the tree has uncommitted changes (vcs.modified would be true); commit or pass --allow-dirty" >&2
+  exit 2
+fi
+if ! ls internal/geo/data/*.mmdb >/dev/null 2>&1; then
+  echo "release: warning: no geo database embedded (run scripts/update-geo first); TUN-006 and the country checks stay inactive" >&2
+fi
+export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct)}
+export VERSION=$version GOWORK=off GOFLAGS=-trimpath
+out=dist/$version
+rm -rf "$out"
+mkdir -p "$out"
+# nfpm does not expand variables in contents: the binary being packaged sits at dist/stage/
+stage() { rm -rf dist/stage && mkdir -p dist/stage && cp "$1" dist/stage/; }
+trap 'rm -rf dist/stage' EXIT
+ldflags="-s -w -buildid= -X lethe/internal/buildinfo.Version=$version"
+for arch in amd64 arm64; do
+  export ARCH=$arch
+  DIST=$out/linux_$arch
+  mkdir -p "$DIST"
+  CGO_ENABLED=0 GOARCH=$arch go build -buildvcs=true -ldflags="$ldflags" -o "$DIST/lethe" ./apps/lethe
+  stage "$DIST/lethe"
+  for fmt in deb rpm; do
+    nfpm package --config packaging/nfpm.yaml --packager $fmt --target "$out/" >/dev/null
+  done
+done
+if [[ $gui == 1 ]]; then
+  # cgo: only for the host architecture (cross-compiling OpenGL needs a sysroot)
+  arch=$(go env GOARCH)
+  export ARCH=$arch
+  DIST=$out/linux_$arch
+  (cd apps/lethe-gui && CGO_ENABLED=1 go build -buildvcs=true -# nfpm does not expand variables in contents: the binary being packaged sits at dist/stage/
+stage() { rm -rf dist/stage && mkdir -p dist/stage && cp "$1" dist/stage/; }
+trap 'rm -rf dist/stage' EXIT
+ldflags="-s -w -buildid=" -o "../../$DIST/lethe-gui" .)
+  stage "$DIST/lethe-gui"
+  for fmt in deb rpm; do
+    nfpm package --config packaging/nfpm-gui.yaml --packager $fmt --target "$out/" >/dev/null
+  done
+fi
+scripts/sbom "$out"
+(cd "$out" && find . -type f ! -name SHA256SUMS -printf '%P\n' | LC_ALL=C sort | xargs sha256sum > SHA256SUMS)
+echo "release: $out"
+cat "$out/SHA256SUMS"

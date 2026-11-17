@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Reproducibility gate (spec §19.2, M14): builds the release of HEAD twice, from two checkouts at
+# different paths and with empty build caches, and requires identical binaries and packages. The
+# SBOMs carry a timestamp and a serial number, so they are left out of the comparison.
+#   scripts/repro-check [VERSION]
+set -euo pipefail
+cd "$(dirname "$0")/.."
+version=${1:-0.0.0-repro}
+work=$(mktemp -d)
+cleanup() {
+  chmod -R u+w "$work" 2>/dev/null || true # the Go module cache is read-only
+  rm -rf "$work"
+}
+trap cleanup EXIT
+for n in a b; do
+  mkdir -p "$work/$n"
+  # a clone, not a worktree: cyclonedx-gomod cannot read the version from a worktree's .git file
+  git clone -q --no-hardlinks . "$work/$n/src"
+  git -C "$work/$n/src" checkout -q --detach "$(git rev-parse HEAD)"
+  (cd "$work/$n/src" && GOCACHE="$work/$n/cache" ./scripts/release "$version" >/dev/null)
+  grep -v '\.cdx\.json$' "$work/$n/src/dist/$version/SHA256SUMS" > "$work/$n/sums"
+done
+if ! diff -u "$work/a/sums" "$work/b/sums"; then
+  echo "repro-check: the two builds differ" >&2
+  exit 1
+fi
+echo "repro-check: two builds of $(git rev-parse --short HEAD) are identical ($(wc -l < "$work/a/sums") files)"

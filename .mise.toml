@@ -1,6 +1,7 @@
 [tools]
 go = "1.27.4"
 golangci-lint = "2.14.0"
+nfpm = "2.49.0"
 
 [env]
 CGO_ENABLED = "0"
@@ -38,6 +39,14 @@ run = [
   "cd apps/lethe-gui && CGO_ENABLED=1 go test -race -count=1 ./internal/... && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./internal/...",
   "go run ./scripts/trace-matrix",
 ]
+
+[tasks.release]
+description = "Release build: dist/VERSION with static binaries, deb/rpm, SBOM and SHA256SUMS (unsigned)"
+run = "scripts/release"
+
+[tasks."release:repro"]
+description = "Build HEAD twice from different paths with empty caches and require identical bytes"
+run = "scripts/repro-check"
 
 [tasks.fix]
 description = "Apply every auto-fix"

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# CycloneDX SBOMs of the two binaries (spec §19.2) into DIR: lethe.cdx.json and lethe-gui.cdx.json.
+# The GUI one lists with cgo on (Fyne needs it) but compiles nothing, so no OpenGL headers.
+# cyclonedx-gomod reads the module version from .git, so a git worktree does not work: clone.
+#   scripts/sbom DIR
+set -euo pipefail
+cd "$(dirname "$0")/.."
+dir=${1:?usage: scripts/sbom DIR}
+mkdir -p "$dir"
+dir=$(cd "$dir" && pwd)
+log=$(mktemp)
+trap 'rm -f "$log"' EXIT
+gomod() {
+  # its progress log is noise; shown only when it fails
+  if ! GOWORK=off go run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.9.0 app -json -licenses -noserial "$@" 2>"$log"; then
+    cat "$log" >&2
+    exit 1
+  fi
+}
+gomod -main apps/lethe -output "$dir/lethe.cdx.json" .
+(cd apps/lethe-gui && CGO_ENABLED=1 gomod -output "$dir/lethe-gui.cdx.json" .)

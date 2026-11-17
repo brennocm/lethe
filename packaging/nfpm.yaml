@@ -1,0 +1,35 @@
+# lethe package (deb and rpm). scripts/release builds the binary and sets VERSION, ARCH and
+# SOURCE_DATE_EPOCH (nfpm reads it for every mtime), so two builds of the same commit give the same package. No unit is enabled
+# on install (docs/runbooks/service-mode.md); nothing is signed here (the owner signs, spec §19.2).
+name: lethe
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+version_schema: semver
+release: "1"
+section: net
+priority: optional
+maintainer: lethe maintainers
+description: |
+  Local OpSec monitor: detects, records and reacts to IP, DNS and identity leaks outside the
+  tunnel (VPN or Tor) during investigations.
+license: see /usr/share/doc/lethe/THIRD_PARTY.md
+contents:
+  - src: dist/stage/lethe
+    dst: /usr/bin/lethe
+    file_info: { mode: 0755, owner: root, group: root }
+  - src: packaging/systemd/lethed.service
+    dst: /usr/lib/systemd/system/lethed.service
+    file_info: { mode: 0644, owner: root, group: root }
+  - src: packaging/systemd/lethe-agent.service
+    dst: /usr/lib/systemd/user/lethe-agent.service
+    file_info: { mode: 0644, owner: root, group: root }
+  - src: docs/runbooks/service-mode.md
+    dst: /usr/share/doc/lethe/service-mode.md
+    file_info: { mode: 0644, owner: root, group: root }
+  - src: docs/THIRD_PARTY.md
+    dst: /usr/share/doc/lethe/THIRD_PARTY.md
+    file_info: { mode: 0644, owner: root, group: root }
+  - src: README.md
+    dst: /usr/share/doc/lethe/README.md
+    file_info: { mode: 0644, owner: root, group: root }
