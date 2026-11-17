@@ -313,3 +313,18 @@ func TestM12_MergeEventsDedupAndCap(t *testing.T) {
 		t.Fatalf("%d %d", len(out), out[0].Seq)
 	}
 }
+
+// A process name with control sequences (OSC, CSI) must not reach the terminal raw.
+func TestM12_DetailsAreTerminalSafe(t *testing.T) {
+	m := New(nil, Options{Lang: "pt-BR"})
+	m.events = []contracts.Event{{Type: contracts.EvCheckAlert, AlertID: "A-1",
+		Data: map[string]any{"proc": map[string]any{"exe": "/tmp/\x1b]0;pwned\x07x", "pid": float64(7)}}}}
+	if d := m.details("A-1"); strings.ContainsAny(d, "\x1b\x07") {
+		t.Fatalf("control characters reached the view: %q", d)
+	}
+	l := NewLines(5)
+	_, _ = l.Write([]byte("daemon \x1b[2J line\n"))
+	if got := l.Last(1)[0]; strings.Contains(got, "\x1b") {
+		t.Fatalf("%q", got)
+	}
+}

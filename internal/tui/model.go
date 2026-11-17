@@ -15,6 +15,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"lethe/internal/platform"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/sys/unix"
 
@@ -522,7 +524,7 @@ func (l *Lines) Write(p []byte) (int, error) {
 	parts := strings.Split(s, "\n")
 	l.part = parts[len(parts)-1]
 	for _, line := range parts[:len(parts)-1] {
-		l.buf = append(l.buf, strings.TrimRight(line, "\r"))
+		l.buf = append(l.buf, platform.TermSafe(strings.TrimRight(line, "\r")))
 	}
 	if len(l.buf) > l.max {
 		l.buf = l.buf[len(l.buf)-l.max:]

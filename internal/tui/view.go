@@ -7,6 +7,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"lethe/internal/platform"
+
 	"lethe/internal/contracts"
 	"lethe/internal/daemon"
 	"lethe/internal/i18n"
@@ -262,7 +264,9 @@ func (m *Model) details(id string) string {
 				parts = append(parts, fmt.Sprintf("%s (pid %d)", name, int(pid)))
 			}
 		}
-		return strings.Join(parts, " · ")
+		// process names and paths come from other programs: no control sequence reaches the
+		// terminal (an exe named "\x1b]0;..." would drive it)
+		return platform.TermSafe(strings.Join(parts, " · "))
 	}
 	return ""
 }
