@@ -103,7 +103,8 @@ func critical() (contracts.Status, []contracts.Event) {
 	st := armed()
 	st.State, st.Color = "PANIC", "RED"
 	st.Alerts = append(st.Alerts, contracts.AlertView{ID: "A-0003", Check: "NET-001", Severity: "CRITICAL", State: "open", Count: 2, FirstSeen: t0, LastSeen: t0})
-	st.Lockdown = &contracts.Lockdown{What: "toda a rede", Why: "pânico por NET-001", Exit: "lethe unpanic"}
+	st.Lockdown = &contracts.Lockdown{What: "toda a rede", Why: "pânico por NET-001", Exit: "lethe unpanic",
+		Ways: []string{contracts.WayAck, contracts.WayUnpanic, contracts.WayDisarm}}
 	return st, []contracts.Event{
 		{Seq: 7, TS: t0, Type: contracts.EvCheckAlert, Check: "NET-001", Severity: "CRITICAL", AlertID: "A-0003",
 			Data: map[string]any{"proto": "udp", "dst": "203.0.113.9", "dport": float64(443), "iface": "eth0", "proc": map[string]any{"pid": float64(4242), "exe": "/usr/bin/firefox"}}},
@@ -396,7 +397,8 @@ func TestAC08_GUIShowsBothWaysOutOfPanic(t *testing.T) {
 	st, _ := critical()
 	u, f, _ := setup(t, st)
 	u.Apply(st, nil)
-	if !u.block.Visible() || !u.unpanicBtn.Visible() || !u.endBtn.Visible() || !strings.Contains(u.blockText.Text, "lethe unpanic") || u.blockWhat.Text != "toda a rede" {
+	if !u.block.Visible() || !u.unpanicBtn.Visible() || !u.endBtn.Visible() || !u.ackWayBtn.Visible() ||
+		!strings.Contains(u.blockText.Text, "3. Se o túnel não voltar") || strings.Contains(u.blockText.Text, "lethe unpanic") || u.blockWhat.Text != "toda a rede" {
 		t.Fatal("the block and its exits")
 	}
 	test.Tap(u.endBtn)

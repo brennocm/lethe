@@ -14,12 +14,16 @@
 						<text pos="0,201" size="32x24" textSize="18">Pare o que estiver fazendo no programa envolvido. Confira o túnel; se não souber a causa,</text>
 						<text pos="0,229" size="32x24" textSize="18">acione o pânico.</text>
 						<text bold pos="0,258" size="32x24" textSize="18">Bloqueio: toda a rede</text>
-						<text pos="0,286" size="32x24" textSize="18">Como sair: lethe unpanic</text>
-						<widget pos="0,315" size="32x1" type="*widget.Separator">
+						<text bold pos="0,286" size="32x24" textSize="18">Como sair:</text>
+						<text pos="0,315" size="32x24" textSize="18">1. Reconheça os alertas críticos com o botão Reconhecer.</text>
+						<text pos="0,343" size="32x24" textSize="18">2. Sair do pânico: o lethe confere o túnel e libera a rede.</text>
+						<text pos="0,372" size="32x24" textSize="18">3. Se o túnel não voltar, Encerrar sessão libera a rede sem conferir o túnel (pede a</text>
+						<text pos="0,400" size="32x24" textSize="18">passphrase).</text>
+						<widget pos="0,429" size="32x1" type="*widget.Separator">
 							<rectangle fillColor="inputBorder" size="32x1"/>
 						</widget>
-						<text pos="0,320" size="32x21" textSize="16">Motivo</text>
-						<widget pos="0,345" size="32x35" type="*widget.Entry">
+						<text pos="0,434" size="32x21" textSize="16">Motivo</text>
+						<widget pos="0,459" size="32x35" type="*widget.Entry">
 							<rectangle fillColor="button" pos="1,1" radius="3" size="30x33"/>
 							<rectangle radius="3" size="30x33" strokeColor="inputBorder" strokeWidth="1"/>
 							<widget pos="0,1" size="32x33" type="*widget.Scroll">
@@ -41,8 +45,8 @@
 								</widget>
 							</widget>
 						</widget>
-						<text pos="0,385" size="32x21" textSize="16">Passphrase da baseline</text>
-						<widget pos="0,410" size="32x35" type="*gui.SecretEntry">
+						<text pos="0,499" size="32x21" textSize="16">Passphrase da baseline</text>
+						<widget pos="0,524" size="32x35" type="*gui.SecretEntry">
 							<container size="32x35">
 								<rectangle fillColor="button" size="32x35" strokeColor="inputBorder" strokeWidth="1"/>
 								<widget size="32x35" type="*widget.Label">
@@ -52,9 +56,9 @@
 								</widget>
 							</container>
 						</widget>
-						<text pos="0,449" size="32x24" textSize="18">No X11, outros programas da sua sessão podem ler o teclado. Se puder, digite a passphrase no terminal (lethe</text>
-						<text pos="0,478" size="32x24" textSize="18">ack, lethe unpanic).</text>
-						<container pos="0,506" size="32x36">
+						<text pos="0,563" size="32x24" textSize="18">No X11, outros programas da sua sessão podem ler o teclado. Se puder, digite a passphrase no terminal (lethe</text>
+						<text pos="0,592" size="32x24" textSize="18">ack, lethe unpanic).</text>
+						<container pos="0,620" size="32x36">
 							<widget size="97x36" type="*widget.Button">
 								<rectangle fillColor="button" radius="5" size="97x36"/>
 								<rectangle size="97x36"/>
@@ -69,8 +73,15 @@
 									<text alignment="center" bold color="background" size="46x19">Pânico</text>
 								</widget>
 							</widget>
+							<widget pos="168,0" size="125x36" type="*widget.Button">
+								<rectangle fillColor="button" radius="5" size="125x36"/>
+								<rectangle size="125x36"/>
+								<widget pos="8,8" size="109x19" type="*widget.RichText">
+									<text alignment="center" bold size="109x19">Encerrar sessão</text>
+								</widget>
+							</widget>
 						</container>
-						<text pos="0,546" size="32x16" textSize="12"></text>
+						<text pos="0,660" size="32x16" textSize="12"></text>
 					</container>
 				</widget>
 			</container>

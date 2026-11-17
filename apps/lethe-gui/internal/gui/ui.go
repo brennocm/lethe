@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -73,6 +74,7 @@ type UI struct {
 	chkFilter  string
 	unpanicBtn *widget.Button
 	endBtn     *widget.Button
+	ackWayBtn  *widget.Button
 	tray       *fyne.Menu
 	trayStatus *fyne.MenuItem
 
@@ -130,8 +132,9 @@ func (u *UI) Build() {
 	u.unpanicBtn.Importance = widget.HighImportance
 	u.unpanicBtn.Hide()
 	u.endBtn = widget.NewButton(u.t("end_btn"), u.askEnd)
+	u.ackWayBtn = widget.NewButton(u.t("ack_btn"), func() { u.askAck(u.panel) })
 	u.block = container.NewStack(canvas.NewRectangle(colPanicBg),
-		container.NewPadded(container.NewVBox(u.blockWhat, u.blockText, container.NewHBox(u.unpanicBtn, u.endBtn))))
+		container.NewPadded(container.NewVBox(u.blockWhat, u.blockText, container.NewHBox(u.ackWayBtn, u.unpanicBtn, u.endBtn))))
 	u.block.Hide()
 
 	u.buildStart()
@@ -413,6 +416,19 @@ func (u *UI) askEnd() {
 	u.askPassphrase(u.panel, q, u.be.Disarm)
 }
 
+// WaysText is the way out of a block in the panel's words, one numbered step per line, in the
+// order to try them; without Ways (an older daemon), the terminal text.
+func WaysText(l *contracts.Lockdown, lang string) string {
+	if len(l.Ways) == 0 {
+		return l.Exit
+	}
+	var lines []string
+	for i, w := range l.Ways {
+		lines = append(lines, fmt.Sprintf("%d. %s", i+1, i18n.UI(lang, "way_"+w)))
+	}
+	return strings.Join(lines, "\n")
+}
+
 // Verdict is the panel's first line: whether the operator is covered, in their words.
 func Verdict(st contracts.Status, offline bool, lang string) (string, color.Color) {
 	t := func(k string) string { return i18n.UI(lang, k) }
@@ -484,21 +500,27 @@ func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 	}
 	if l := st.Lockdown; l != nil {
 		u.blockWhat.SetText(l.What)
-		u.blockText.SetText(u.t("why") + ": " + l.Why + "\n" + u.t("how_out") + ": " + l.Exit)
+		u.blockText.SetText(u.t("why") + ": " + l.Why + "\n" + u.t("how_out") + ":\n" + WaysText(l, u.lang))
 		u.block.Show()
 	} else {
 		u.block.Hide()
 	}
-	if st.State == "PANIC" {
-		u.unpanicBtn.Show()
-	} else {
-		u.unpanicBtn.Hide()
+	ways := map[string]bool{}
+	if st.Lockdown != nil {
+		for _, w := range st.Lockdown.Ways {
+			ways[w] = true
+		}
 	}
-	if session {
-		u.endBtn.Show()
-	} else {
-		u.endBtn.Hide()
+	show := func(b *widget.Button, on bool) {
+		if on {
+			b.Show()
+		} else {
+			b.Hide()
+		}
 	}
+	show(u.ackWayBtn, ways[contracts.WayAck])
+	show(u.unpanicBtn, ways[contracts.WayUnpanic] || st.State == "PANIC")
+	show(u.endBtn, session && (ways[contracts.WayDisarm] || len(ways) == 0))
 	for _, rows := range Grid(st, u.lang) {
 		for _, r := range rows {
 			l, ok := u.rows[r.ID]
@@ -627,8 +649,11 @@ func (u *UI) fillAlert(a contracts.AlertView) {
 	}
 	if l := u.st.Lockdown; l != nil {
 		b.Add(white(u.t("lockdown")+": "+l.What, 18, true))
-		for _, o := range whiteWrap(u.t("how_out")+": "+l.Exit, 90) {
-			b.Add(o)
+		b.Add(white(u.t("how_out")+":", 18, true))
+		for _, line := range strings.Split(WaysText(l, u.lang), "\n") {
+			for _, o := range whiteWrap(line, 90) {
+				b.Add(o)
+			}
 		}
 	}
 	reason := widget.NewEntry()
@@ -653,7 +678,14 @@ func (u *UI) fillAlert(a contracts.AlertView) {
 			b.Add(o)
 		}
 	}
-	b.Add(container.NewHBox(ack, panicBtn))
+	row := container.NewHBox(ack, panicBtn)
+	if l := u.st.Lockdown; l != nil && slices.Contains(l.Ways, contracts.WayDisarm) {
+		// the session can end from here: the CRITICAL is acknowledged with the end
+		row.Add(widget.NewButton(u.t("end_btn"), func() {
+			u.askPassphrase(u.alertWin, u.t("end_panic_ask"), u.be.Disarm)
+		}))
+	}
+	b.Add(row)
 	b.Add(white("", 12, false))
 	b.Refresh()
 }
