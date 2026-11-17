@@ -405,3 +405,35 @@ func TestIPC_LargeResponsesReachTheClient(t *testing.T) {
 		t.Fatalf("connection unusable after a large answer: %v", err)
 	}
 }
+
+// A listener that is not root (an impostor of the operator's UID in /run/user/<uid>/lethe)
+// never receives a byte from DialDaemon: the passphrase of session.arm stays home.
+func TestAC14_ClientRefusesNonRootListener(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: every listener here is root")
+	}
+	path := filepath.Join(t.TempDir(), "fake.sock")
+	l, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = l.Close() }()
+	got := make(chan int, 1)
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			got <- -1
+			return
+		}
+		_ = c.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		n, _ := c.Read(make([]byte, 64))
+		got <- n
+		_ = c.Close()
+	}()
+	if _, err := DialDaemon(path, time.Second); !errors.Is(err, ErrNotDaemon) {
+		t.Fatalf("err = %v", err)
+	}
+	if n := <-got; n > 0 {
+		t.Fatalf("the impostor read %d bytes", n)
+	}
+}

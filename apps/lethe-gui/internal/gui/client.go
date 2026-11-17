@@ -58,12 +58,12 @@ const callTimeout = 5 * time.Second
 
 func (c Client) dial() (*ipc.Client, error) {
 	if c.Socket != "" {
-		return ipc.Dial(c.Socket, 2*time.Second)
+		return ipc.DialDaemon(c.Socket, 2*time.Second)
 	}
 	err := errors.New("no daemon socket")
 	for _, s := range c.Others {
 		var cl *ipc.Client
-		if cl, err = ipc.Dial(s, 2*time.Second); err == nil {
+		if cl, err = ipc.DialDaemon(s, 2*time.Second); err == nil {
 			return cl, nil
 		}
 	}

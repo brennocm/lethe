@@ -28,6 +28,32 @@ func Dial(path string, timeout time.Duration) (*Client, error) {
 	return &Client{conn: c, r: bufio.NewReaderSize(c, MaxMessage)}, nil
 }
 
+// ErrNotDaemon: the process behind the socket is not root. The daemon always runs as root (its
+// capabilities reduced, its UID kept), so anything else is an impostor, typically a process of
+// the operator's own UID listening in /run/user/<uid>/lethe to collect the passphrase that
+// session.arm carries.
+var ErrNotDaemon = errors.New("the process behind the lethe socket is not the daemon (not root); refusing to talk to it")
+
+// DialDaemon connects to the daemon socket and checks, by SO_PEERCRED, that the listener is root
+// before anything (a passphrase, a proof) is sent.
+func DialDaemon(path string, timeout time.Duration) (*Client, error) {
+	c, err := Dial(path, timeout)
+	if err != nil {
+		return nil, err
+	}
+	uc, ok := c.conn.(*net.UnixConn)
+	if !ok {
+		_ = c.Close()
+		return nil, ErrNotDaemon
+	}
+	p, err := PeerCred(uc)
+	if err != nil || p.UID != 0 {
+		_ = c.Close()
+		return nil, fmt.Errorf("%w (%s)", ErrNotDaemon, path)
+	}
+	return c, nil
+}
+
 // Close closes the connection.
 func (c *Client) Close() error { return c.conn.Close() }
 

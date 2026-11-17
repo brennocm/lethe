@@ -33,7 +33,7 @@ type IPC struct {
 
 const callTimeout = 5 * time.Second
 
-func (b IPC) dial() (*ipc.Client, error) { return ipc.Dial(b.Socket, 2*time.Second) }
+func (b IPC) dial() (*ipc.Client, error) { return ipc.DialDaemon(b.Socket, 2*time.Second) }
 
 func (b IPC) call(method string, params any, out any) error {
 	c, err := b.dial()

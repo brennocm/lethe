@@ -78,7 +78,7 @@ func dialDaemon() (*ipc.Client, error) {
 	if err != nil {
 		return nil, WithCode(ExitDaemonDown, err)
 	}
-	c, err := ipc.Dial(p, 2*time.Second)
+	c, err := ipc.DialDaemon(p, 2*time.Second)
 	if err != nil {
 		return nil, WithCode(ExitDaemonDown, fmt.Errorf("daemon unreachable: %w", err))
 	}
@@ -398,7 +398,7 @@ func newAgentCmd() *cobra.Command {
 				var c *ipc.Client
 				var err error
 				for range 50 { // the daemon may still be binding the socket
-					if c, err = ipc.Dial(sock, time.Second); err == nil {
+					if c, err = ipc.DialDaemon(sock, time.Second); err == nil {
 						return c, nil
 					}
 					time.Sleep(100 * time.Millisecond)
