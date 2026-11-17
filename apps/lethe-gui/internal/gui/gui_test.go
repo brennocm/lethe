@@ -17,8 +17,10 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
+	"lethe/internal/baseline"
 	"lethe/internal/contracts"
 	"lethe/internal/profile"
+	lsetup "lethe/internal/setup"
 )
 
 var t0 = time.Date(2026, 11, 16, 14, 0, 0, 0, time.UTC)
@@ -417,5 +419,69 @@ func TestAC08_GUIShowsBothWaysOutOfPanic(t *testing.T) {
 	u.wg.Wait()
 	if c := f.got(); len(c) != 1 || c[0] != "disarm|pw" {
 		t.Fatalf("%q", c)
+	}
+}
+
+// First use from the panel (spec §15.1): with no profile, even with no daemon, the form fills
+// what the machine knows, asks the public IP only on request, refuses differing passphrases and
+// writes the profile and the baseline; the start form then names the new profile.
+func TestM10_FirstUseFromThePanel(t *testing.T) {
+	home := t.TempDir()
+	asked := []bool{}
+	det := func(_ context.Context, askIP bool) lsetup.Detected {
+		asked = append(asked, askIP)
+		d := lsetup.Detected{Egress: "wireguard", Network: baseline.Network{GatewayIP: "192.0.2.1", Resolvers: []string{"192.0.2.53"}}}
+		if askIP {
+			d.Network.PublicIPv4 = "203.0.113.7"
+		}
+		return d
+	}
+	a := &trayApp{App: test.NewTempApp(t)}
+	u := New(a, &fake{}, Options{Lang: "pt-BR", Now: func() time.Time { return t0 }, Home: home, Detect: det, WorkFactor: 10})
+	u.offline = os.ErrNotExist
+	u.Build()
+	u.wg.Wait()
+	f := u.firstForm
+	if !f.box.Visible() || u.start.Visible() {
+		t.Fatal("no profile: the first-use form, even with the daemon off")
+	}
+	if len(asked) != 1 || asked[0] || f.gateway.Text != "192.0.2.1" || f.netIP.Text != "" || f.egress.Selected != "wireguard" {
+		t.Fatalf("local detection only at start: %v %q %q %q", asked, f.gateway.Text, f.netIP.Text, f.egress.Selected)
+	}
+	test.Tap(f.detectBtn)
+	u.wg.Wait()
+	if f.netIP.Text != "203.0.113.7" || len(asked) != 2 || !asked[1] {
+		t.Fatalf("the public IP on request: %q %v", f.netIP.Text, asked)
+	}
+	test.Type(f.pass1, "lab passphrase")
+	test.Type(f.pass2, "lab passphrasX")
+	test.Tap(f.createBtn)
+	u.wg.Wait()
+	if lsetup.Exists(filepath.Join(home, "lethe")) || u.flash.Text != u.t("pass_mismatch") || f.pass1.Len() != 0 {
+		t.Fatalf("differing passphrases: %q", u.flash.Text)
+	}
+	test.Type(f.pass1, "lab passphrase")
+	test.Type(f.pass2, "lab passphrase")
+	test.Tap(f.createBtn)
+	u.wg.Wait()
+	prof := filepath.Join(home, "lethe", "profile.yaml")
+	raw, err := os.ReadFile(prof)
+	if err != nil {
+		t.Fatalf("%v (flash %q)", err, u.flash.Text)
+	}
+	p, _, err := profile.Parse(raw, home)
+	if err != nil || p.Egress.Type != "wireguard" || p.Guard.Mode != "off" {
+		t.Fatalf("%v %+v", err, p.Egress)
+	}
+	enc, _ := os.ReadFile(p.Baseline.File)
+	b, err := baseline.Decrypt(enc, []byte("lab passphrase"))
+	if err != nil || b.Networks[0].PublicIPv4 != "203.0.113.7" || b.Networks[0].GatewayIP != "192.0.2.1" {
+		t.Fatalf("%v", err)
+	}
+	if f.box.Visible() || u.profile.Text != prof || !strings.Contains(u.flash.Text, prof) {
+		t.Fatalf("after creation the start form names the profile: %q %q", u.profile.Text, u.flash.Text)
+	}
+	if strings.Contains(u.flash.Text, "203.0.113.7") {
+		t.Fatal("a baseline value in the panel")
 	}
 }

@@ -23,6 +23,7 @@ import (
 	"lethe/internal/contracts"
 	"lethe/internal/i18n"
 	"lethe/internal/profile"
+	lsetup "lethe/internal/setup"
 )
 
 // Options configure the UI.
@@ -31,6 +32,10 @@ type Options struct {
 	X11  bool             // warn that same-UID programs can read the keyboard (spec §22 item 12)
 	Now  func() time.Time // nil = time.Now
 	Home string           // the operator's home: the default profile is Home/lethe/profile.yaml
+	// Detect reads the machine for the first-use form (nil = setup.LiveDetect); askIP also asks
+	// the public IP. WorkFactor is the baseline's scrypt factor (0 = the default; tests lower it).
+	Detect     func(ctx context.Context, askIP bool) lsetup.Detected
+	WorkFactor int
 }
 
 const maxEvents = 500
@@ -60,6 +65,7 @@ type UI struct {
 	blockText *widget.Label
 	flash     *widget.Label
 	start     *fyne.Container // the session start form (no session)
+	firstForm *firstUse       // the first-use form (no profile yet)
 	work      *fyne.Container // checks and log (a session)
 	actions   *fyne.Container
 	profile   *widget.Entry
@@ -139,6 +145,7 @@ func (u *UI) Build() {
 	u.block.Hide()
 
 	u.buildStart()
+	u.buildFirstUse()
 
 	var groups []fyne.CanvasObject
 	grid := Grid(u.st, u.lang)
@@ -186,7 +193,7 @@ func (u *UI) Build() {
 		u.route.box,
 		container.NewBorder(nil, nil, nil, u.routeActs, u.routeNote),
 		u.dnsOut, u.block, u.flash, widget.NewSeparator())
-	u.body = container.NewStack(u.start, u.work)
+	u.body = container.NewStack(u.start, u.firstForm.box, u.work)
 	u.panel.SetContent(container.NewPadded(container.NewBorder(u.top, container.NewVBox(widget.NewSeparator(), u.actions), nil, nil, u.body)))
 	u.panel.Resize(fyne.NewSize(1080, 760))
 
@@ -206,6 +213,9 @@ func (u *UI) Build() {
 		u.panel.SetCloseIntercept(u.panel.Hide) // the tray keeps the GUI; closing hides the panel
 	}
 	u.Apply(u.st, nil)
+	if u.needsFirstUse() {
+		u.detect(false) // local only: gateway, resolvers, the kind of tunnel
+	}
 }
 
 // buildStart is the form shown with no session: the profile (the default place lethe setup
@@ -535,6 +545,7 @@ func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 	}
 	if session {
 		u.start.Hide()
+		u.firstForm.box.Hide()
 		u.work.Show()
 		u.actions.Show()
 	} else {
@@ -542,10 +553,17 @@ func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 		u.dnsOut.Hide()
 		u.work.Hide()
 		u.actions.Hide()
-		if u.offline == nil {
-			u.start.Show()
-		} else {
+		first := u.needsFirstUse() // needs no daemon: the files are the operator's
+		switch {
+		case first:
 			u.start.Hide()
+			u.firstForm.box.Show()
+		case u.offline == nil:
+			u.start.Show()
+			u.firstForm.box.Hide()
+		default:
+			u.start.Hide()
+			u.firstForm.box.Hide()
 		}
 	}
 	if l := st.Lockdown; l != nil {

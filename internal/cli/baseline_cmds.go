@@ -198,10 +198,6 @@ func openBaseline(cmd *cobra.Command, path string, sec *secretFlags) ([]byte, *b
 	return pw, b, nil
 }
 
-func askNetwork(pr *prompter) (baseline.Network, error) {
-	return askNetworkWith(pr, baseline.Network{})
-}
-
 // askNetworkWith asks the network questions; def holds what was detected (Enter keeps it).
 func askNetworkWith(pr *prompter, def baseline.Network) (baseline.Network, error) {
 	var n baseline.Network

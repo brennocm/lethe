@@ -96,3 +96,11 @@ func TestM13_SetupNeverActsOnTheNetwork(t *testing.T) {
 		}
 	}
 }
+
+// The local reading asks nothing on the network: without askIP the public IP stays empty.
+func TestM10_SetupLiveDetectStaysLocal(t *testing.T) {
+	d := LiveDetect(context.Background(), false)
+	if d.Network.PublicIPv4 != "" || d.Network.PublicIPv6 != "" || d.Egress == "" {
+		t.Fatalf("%+v", d)
+	}
+}

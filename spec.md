@@ -635,7 +635,7 @@ O bloqueio é deliberado só quando protege contra um vazamento durante a opera�
 
 **Primeiro uso guiado**
 
-8. `lethe setup` é um assistente no terminal que cria o perfil e a baseline com perguntas simples (identificador da operação, persona, tipo de túnel detectado pela descoberta) e grava o perfil em `off`. Ele só oferece passar para `strict` depois de um `lethe selftest` aprovado nesta máquina, e então roda o preflight para mostrar o que o estrito vai permitir.
+8. O primeiro uso cria o perfil e a baseline com perguntas simples (identificador da operação, persona, tipo de túnel detectado pela descoberta, a rede real) e grava o perfil em `off`. A GUI mostra esse formulário no lugar do início de sessão enquanto `~/lethe/profile.yaml` não existe, mesmo sem o daemon rodando; `lethe setup` faz o mesmo no terminal. Os dois usam `internal/setup`, que roda como o operador e nunca alcança o guarda, as respostas nem o daemon. O gateway e os resolvedores vêm da leitura local; o IP público só é consultado quando o operador pede e nenhum túnel está no caminho padrão. Não há chave para gerar nem guardar: o único segredo é a passphrase, digitada duas vezes (8 caracteres ou mais). O estrito só é oferecido depois de um selftest aprovado nesta máquina, e então o preflight mostra o que ele vai permitir.
 10. **Saída autenticada do pânico.** O `unpanic` exige a reconferência do túnel, e o pânico padrão bloqueia o próprio túnel: se a VPN caiu de verdade, ela não volta e a reconferência nunca passa. Por isso o `disarm` (que exige a passphrase) também vale em PÂNICO: encerra a sessão, remove as tabelas, religa as interfaces que o `link_down` derrubou e fecha o log com `reason: disarm_in_panic` (contando os CRITICAL não reconhecidos). Sem passphrase (Ctrl-C, sinal), o bloqueio continua de propósito. A GUI oferece essa saída ao lado do "Sair do pânico".
 9. `lethe report` e `lethe verify` abrem o log com `--baseline FILE` (pede a passphrase e usa a `log_identity` embutida), além de `--identity`. Sem chaves institucionais, o operador lê o próprio relatório sem gerar outra chave.
 
@@ -958,7 +958,7 @@ UTC com microssegundos mais `CLOCK_MONOTONIC`. Saltos de relógio são registrad
 | `lethe baseline create [--manual] [--allow-tunnel] [--out FILE] [--recipient AGE]` | Cria a baseline cifrada |
 | `lethe baseline add-network [--manual] FILE` | Adiciona uma rede conhecida |
 | `lethe baseline show FILE` | Mostra o conteúdo (pede a passphrase) |
-| `lethe setup` | Assistente do primeiro uso: perfil + baseline, começando em `off` (§10.6) |
+| `lethe setup` | Assistente do primeiro uso no terminal: perfil + baseline, começando em `off` (§10.6 item 8; a GUI tem o mesmo formulário) |
 | `lethe profile init [--out FILE]` | Gera um perfil comentado (guarda `off`) |
 | `lethe profile validate FILE` | Valida contra o schema |
 | `lethe discover [--json] [--learn]` | Mostra o que foi descoberto (sem armar) |

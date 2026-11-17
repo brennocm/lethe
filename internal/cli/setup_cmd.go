@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -197,7 +198,8 @@ func (w *wizard) run() error {
 	} else {
 		w.say("\nBaseline: os dados reais desta máquina e das suas redes, cifrados. Responda SEM o túnel ligado,\n" +
 			"numa rede conhecida. Os valores nunca aparecem nos logs, só o nome do campo que casou.\n")
-		if ans.Network, err = askNetwork(w.pr); err != nil {
+		// gateway and resolvers as read from this machine; Enter keeps them
+		if ans.Network, err = askNetworkWith(w.pr, setup.Detect(context.Background(), snap, nil).Network); err != nil {
 			return err
 		}
 		if pw, err = w.pass(); err != nil {

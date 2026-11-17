@@ -15,8 +15,8 @@ release (spec §19.2). The Go standard library is BSD-3-Clause.
 | Module | Version | License | Linked into |
 |---|---|---|---|
 | `antrea.io/packet` | v0.0.0-20260515064457-4eaabd67893f | MIT | lethe |
-| `filippo.io/age` | v1.3.2 | BSD-3-Clause | lethe |
-| `filippo.io/hpke` | v0.4.0 | BSD-3-Clause | lethe |
+| `filippo.io/age` | v1.3.2 | BSD-3-Clause | lethe, lethe-gui |
+| `filippo.io/hpke` | v0.4.0 | BSD-3-Clause | lethe, lethe-gui |
 | `fyne.io/fyne/v2` | v2.8.2 | BSD-3-Clause | lethe-gui |
 | `fyne.io/systray` | v1.12.3-0.20260810170012-af4e8e793ec4 | Apache-2.0 | lethe-gui |
 | `github.com/BurntSushi/toml` | v1.6.0 | MIT | lethe-gui |
@@ -49,9 +49,9 @@ release (spec §19.2). The Go standard library is BSD-3-Clause.
 | `github.com/lucasb-eyer/go-colorful` | v1.2.0 | MIT | lethe |
 | `github.com/mattn/go-isatty` | v0.0.20 | MIT | lethe |
 | `github.com/mattn/go-runewidth` | v0.0.16 / v0.0.24 | MIT | lethe, lethe-gui |
-| `github.com/mdlayher/genetlink` | v1.3.2 | MIT | lethe |
-| `github.com/mdlayher/netlink` | v1.9.1-0.20260312172110-2a932c0fc1ae | MIT | lethe |
-| `github.com/mdlayher/socket` | v0.7.0 | MIT | lethe |
+| `github.com/mdlayher/genetlink` | v1.3.2 | MIT | lethe, lethe-gui |
+| `github.com/mdlayher/netlink` | v1.9.1-0.20260312172110-2a932c0fc1ae | MIT | lethe, lethe-gui |
+| `github.com/mdlayher/socket` | v0.7.0 | MIT | lethe, lethe-gui |
 | `github.com/muesli/ansi` | v0.0.0-20230316100256-276c6243b2f6 | MIT | lethe |
 | `github.com/muesli/cancelreader` | v0.2.2 | MIT | lethe |
 | `github.com/muesli/termenv` | v0.16.0 | MIT | lethe |
@@ -65,18 +65,18 @@ release (spec §19.2). The Go standard library is BSD-3-Clause.
 | `github.com/spf13/pflag` | v1.0.9 | BSD-3-Clause | lethe |
 | `github.com/srwiley/oksvg` | v0.0.0-20221011165216-be6e8873101c | BSD-3-Clause | lethe-gui |
 | `github.com/srwiley/rasterx` | v0.0.0-20220730225603-2ab79fcdd4ef | BSD-3-Clause | lethe-gui |
-| `github.com/vishvananda/netlink` | v1.3.1 | Apache-2.0 | lethe |
-| `github.com/vishvananda/netns` | v0.0.5 | Apache-2.0 | lethe |
+| `github.com/vishvananda/netlink` | v1.3.1 | Apache-2.0 | lethe, lethe-gui |
+| `github.com/vishvananda/netns` | v0.0.5 | Apache-2.0 | lethe, lethe-gui |
 | `github.com/xo/terminfo` | v0.0.0-20220910002029-abceb7e1c41e | MIT | lethe |
 | `github.com/yuin/goldmark` | v1.8.2 | MIT | lethe-gui |
 | `golang.org/x/crypto` | v0.59.0 | BSD-3-Clause | lethe, lethe-gui |
 | `golang.org/x/image` | v0.48.0 | BSD-3-Clause | lethe-gui |
 | `golang.org/x/net` | v0.62.0 | BSD-3-Clause | lethe, lethe-gui |
-| `golang.org/x/sync` | v0.25.0 | BSD-3-Clause | lethe |
+| `golang.org/x/sync` | v0.25.0 | BSD-3-Clause | lethe, lethe-gui |
 | `golang.org/x/sys` | v0.50.0 | BSD-3-Clause | lethe, lethe-gui |
 | `golang.org/x/term` | v0.48.0 | BSD-3-Clause | lethe |
 | `golang.org/x/text` | v0.44.0 | BSD-3-Clause | lethe, lethe-gui |
-| `golang.zx2c4.com/wireguard/wgctrl` | v0.0.0-20241231184526-a9ab2273dd10 | MIT | lethe |
+| `golang.zx2c4.com/wireguard/wgctrl` | v0.0.0-20241231184526-a9ab2273dd10 | MIT | lethe, lethe-gui |
 | `kernel.org/pub/linux/libs/security/libcap/cap` | v1.2.78 | BSD-3-Clause OR GPL-2.0-only | lethe |
 | `kernel.org/pub/linux/libs/security/libcap/psx` | v1.2.78 | BSD-3-Clause OR GPL-2.0-only | lethe |
 <!-- modules:end -->

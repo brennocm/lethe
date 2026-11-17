@@ -26,7 +26,7 @@ Where the exit is:
   - it resolves 10 random `N.ID.bash.ws` names through the system resolver, which is the path under test;
   - it fetches the result through the NET-011 path (the tunnel or Tor), and with no such path it stops before resolving anything;
   - a resolver from `baseline.networks[].resolvers` is shown by its field name.
-  The result is neither journaled (no event type exists for it) nor alerted. Wiring it into DNS-002 needs a spec change.
+  The result is not journaled, since no event type exists for it. A baseline resolver seen by the test raises DNS-002 (CRITICAL), kept in its own condition group until the next test.
 - **`active.check_now`** (safe) starts a NET-011 round.
 
 GUI first:
@@ -40,4 +40,8 @@ GUI first:
 - An operator who knows the passphrase can always release the network from the panel, with or without a working tunnel. An attacker without it cannot.
 - The DNS leak test makes the system resolver ask for `bash.ws` names. When DNS is leaking, whoever sees it learns that someone ran the test. The GUI says so before running it.
 - `bash.ws`'s JSON format has no documentation. It was checked against the live service on 2026-11-17: a list of `{ip, country (lowercase ISO), country_name, asn, org, type}`, or `{"error": ...}` when no lookup arrived. Anything else skips the test.
-- First-time setup (profile and baseline) is still `lethe setup` in a terminal. Moving it into the GUI, with no keys for the operator to handle, is the next spec change. It is listed in the review report.
+- First use is in the GUI too. While `~/lethe/profile.yaml` is missing, the panel shows a form in place of the session start, even with the daemon down:
+  - it fills the gateway, the resolvers and the kind of tunnel from a local reading;
+  - it asks the public IP only on request, and never with a tunnel on the default route;
+  - the only secret is the passphrase, typed twice, with no key to generate or keep.
+  The creation moved to `internal/setup`, shared with `lethe setup`. It runs as the operator, and a test keeps it away from the guard, the responses, the daemon, privsep and `os/exec` in lethe code. The GUI may now import `internal/setup` and `internal/buildinfo`, which pulls netlink, D-Bus and age into the GUI module.

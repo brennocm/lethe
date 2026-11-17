@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -272,4 +273,23 @@ func WriteNew(path string, data []byte) error {
 		return err
 	}
 	return f.Close()
+}
+
+// LiveDetect reads this machine (netlink, systemd-resolved when present). With askIP and no
+// tunnel up it also asks the template's two "what is my IP" services over the normal path (the
+// baseline is the real connection's); without askIP nothing leaves the machine.
+func LiveDetect(ctx context.Context, askIP bool) Detected {
+	opt := discovery.Options{Now: time.Now()}
+	if r, err := discovery.NewDBusResolved(); err == nil {
+		defer func() { _ = r.Close() }()
+		opt.Resolved = r
+	}
+	snap := discovery.Discover(discovery.NetlinkKernel{}, opt)
+	if !askIP {
+		return Detect(ctx, snap, nil)
+	}
+	return Detect(ctx, snap, func(ctx context.Context, eps []string) egressip.Result {
+		direct := egressip.Path{Dial: (&net.Dialer{Timeout: 15 * time.Second}).DialContext}
+		return egressip.Query(ctx, direct, egressip.Config{Endpoints: eps})
+	})
 }
