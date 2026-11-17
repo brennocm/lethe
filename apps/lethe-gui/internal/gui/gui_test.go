@@ -3,6 +3,7 @@ package gui
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -343,6 +344,15 @@ func TestM13_StartSessionFromThePanel(t *testing.T) {
 	if !u.start.Visible() || u.work.Visible() || u.verdict.Text != "Nenhuma sessão em andamento" {
 		t.Fatal("no session: the start form")
 	}
+	if slices.Contains(u.guardSel.Options, u.t("guard_strict")) || !strings.Contains(u.guardNote.Text, "nenhum selftest") {
+		t.Fatalf("strict offered without a selftest: %v %q", u.guardSel.Options, u.guardNote.Text)
+	}
+	// an approved full selftest in the profile's storage.dir: strict is offered
+	p, _, _ := profile.Parse([]byte(raw), dir)
+	_ = os.MkdirAll(filepath.Join(p.Storage.Dir, "state"), 0o700)
+	st, _ := json.Marshal(contracts.SelftestResult{FinishedAt: t0.Add(-time.Hour), Passed: true, Full: true})
+	_ = os.WriteFile(filepath.Join(p.Storage.Dir, "state", "selftest.json"), st, 0o600)
+	u.refreshStrict()
 	u.guardSel.SetSelected(u.t("guard_strict"))
 	test.Type(u.startPass, "pw")
 	test.Tap(u.startBtn)

@@ -64,6 +64,7 @@ type UI struct {
 	actions   *fyne.Container
 	profile   *widget.Entry
 	guardSel  *widget.RadioGroup
+	guardNote *widget.Label
 	startPass *SecretEntry
 	startBtn  *widget.Button
 
@@ -225,12 +226,12 @@ func (u *UI) buildStart() {
 		d.SetFilter(storage.NewExtensionFileFilter([]string{".yaml", ".yml"}))
 		d.Show()
 	})
-	opts := []string{u.t("guard_profile"), u.t("guard_off"), u.t("guard_strict")}
-	u.guardSel = widget.NewRadioGroup(opts, nil)
-	u.guardSel.SetSelected(opts[0])
+	u.guardSel = widget.NewRadioGroup(nil, nil)
 	u.guardSel.Required = true
-	note := widget.NewLabel(u.t("guard_strict_note"))
+	note := wrapped("")
 	note.Importance = widget.LowImportance
+	u.guardNote = note
+	u.profile.OnChanged = func(string) { u.refreshStrict() }
 	u.startPass = NewSecretEntry()
 	u.startBtn = widget.NewButton(u.t("start_btn"), u.startSession)
 	u.startBtn.Importance = widget.HighImportance
@@ -247,8 +248,57 @@ func (u *UI) buildStart() {
 		form.Add(x)
 	}
 	form.Add(container.NewHBox(u.startBtn))
+	u.refreshStrict()
 	// a reading column: the form does not stretch across a wide window
 	u.start = container.NewHBox(container.New(&maxWidth{w: 560}, form))
+}
+
+// refreshStrict offers strict only after an approved selftest on this machine (spec §10.6
+// item 8), read from the profile's storage.dir/state/selftest.json. A profile that asks for
+// strict without one starts in observe-only, with the reason, unless the operator insists.
+func (u *UI) refreshStrict() {
+	ok, why, profStrict := StrictApproval(strings.TrimSpace(u.profile.Text), u.opt.Home, u.opt.Now())
+	opts := []string{u.t("guard_profile"), u.t("guard_off")}
+	if ok {
+		opts = append(opts, u.t("guard_strict"))
+	}
+	prev := u.guardSel.Selected
+	u.guardSel.Options = opts
+	switch {
+	case ok:
+		u.guardNote.SetText(u.t("guard_strict_note"))
+	case profStrict:
+		u.guardNote.SetText(fmt.Sprintf(u.t("strict_profile_warn"), u.t("strict_why_"+why)))
+	default:
+		u.guardNote.SetText(fmt.Sprintf(u.t("strict_locked"), u.t("strict_why_"+why)))
+	}
+	switch {
+	case !ok && profStrict && prev != u.t("guard_profile"):
+		u.guardSel.Selected = u.t("guard_off")
+	case !slices.Contains(opts, prev):
+		u.guardSel.Selected = opts[0]
+	}
+	u.guardSel.Refresh()
+}
+
+// StrictApproval says whether strict may be offered (a recent full approved selftest in the
+// profile's storage.dir), why not, and whether the profile itself asks for strict. A profile
+// that cannot be read counts as no selftest.
+func StrictApproval(path, home string, now time.Time) (ok bool, why string, profileStrict bool) {
+	raw, err := os.ReadFile(path) // #nosec G304 -- the operator's own profile
+	if err != nil {
+		return false, contracts.SelftestNone, false
+	}
+	p, _, err := profile.Parse(raw, home)
+	if err != nil || p.Storage.Dir == "" {
+		return false, contracts.SelftestNone, false
+	}
+	st, err := os.ReadFile(filepath.Join(p.Storage.Dir, "state", "selftest.json")) // #nosec G304 G703 -- the operator's own data dir
+	if err != nil {
+		st = nil
+	}
+	ok, why = contracts.SelftestApproval(st, now)
+	return ok, why, p.Guard.Mode == "strict"
 }
 
 // maxWidth lays its children out at most w wide.
