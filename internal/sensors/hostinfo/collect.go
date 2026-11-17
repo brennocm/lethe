@@ -26,6 +26,7 @@ type State struct {
 type Selftest struct {
 	FinishedAt time.Time `json:"finished_at"`
 	Passed     bool      `json:"passed"`
+	Critical   bool      `json:"critical"` // a failure in ST-NET-001, ST-NET-002 (strict) or RESP-001
 }
 
 // Collector reads a State. Zero fields take the production defaults.

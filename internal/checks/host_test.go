@@ -238,17 +238,20 @@ func TestSELF003_Disconnected(t *testing.T) {
 }
 
 func TestSELF004_Stale(t *testing.T) {
+	if f := onlyFinding(t, (SELF004{}).Evaluate(time.Now().Add(-time.Hour), false, true, time.Now()), "SELF-004", contracts.SeverityCritical); f.Data["reason"] != "failed_critical" {
+		t.Fatal(f.Data)
+	}
 	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
-	if f := onlyFinding(t, (SELF004{}).Evaluate(time.Time{}, false, now), "SELF-004", contracts.SeverityWarning); f.Data["reason"] != "never_run" {
+	if f := onlyFinding(t, (SELF004{}).Evaluate(time.Time{}, false, false, now), "SELF-004", contracts.SeverityWarning); f.Data["reason"] != "never_run" {
 		t.Fatal(f.Data)
 	}
-	if f := onlyFinding(t, (SELF004{}).Evaluate(now.Add(-25*time.Hour), true, now), "SELF-004", contracts.SeverityWarning); f.Data["reason"] != "stale" {
+	if f := onlyFinding(t, (SELF004{}).Evaluate(now.Add(-25*time.Hour), true, false, now), "SELF-004", contracts.SeverityWarning); f.Data["reason"] != "stale" {
 		t.Fatal(f.Data)
 	}
-	if f := onlyFinding(t, (SELF004{}).Evaluate(now.Add(-time.Hour), false, now), "SELF-004", contracts.SeverityWarning); f.Data["reason"] != "failed" {
+	if f := onlyFinding(t, (SELF004{}).Evaluate(now.Add(-time.Hour), false, false, now), "SELF-004", contracts.SeverityWarning); f.Data["reason"] != "failed" {
 		t.Fatal(f.Data)
 	}
-	if (SELF004{}).Evaluate(now.Add(-time.Hour), true, now) != nil {
+	if (SELF004{}).Evaluate(now.Add(-time.Hour), true, false, now) != nil {
 		t.Fatal("fresh pass")
 	}
 }
@@ -258,4 +261,14 @@ func TestSELF005_ClockJump(t *testing.T) {
 		t.Fatal("1 s drift is not a jump")
 	}
 	onlyFinding(t, SELF005{}.Evaluate(time.Hour, time.Hour-5*time.Second), "SELF-005", contracts.SeverityInfo)
+}
+
+func TestDNS004_ConfigChanged(t *testing.T) {
+	f := onlyFinding(t, DNS004{}.Evaluate("/etc/resolv.conf"), "DNS-004", contracts.SeverityWarning)
+	if f.Data["path"] != "/etc/resolv.conf" {
+		t.Fatal(f.Data)
+	}
+	if (DNS004{}).Evaluate("") != nil {
+		t.Fatal("no path")
+	}
 }

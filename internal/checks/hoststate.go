@@ -43,7 +43,7 @@ func EvaluateHost(in HostInput) map[string][]Finding {
 		"HOST-007": HOST007{}.Evaluate(st.Facts.TimeSync),
 		"PER-002":  PER002{}.Evaluate(st.Prefs, st.Chromium),
 		"PER-003":  PER003{}.Evaluate(st.Procs, in.PersonaProfiles),
-		"SELF-004": SELF004{}.Evaluate(st.Selftest.FinishedAt, st.Selftest.Passed, in.Now),
+		"SELF-004": SELF004{}.Evaluate(st.Selftest.FinishedAt, st.Selftest.Passed, st.Selftest.Critical, in.Now),
 	}
 	if in.AgentKeyboard == "" {
 		out["PER-001"] = PER001{}.Evaluate(st.Keyboard(), false, in.Persona)

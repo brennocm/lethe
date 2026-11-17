@@ -46,7 +46,8 @@ func (NET010) Evaluate(sc SocketScan) []Finding {
 			p = contracts.Proc{PID: o.PID, Exe: o.Exe, Comm: o.Comm, UID: o.UID, Confidence: contracts.ConfidenceHigh}
 		}
 		out = append(out, Finding{Check: "NET-010", Severity: contracts.SeverityWarning, Data: map[string]any{
-			"iface": iface, "proto": s.Proto, "dst": s.Remote.Addr().String(), "dport": int(s.Remote.Port()), "proc": p,
+			"iface": iface, "proto": s.Proto, "dst": s.Remote.Addr().String(), "dport": int(s.Remote.Port()),
+			"sport": int(s.Local.Port()), "proc": p,
 		}})
 	}
 	return out
