@@ -34,6 +34,7 @@ type Leak struct {
 	Dport     uint16
 	Len       int // original length on the wire
 	QName     string
+	Names     []string // hostnames announced by a NET-009 broadcast (sensitive, like QName)
 	hasPorts  bool
 	EtherType uint16
 }
@@ -217,6 +218,7 @@ func (l *Leak) classify(proto uint8, payload []byte) {
 		l.Check = CheckNET012
 	case l.Dport == 5353 || l.Dport == 5355 || l.Dport == 137 || l.Dport == 138 || l.Dport == 1900:
 		l.Check, l.Severity = CheckNET009, contracts.SeverityWarning
+		l.Names = announcedNames(l.Dport, payload)
 	}
 }
 

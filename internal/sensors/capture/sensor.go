@@ -108,6 +108,21 @@ func (s *Sensor) Update(al Allowlist) error {
 	return nil
 }
 
+// SetReadBuffer sets SO_RCVBUF (the selftest shrinks it to force drops, ST-SELF-002).
+func (s *Sensor) SetReadBuffer(n int) error {
+	rc, err := s.conn.SyscallConn()
+	if err != nil {
+		return err
+	}
+	var serr error
+	if err := rc.Control(func(fd uintptr) {
+		serr = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUF, n) // #nosec G115 -- fd fits in int
+	}); err != nil {
+		return err
+	}
+	return serr
+}
+
 // Stats reads and resets the kernel counters.
 func (s *Sensor) Stats() (Stats, error) {
 	st, err := s.conn.Stats()
