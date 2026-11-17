@@ -8,3 +8,6 @@ const (
 )
 
 var deniedArch []uintptr
+
+// allowedArch: arm64 has only the *at forms, all in the common list.
+var allowedArch = []uintptr{unix.SYS_SIGNALFD4}

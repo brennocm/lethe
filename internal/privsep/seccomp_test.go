@@ -20,7 +20,7 @@ func seccompData(nr, arch uint32) []byte {
 }
 
 func TestSELF001_SeccompDenylist(t *testing.T) {
-	raw, err := SeccompProgram()
+	raw, err := SeccompProgram(ModeEnforce)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,6 +57,57 @@ func TestSELF001_SeccompDenylist(t *testing.T) {
 	if x32 {
 		if got := run(uint32(unix.SYS_READ)|x32Bit, auditArch); got != eperm {
 			t.Errorf("x32 ABI allowed (%#x)", got)
+		}
+	}
+}
+
+func TestSELF001_SeccompAllowlist(t *testing.T) {
+	for _, tc := range []struct {
+		mode  Mode
+		other uint32
+	}{{ModeEnforce, unix.SECCOMP_RET_KILL_PROCESS}, {ModeLog, unix.SECCOMP_RET_LOG}} {
+		raw, err := SeccompProgram(tc.mode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		prog, _ := bpf.Disassemble(raw)
+		vm, err := bpf.NewVM(prog)
+		if err != nil {
+			t.Fatal(err)
+		}
+		run := func(nr uint32) uint32 {
+			out, err := vm.Run(seccompData(nr, auditArch))
+			if err != nil {
+				t.Fatal(err)
+			}
+			return uint32(out) // #nosec G115 -- the VM returns the 32-bit action
+		}
+		for _, nr := range append(append([]uintptr{}, allowed...), allowedArch...) {
+			if got := run(uint32(nr)); got != unix.SECCOMP_RET_ALLOW {
+				t.Errorf("mode %d: allowed syscall %d gets %#x", tc.mode, nr, got)
+			}
+		}
+		// never used by the daemon and not on either list
+		for _, nr := range []uintptr{unix.SYS_SHMGET, unix.SYS_MSGGET, unix.SYS_PERSONALITY, unix.SYS_FANOTIFY_INIT} {
+			if got := run(uint32(nr)); got != tc.other {
+				t.Errorf("mode %d: syscall %d gets %#x, want %#x", tc.mode, nr, got, tc.other)
+			}
+		}
+	}
+	if SeccompMode("log") != ModeLog || SeccompMode("") != ModeEnforce || SeccompMode("off") != ModeEnforce {
+		t.Fatal("only log weakens the filter; anything else enforces")
+	}
+}
+
+// The lists must not overlap: a denied syscall is never also allowed.
+func TestSELF001_SeccompListsDisjoint(t *testing.T) {
+	deny := map[uintptr]bool{}
+	for _, nr := range append(append([]uintptr{}, denied...), deniedArch...) {
+		deny[nr] = true
+	}
+	for _, nr := range append(append([]uintptr{}, allowed...), allowedArch...) {
+		if deny[nr] {
+			t.Errorf("syscall %d on both lists", nr)
 		}
 	}
 }

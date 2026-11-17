@@ -3,16 +3,38 @@ package privsep
 import (
 	"errors"
 	"fmt"
+	"os"
 	"unsafe"
 
 	"golang.org/x/net/bpf"
 	"golang.org/x/sys/unix"
 )
 
-// Seccomp phase 1 (spec §19.3): a denylist of syscalls the daemon never makes and that serve to
-// escalate or to leave its confinement. They fail with EPERM. Nothing kills the process, so a
-// syscall missed by this list can never take a session down; the allowlist with
-// SECCOMP_RET_KILL_PROCESS is phase 2 (M14), after the e2e suite has recorded what is used.
+// Seccomp (spec §19.3) in one filter with both phases:
+//   - phase 1, a denylist of syscalls the daemon never makes and that serve to escalate or to
+//     leave its confinement, answered with EPERM;
+//   - phase 2, an allowlist (allow.go) of what the daemon does make; anything else kills the
+//     process (SECCOMP_RET_KILL_PROCESS), or with LETHE_SECCOMP=log is only logged by the kernel
+//     (SECCOMP_RET_LOG), which is how the list was surveyed on the e2e suite (ADR 0014).
+// A killed daemon leaves its tables in place: the network stays closed, and `lethe status`
+// names `sudo lethe cleanup` (§18 lockdown), so the failure is never silent nor open.
+
+// Mode is what the filter does with a syscall outside the allowlist.
+type Mode int
+
+// The modes. Enforce is the default and what every unknown LETHE_SECCOMP value means.
+const (
+	ModeEnforce Mode = iota
+	ModeLog
+)
+
+// SeccompMode reads LETHE_SECCOMP ("log" for the survey; anything else enforces).
+func SeccompMode(env string) Mode {
+	if env == "log" {
+		return ModeLog
+	}
+	return ModeEnforce
+}
 
 // denied is common to the supported architectures; deniedArch adds the per-architecture ones.
 var denied = []uintptr{
@@ -36,15 +58,19 @@ const (
 	seccompNR   = 0
 	seccompArch = 4
 	x32Bit      = 0x40000000 // __X32_SYSCALL_BIT
+	maxInsns    = 4096       // BPF_MAXINSNS
 )
 
-// SeccompProgram is the phase-1 filter for this architecture (nil where unsupported).
-func SeccompProgram() ([]bpf.RawInstruction, error) {
+// SeccompProgram is the filter for this architecture (nil where unsupported).
+func SeccompProgram(mode Mode) ([]bpf.RawInstruction, error) {
 	if auditArch == 0 {
 		return nil, nil
 	}
-	list := append(append([]uintptr{}, denied...), deniedArch...)
 	eperm := unix.SECCOMP_RET_ERRNO | uint32(unix.EPERM)
+	other := uint32(unix.SECCOMP_RET_KILL_PROCESS)
+	if mode == ModeLog {
+		other = unix.SECCOMP_RET_LOG
+	}
 	prog := []bpf.Instruction{
 		bpf.LoadAbsolute{Off: seccompArch, Size: 4},
 		// A foreign ABI (i386 int 0x80 on amd64) has other syscall numbers: refuse it whole.
@@ -55,20 +81,24 @@ func SeccompProgram() ([]bpf.RawInstruction, error) {
 	if x32 {
 		prog = append(prog, bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: x32Bit, SkipFalse: 1}, bpf.RetConstant{Val: eperm})
 	}
-	for i, nr := range list {
-		// on a match, skip to the EPERM after the list
-		prog = append(prog, bpf.JumpIf{Cond: bpf.JumpEqual, Val: uint32(nr), SkipTrue: uint8(len(list) - i)}) // #nosec G115 -- small list
+	// Each entry is a compare and a return, so no jump is longer than one instruction.
+	for _, nr := range append(append([]uintptr{}, denied...), deniedArch...) {
+		prog = append(prog, bpf.JumpIf{Cond: bpf.JumpEqual, Val: uint32(nr), SkipFalse: 1}, bpf.RetConstant{Val: eperm}) // #nosec G115 -- syscall numbers
 	}
-	prog = append(prog, bpf.RetConstant{Val: unix.SECCOMP_RET_ALLOW}, bpf.RetConstant{Val: eperm})
-	if len(list) > 250 {
-		return nil, errors.New("privsep: seccomp list too long for 8-bit jumps")
+	for _, nr := range append(append([]uintptr{}, allowed...), allowedArch...) {
+		prog = append(prog, bpf.JumpIf{Cond: bpf.JumpEqual, Val: uint32(nr), SkipFalse: 1}, bpf.RetConstant{Val: unix.SECCOMP_RET_ALLOW}) // #nosec G115 -- syscall numbers
+	}
+	prog = append(prog, bpf.RetConstant{Val: other})
+	if len(prog) > maxInsns {
+		return nil, errors.New("privsep: seccomp program too long")
 	}
 	return bpf.Assemble(prog)
 }
 
-// applySeccomp installs the phase-1 filter on every thread (TSYNC). no_new_privs must be set.
+// applySeccomp installs the filter on every thread (TSYNC). no_new_privs must be set.
+// SECCOMP_FILTER_FLAG_LOG makes the kernel log the denials and kills too, not only RET_LOG.
 func applySeccomp() error {
-	raw, err := SeccompProgram()
+	raw, err := SeccompProgram(SeccompMode(os.Getenv("LETHE_SECCOMP")))
 	if err != nil || raw == nil {
 		return err
 	}
@@ -77,7 +107,7 @@ func applySeccomp() error {
 		filter[i] = unix.SockFilter{Code: r.Op, Jt: r.Jt, Jf: r.Jf, K: r.K}
 	}
 	fprog := unix.SockFprog{Len: uint16(len(filter)), Filter: &filter[0]} // #nosec G115 -- < 300
-	r, _, errno := unix.Syscall(unix.SYS_SECCOMP, unix.SECCOMP_SET_MODE_FILTER, unix.SECCOMP_FILTER_FLAG_TSYNC,
+	r, _, errno := unix.Syscall(unix.SYS_SECCOMP, unix.SECCOMP_SET_MODE_FILTER, unix.SECCOMP_FILTER_FLAG_TSYNC|unix.SECCOMP_FILTER_FLAG_LOG,
 		uintptr(unsafe.Pointer(&fprog))) // #nosec G103 -- the kernel ABI takes a pointer
 	switch {
 	case errno != 0:

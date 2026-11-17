@@ -9,3 +9,5 @@ const (
 )
 
 var deniedArch []uintptr
+
+var allowed, allowedArch []uintptr
