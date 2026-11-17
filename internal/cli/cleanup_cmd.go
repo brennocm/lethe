@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"lethe/internal/guard"
+	"lethe/internal/response"
 )
 
 // newCleanupCmd removes every lethe* nftables table, with or without a running daemon
@@ -32,6 +33,14 @@ func newCleanupCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
+			// the links a panic set down (link_down), also after a crash
+			up, lerr := response.LinkStore{}.Restore(response.NetlinkLinkUp)
+			for _, l := range up {
+				_, _ = fmt.Fprintf(out, "interface %s religada (o pânico a tinha derrubado)\n", l)
+			}
+			if lerr != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "lethe: interfaces que não voltaram: %v; religue-as no gerenciador de rede\n", lerr)
+			}
 			if len(removed) == 0 {
 				_, _ = fmt.Fprintln(out, "no lethe tables present: nada a remover; o lethe não está bloqueando a rede")
 				return nil

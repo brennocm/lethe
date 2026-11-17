@@ -23,7 +23,7 @@ RestartSec=1s
 # `sudo lethe cleanup`. Nothing here removes them behind the operator's back.
 KillMode=mixed
 TimeoutStopSec=20s
-RuntimeDirectory=lethe
+RuntimeDirectory=lethe lethe-state
 RuntimeDirectoryMode=0700
 RuntimeDirectoryPreserve=yes
 UMask=0077

@@ -401,7 +401,7 @@ func (d *Daemon) executorEnv(s *session) response.Env {
 		KillOnPanic: kill,
 		KillUID:     d.cfg.Operator.UID,
 		Egress:      func() []string { return s.gcfg.Egress },
-		LinkDown:    response.NetlinkLinkDown,
+		LinkDown:    response.RecordedLinkDown(response.LinkStore{Dir: d.cfg.LinkDir}),
 		LockScreen: func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
@@ -565,7 +565,11 @@ func (d *Daemon) endLocked(reason string, keepGuard bool) {
 	if !keepGuard && s.guardMode != engine.GuardOff {
 		if c, err := d.cfg.NFT(); err == nil {
 			if err := guard.Remove(c, guard.All()...); err == nil {
-				d.appendLocked(contracts.Event{Type: contracts.EvGuardRemoved, Source: contracts.SourceDaemon, Data: map[string]any{"reason": removalReason(reason)}})
+				data := map[string]any{"reason": removalReason(reason)}
+				if up := d.restoreLinksLocked(); len(up) > 0 {
+					data["links_up"] = up
+				}
+				d.appendLocked(contracts.Event{Type: contracts.EvGuardRemoved, Source: contracts.SourceDaemon, Data: data})
 			} else {
 				_, _ = fmt.Fprintf(d.cfg.Out, "lethe: guard: %v (run lethe cleanup)\n", err)
 			}
@@ -689,9 +693,29 @@ func (d *Daemon) Unpanic() (map[string]any, error) {
 		return nil, err
 	}
 	d.sess.panic = panicCause{}
-	d.appendLocked(contracts.Event{Type: contracts.EvPanicReleased, Source: contracts.SourceOperator, Data: map[string]any{"recheck": []any{"NET-003", "NET-004", "TUN-001"}}})
+	data := map[string]any{"recheck": []any{"NET-003", "NET-004", "TUN-001"}}
+	if up := d.restoreLinksLocked(); len(up) > 0 {
+		data["links_up"] = up
+	}
+	d.appendLocked(contracts.Event{Type: contracts.EvPanicReleased, Source: contracts.SourceOperator, Data: data})
 	d.stateChangedLocked("unpanic")
 	return map[string]any{"state": string(d.eng.Session())}, nil
+}
+
+// restoreLinksLocked brings back up the links panic set down (link_down). Leaving the panic must
+// give the network back: without this the operator would leave PANIC with every egress link
+// still down and nothing in lethe to undo it. A link that fails stays recorded, and the message
+// names `sudo lethe cleanup`, which retries.
+func (d *Daemon) restoreLinksLocked() []any {
+	up, err := response.LinkStore{Dir: d.cfg.LinkDir}.Restore(response.NetlinkLinkUp)
+	if err != nil {
+		_, _ = fmt.Fprintf(d.cfg.Out, "lethe: interfaces derrubadas pelo pânico não voltaram: %v\n  como sair: sudo lethe cleanup (tenta de novo), ou religue-as no gerenciador de rede\n", err)
+	}
+	out := make([]any, 0, len(up))
+	for _, l := range up {
+		out = append(out, l)
+	}
+	return out
 }
 
 // releaseGuardLocked reapplies strict before removing the panic tables, so there is never a

@@ -41,7 +41,7 @@ func TestM14_ServiceUnitMatchesSpec(t *testing.T) {
 		"AmbientCapabilities": "", "NoNewPrivileges": "yes", "ProtectSystem": "strict", "ProtectHome": "read-only",
 		"PrivateTmp": "yes", "MemoryDenyWriteExecute": "yes", "LockPersonality": "yes", "RestrictNamespaces": "yes",
 		"RestrictAddressFamilies": "AF_UNIX AF_NETLINK AF_PACKET AF_INET AF_INET6", "ExecStart": "/usr/bin/lethe daemon",
-		"RuntimeDirectory": "lethe",
+		"RuntimeDirectory": "lethe lethe-state",
 	}
 	for k, v := range want {
 		if got, ok := d[k]; !ok || got != v {

@@ -182,6 +182,7 @@ func startDaemon(t *testing.T, s *session) (*daemon.Daemon, *ipc.Client, *syncBu
 	d := daemon.New(daemon.Config{
 		Operator: platform.Operator{UID: os.Getuid(), GID: os.Getgid(), Home: s.dir}, SocketPath: s.socket,
 		ToolVersion: "e2e", Sensors: true, Out: out, DiscoverEvery: 300 * time.Millisecond,
+		LinkDir: filepath.Join(s.dir, "linkstate"), // /run is the host's, read-only in the user namespace
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

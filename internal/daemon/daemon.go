@@ -36,6 +36,8 @@ import (
 
 // Config wires the daemon to the host. Every I/O dependency is injectable for tests.
 type Config struct {
+	// LinkDir records the links panic set down (default response.DefaultLinkDir).
+	LinkDir     string
 	Operator    platform.Operator
 	SocketPath  string
 	ToolVersion string
