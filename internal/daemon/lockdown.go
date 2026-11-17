@@ -63,7 +63,7 @@ func (d *Daemon) lockdownLocked() *Lockdown {
 			exit = fmt.Sprintf("reconheça os CRITICAL com lethe ack ID --reason \"...\" (%s) e depois rode lethe unpanic", strings.Join(unacked, ", "))
 		}
 		return &Lockdown{What: "a rede está bloqueada: pânico", Why: why,
-			Exit: exit + "; se o lethe não responder: sudo lethe cleanup, ou reinicie a máquina"}
+			Exit: exit + "; se o túnel não voltar: lethe disarm encerra a sessão e libera a rede (pede a passphrase); se o lethe não responder: sudo lethe cleanup, ou reinicie a máquina"}
 	case s.guardMode == engine.GuardStrict && s.confirming:
 		return &Lockdown{What: "guarda estrito aplicado: só o túnel passa enquanto ele prova que funciona",
 			Why:  fmt.Sprintf("o arm espera até %s por um handshake ou tráfego pelo túnel", s.prof.Guard.ArmWindow),

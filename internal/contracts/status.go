@@ -78,6 +78,9 @@ type DisarmResult struct {
 	Session  string `json:"session"`
 	Dir      string `json:"dir"`
 	Critical int    `json:"critical"`
+	// InPanic: the session was ended from PANIC; the block was lifted by the operator's
+	// passphrase without the unpanic re-check (spec §10.6 item 10).
+	InPanic bool `json:"in_panic,omitempty"`
 }
 
 // SelftestCases is every case of spec §18.2, in run order; Resp001 is the one that cuts the

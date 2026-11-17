@@ -597,7 +597,7 @@ func (d *Daemon) endLocked(reason string, keepGuard bool) {
 // removalReason names why the guard left: the session end reason, or disarm.
 func removalReason(end string) string {
 	switch end {
-	case "arm_unconfirmed", "daemon_stopped", "ipc_failed":
+	case "arm_unconfirmed", "daemon_stopped", "ipc_failed", "disarm_in_panic":
 		return end
 	}
 	if strings.HasPrefix(end, "arm_failed") {
@@ -606,7 +606,10 @@ func removalReason(end string) string {
 	return "disarm"
 }
 
-// Disarm closes an ARMED session (PANIC needs unpanic first, spec §6.1).
+// Disarm closes the session (passphrase proved by the caller). From PANIC it also lifts the
+// block: it is the operator's way out when the unpanic re-check cannot pass, because the panic
+// blocks the very tunnel that would have to come back (spec §10.6 item 10). It is journaled as
+// disarm_in_panic, with the unacknowledged CRITICALs counted in session.end.
 func (d *Daemon) Disarm() (DisarmResult, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -616,8 +619,13 @@ func (d *Daemon) Disarm() (DisarmResult, error) {
 	if _, err := engine.Next(d.eng.Session(), engine.CmdDisarm); err != nil {
 		return DisarmResult{}, errState(err)
 	}
-	r := DisarmResult{Session: d.sess.id, Dir: d.sess.dir(), Critical: d.sess.critical}
-	d.endLocked("disarm", false)
+	inPanic := d.eng.Session() == engine.StatePanic
+	r := DisarmResult{Session: d.sess.id, Dir: d.sess.dir(), Critical: d.sess.critical, InPanic: inPanic}
+	reason := "disarm"
+	if inPanic {
+		reason = "disarm_in_panic"
+	}
+	d.endLocked(reason, false)
 	if _, err := d.eng.Apply(engine.CmdDisarm); err != nil {
 		return r, errState(err)
 	}

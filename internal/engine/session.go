@@ -64,6 +64,9 @@ var transitions = map[transitionKey]SessionState{
 	{StateArmed, CmdDisarm}:               StateReady,
 	{StatePanic, CmdPanic}:                StatePanic,
 	{StatePanic, CmdUnpanic}:              StateArmed,
+	// Ending the session from PANIC (passphrase, spec §10.6 item 10): the operator's
+	// authenticated way out when the tunnel cannot come back to pass the unpanic re-check.
+	{StatePanic, CmdDisarm}: StateReady,
 }
 
 // Next returns the state reached by applying cmd in from, or ErrInvalidTransition.

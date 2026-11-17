@@ -381,9 +381,6 @@ func TestAC08_ReactivePanicAndUnpanic(t *testing.T) {
 	if !f.nft.has("inet lethe_panic") {
 		t.Fatal("panic table not applied")
 	}
-	if _, err := f.d.Disarm(); err == nil {
-		t.Fatal("disarm from PANIC must be refused")
-	}
 	if _, err := f.d.Unpanic(); err == nil || !strings.Contains(err.Error(), "unacknowledged") {
 		t.Fatalf("unpanic with an unacked CRITICAL: %v", err)
 	}
@@ -412,6 +409,33 @@ func TestAC08_ReactivePanicAndUnpanic(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("journal lacks %s: %s", want, got)
 		}
+	}
+}
+
+// The operator's way out of a PANIC whose re-check cannot pass (the panic blocks the tunnel that
+// would have to come back): disarm with the passphrase lifts every table, the journal says so.
+func TestAC08_DisarmFromPanicLiftsTheBlock(t *testing.T) {
+	f := newFixture(t)
+	res := f.arm(t, "strict")
+	f.d.deliver(f.d.sess, leak())
+	if st, _ := f.d.State(); st != engine.StatePanic {
+		t.Fatalf("got %s", st)
+	}
+	f.k.setProbe(2) // the re-check fails: unpanic is impossible
+	if _, err := f.d.Unpanic(); err == nil {
+		t.Fatal("unpanic must still need the re-check")
+	}
+	r, err := f.d.Disarm()
+	if err != nil || !r.InPanic {
+		t.Fatalf("%+v %v", r, err)
+	}
+	if st, _ := f.d.State(); st != engine.StateReady || f.nft.has("inet lethe_panic") || f.nft.has("inet lethe") {
+		t.Fatalf("after disarm in panic: %s, tables left", st)
+	}
+	evs := f.events(t, res.Dir)
+	last := evs[len(evs)-1]
+	if last.Type != "session.end" || last.Data["reason"] != "disarm_in_panic" {
+		t.Fatalf("journal end: %+v", last)
 	}
 }
 

@@ -601,6 +601,7 @@ NET-002 (tentativa bloqueada no estrito) é WARNING por definição: o guarda fu
 ### 10.5 Pânico e unpanic
 
 - **Pânico** = `block_all` ativo. Entra sozinho (CRITICAL em `reactive`/`strict`) ou por `lethe panic`, pelo botão da GUI ou pelo `p` da TUI. Entrar em pânico **não** exige passphrase.
+- **Encerrar em pânico:** `lethe disarm` (passphrase) encerra a sessão e libera a rede sem a reconferência (§10.6 item 10).
 - **Unpanic** exige, nesta ordem:
   1. todos os CRITICAL da sessão reconhecidos;
   2. nova rodada dos checks de estado (NET-003, NET-004, DNS-002, TUN-001, TUN-003) passando. Como a rede está bloqueada, só checks locais entram aqui;
@@ -633,6 +634,7 @@ O bloqueio é deliberado só quando protege contra um vazamento durante a opera�
 **Primeiro uso guiado**
 
 8. `lethe setup` é um assistente no terminal que cria o perfil e a baseline com perguntas simples (identificador da operação, persona, tipo de túnel detectado pela descoberta) e grava o perfil em `off`. Ele só oferece passar para `strict` depois de um `lethe selftest` aprovado nesta máquina, e então roda o preflight para mostrar o que o estrito vai permitir.
+10. **Saída autenticada do pânico.** O `unpanic` exige a reconferência do túnel, e o pânico padrão bloqueia o próprio túnel: se a VPN caiu de verdade, ela não volta e a reconferência nunca passa. Por isso o `disarm` (que exige a passphrase) também vale em PÂNICO: encerra a sessão, remove as tabelas, religa as interfaces que o `link_down` derrubou e fecha o log com `reason: disarm_in_panic` (contando os CRITICAL não reconhecidos). Sem passphrase (Ctrl-C, sinal), o bloqueio continua de propósito. A GUI oferece essa saída ao lado do "Sair do pânico".
 9. `lethe report` e `lethe verify` abrem o log com `--baseline FILE` (pede a passphrase e usa a `log_identity` embutida), além de `--identity`. Sem chaves institucionais, o operador lê o próprio relatório sem gerar outra chave.
 
 ---

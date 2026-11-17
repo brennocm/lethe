@@ -14,7 +14,7 @@ func TestSession_ExhaustiveTransitions(t *testing.T) {
 		StateVerified: {CmdPreflightPass: StateVerified, CmdPreflightFail: StateReady,
 			CmdArm: StateArmed, CmdArmForce: StateArmed},
 		StateArmed: {CmdPanic: StatePanic, CmdDisarm: StateReady},
-		StatePanic: {CmdPanic: StatePanic, CmdUnpanic: StateArmed},
+		StatePanic: {CmdPanic: StatePanic, CmdUnpanic: StateArmed, CmdDisarm: StateReady},
 	}
 	for _, s := range SessionStates() {
 		for _, c := range Commands() {
