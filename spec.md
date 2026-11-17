@@ -961,7 +961,7 @@ UTC com microssegundos mais `CLOCK_MONOTONIC`. Saltos de relógio são registrad
 | `lethe events [--follow] [--severity S] [--json]` | Fluxo de eventos |
 | `lethe ack ID --reason TEXT` | Reconhece um alerta |
 | `lethe panic` / `lethe unpanic` | Bloqueio manual / liberação |
-| `lethe selftest [--case ID] [--json]` | Autoteste (§18) |
+| `lethe selftest [--case ID] [--json] [--yes]` | Autoteste (§18), dentro da sessão armada; `--yes` confirma o RESP-001 sem perguntar |
 | `lethe report SESSÃO [--format md\|json] (--identity FILE \| --baseline FILE)` | Relatório |
 | `lethe verify SESSÃO [--expect-fingerprint FP] (--identity FILE \| --baseline FILE)` | Verificação de integridade |
 | `lethe cleanup` | Remove tabelas `lethe*`, socket e arquivos temporários e diz o que removeu |
@@ -1071,7 +1071,7 @@ Esses pacotes chegam, no máximo, ao roteador do operador. Eventos de autoteste 
 |---|---|---|
 | ST-NET-001 | NET-001 | UDP para `192.0.2.1:9` com `SO_BINDTODEVICE` na interface egress |
 | ST-NET-002 | NET-002 (estrito) | O mesmo, sem a exceção: deve aparecer como tentativa bloqueada, com UID |
-| ST-NET-003 | NET-003/NET-001 v6 | UDP para `[2001:db8::1]:9` pela interface egress (se houver v6) |
+| ST-NET-003 | NET-003/NET-001 v6 | UDP para `[2001:db8::1]:9` pela interface egress (se houver v6; sem IPv6 global no egress, SKIP) |
 | ST-NET-006 | NET-006 | Cria e remove uma interface `dummy` temporária (`lethe-st0`) |
 | ST-NET-010 | NET-010 | TCP SYN para `198.51.100.1:443` pela egress; o evento precisa vir atribuído ao PID do selftest com `confidence: high` |
 | ST-NET-012 | NET-012 | UDP com cabeçalho STUN Binding Request para `203.0.113.1:3478` |
@@ -1085,7 +1085,7 @@ Esses pacotes chegam, no máximo, ao roteador do operador. Eventos de autoteste 
 
 ### 18.3 Resultado
 
-Tabela pass/fail com a latência de detecção por caso, gravada no log e em `storage.dir/state/selftest.json` (lido pelo SELF-004). Qualquer falha deixa o preflight em WARNING; uma falha em ST-NET-001, ST-NET-002 (no estrito) ou RESP-001 o deixa em CRITICAL.
+Tabela pass/fail com a latência de detecção por caso, gravada no log e em `storage.dir/state/selftest.json` (lido pelo SELF-004; só uma rodada completa atualiza o arquivo). O selftest roda no daemon da sessão armada (`selftest.run`); os achados que ele causa são reconhecidos pelo fluxo exato, pela interface, tabela, PID ou arquivo do caso e gravados com `selftest: true` e o plano de respostas em dry-run (ADR 0010). Qualquer falha deixa o preflight em WARNING; uma falha em ST-NET-001, ST-NET-002 (no estrito) ou RESP-001 o deixa em CRITICAL.
 
 ---
 
