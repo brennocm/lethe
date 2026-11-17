@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 
 	"lethe/internal/contracts"
 	"lethe/internal/ipc"
@@ -15,42 +14,6 @@ import (
 
 	"golang.org/x/sys/unix"
 )
-
-// Status is status.get and `lethe status --json` (schema: status).
-type Status struct {
-	State       string       `json:"state"`
-	Color       string       `json:"color"`
-	Session     string       `json:"session,omitempty"`
-	Fingerprint string       `json:"fingerprint,omitempty"`
-	Guard       string       `json:"guard,omitempty"`
-	StartedAt   *time.Time   `json:"started_at,omitempty"`
-	AuthSalt    []byte       `json:"auth_salt,omitempty"` // for K = scrypt(passphrase, salt), spec §17.3
-	Alerts      []AlertView  `json:"alerts"`
-	Degraded    []string     `json:"degraded"`
-	Sensors     []SensorView `json:"sensors"`
-	Agent       bool         `json:"agent"`
-	Confirming  bool         `json:"confirming,omitempty"` // strict arm waiting for the tunnel's proof
-	Lockdown    *Lockdown    `json:"lockdown,omitempty"`   // what lethe blocks, why and how to get out
-	Exit        *ExitView    `json:"exit,omitempty"`       // last agreed exit check (NET-011), never the IP
-}
-
-// AlertView is one alert in the status.
-type AlertView struct {
-	ID        string    `json:"id"`
-	Check     string    `json:"check"`
-	Severity  string    `json:"severity"`
-	State     string    `json:"state"`
-	Count     int       `json:"count"`
-	FirstSeen time.Time `json:"first_seen"`
-	LastSeen  time.Time `json:"last_seen"`
-	Acked     bool      `json:"acked"`
-}
-
-// SensorView is one heartbeat source.
-type SensorView struct {
-	Source string `json:"source"`
-	Up     bool   `json:"up"`
-}
 
 // Status snapshots the daemon state.
 func (d *Daemon) Status() Status {
@@ -78,6 +41,20 @@ func (d *Daemon) Status() Status {
 	return st
 }
 
+// The IPC answers live in contracts (the GUI imports only contracts and ipc).
+type (
+	Status          = contracts.Status
+	AlertView       = contracts.AlertView
+	SensorView      = contracts.SensorView
+	ExitView        = contracts.ExitView
+	Lockdown        = contracts.Lockdown
+	QueryParams     = contracts.QueryParams
+	DisarmResult    = contracts.DisarmResult
+	SelftestRequest = contracts.SelftestRequest
+	CaseResult      = contracts.CaseResult
+	SelftestResult  = contracts.SelftestResult
+)
+
 func sortSensors(v []SensorView) {
 	for i := 1; i < len(v); i++ {
 		for j := i; j > 0 && v[j].Source < v[j-1].Source; j-- {
@@ -96,13 +73,7 @@ func decode(c *ipc.Call, v any) error {
 	return nil
 }
 
-// QueryParams filters events.query and events.subscribe.
-type QueryParams struct {
-	Severity string `json:"severity,omitempty"` // minimum severity
-	Limit    int    `json:"limit,omitempty"`
-}
-
-func (q QueryParams) match(ev contracts.Event) bool {
+func matchQuery(q QueryParams, ev contracts.Event) bool {
 	if q.Severity == "" {
 		return true
 	}
@@ -139,7 +110,7 @@ func (d *Daemon) routes() {
 		defer d.mu.Unlock()
 		out := []contracts.Event{}
 		for _, ev := range d.recent {
-			if q.match(ev) {
+			if matchQuery(q, ev) {
 				out = append(out, ev)
 			}
 		}
@@ -170,7 +141,7 @@ func (d *Daemon) routes() {
 				case <-c.Ctx.Done():
 					return
 				case ev := <-ch:
-					if q.match(ev) && c.Notify(ev) != nil {
+					if matchQuery(q, ev) && c.Notify(ev) != nil {
 						return
 					}
 				}
@@ -203,6 +174,13 @@ func (d *Daemon) routes() {
 			return nil, err
 		}
 		return map[string]any{"ok": true}, d.Ack(p.ID, p.Reason, c.Authorize)
+	})
+	h("gui.fullscreen_result", func(c *ipc.Call) (any, error) {
+		var r FullscreenReport
+		if err := decode(c, &r); err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true}, d.FullscreenResult(r)
 	})
 	h("agent.report", func(c *ipc.Call) (any, error) {
 		if err := contracts.ValidateJSON("agent_report", c.Req.Params); err != nil {

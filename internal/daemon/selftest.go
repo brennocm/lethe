@@ -42,21 +42,20 @@ const (
 	STHost001 = "ST-HOST-001"
 	STSelf001 = "ST-SELF-001"
 	STSelf002 = "ST-SELF-002"
-	Resp001   = "RESP-001"
+	Resp001   = contracts.Resp001
 )
 
 // SelftestCases is every case of §18.2, in run order.
-var SelftestCases = []string{STNet001, STNet002, STNet003, STNet006, STNet010, STNet012, STDNS001, STDNS004,
-	STTun004, STHost001, STSelf001, STSelf002, Resp001}
+var SelftestCases = contracts.SelftestCases
 
 // criticalCases: a failure here makes the preflight CRITICAL (spec §18.3).
 var criticalCases = map[string]bool{STNet001: true, STNet002: true, Resp001: true}
 
 // Case results.
 const (
-	CasePass = "pass"
-	CaseFail = "fail"
-	CaseSkip = "skip"
+	CasePass = contracts.CasePass
+	CaseFail = contracts.CaseFail
+	CaseSkip = contracts.CaseSkip
 )
 
 // Selftest flow constants (documentation destinations only, spec §18.1).
@@ -79,30 +78,6 @@ const (
 	stBurst     = 2000            // ST-SELF-002
 	stMinRcvbuf = 1
 )
-
-// SelftestRequest is selftest.run. RESP-001 runs only when Resp is true (a sensitive call).
-type SelftestRequest struct {
-	Cases []string `json:"cases,omitempty"` // empty = all
-	Resp  bool     `json:"resp,omitempty"`  // the operator confirmed RESP-001 (it cuts the network ~1 s)
-}
-
-// CaseResult is one row of the result table.
-type CaseResult struct {
-	ID        string  `json:"id"`
-	Result    string  `json:"result"`
-	LatencyMS float64 `json:"latency_ms,omitempty"`
-	Reason    string  `json:"reason,omitempty"`
-}
-
-// SelftestResult is the table written to the journal and to storage.dir/state/selftest.json.
-type SelftestResult struct {
-	FinishedAt time.Time    `json:"finished_at"`
-	Guard      string       `json:"guard"`
-	Passed     bool         `json:"passed"`
-	Critical   bool         `json:"critical"`
-	Full       bool         `json:"full"` // every case was asked (only a full run updates SELF-004)
-	Cases      []CaseResult `json:"cases"`
-}
 
 // ErrSelftestBusy: one selftest at a time.
 var ErrSelftestBusy = errors.New("a selftest is already running")
@@ -280,7 +255,7 @@ func (d *Daemon) RunSelftest(ctx context.Context, req SelftestRequest, auth func
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.sess == s {
-		d.appendLocked(contracts.Event{Type: contracts.EvSelftestResult, Source: contracts.SourceSelftest, Selftest: true, Data: res.data()})
+		d.appendLocked(contracts.Event{Type: contracts.EvSelftestResult, Source: contracts.SourceSelftest, Selftest: true, Data: selftestData(res)})
 	}
 	if res.Full {
 		if err := d.writeSelftestFile(s, res); err != nil {
@@ -290,7 +265,7 @@ func (d *Daemon) RunSelftest(ctx context.Context, req SelftestRequest, auth func
 	return res, nil
 }
 
-func (r SelftestResult) data() map[string]any {
+func selftestData(r SelftestResult) map[string]any {
 	cases := make([]any, 0, len(r.Cases))
 	for _, c := range r.Cases {
 		m := map[string]any{"id": c.ID, "result": c.Result}

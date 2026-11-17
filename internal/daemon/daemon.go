@@ -154,6 +154,7 @@ type session struct {
 	agentKeyboard   string
 	clockOffset     time.Duration        // realtime − boottime at the last tick (SELF-005)
 	paused          map[string]time.Time // heartbeats ignored until then (ST-SELF-001)
+	fullscreen      map[string]bool      // alerts whose gui.fullscreen_result is journaled
 	probes          []*stProbe           // selftest findings recognisers
 	selftesting     bool
 	stExceptions    []guard.Exception // strict exceptions of the running case

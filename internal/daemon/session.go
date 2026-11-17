@@ -288,7 +288,7 @@ func (d *Daemon) openSession(prof *profile.Profile, base *baseline.Baseline, mod
 		return nil, err
 	}
 	s := &session{id: id, prof: prof, base: base, guardMode: mode, startedAt: now,
-		beats: map[string]time.Time{}, paused: map[string]time.Time{}, down: map[string]bool{}, conditions: map[string]map[string]map[string]any{}, tunnels: map[string]bool{}, tx: checks.NewTxTracker()}
+		beats: map[string]time.Time{}, paused: map[string]time.Time{}, fullscreen: map[string]bool{}, down: map[string]bool{}, conditions: map[string]map[string]map[string]any{}, tunnels: map[string]bool{}, tx: checks.NewTxTracker()}
 	recips, err := recipients(prof.Storage.LogRecipients, base)
 	if err != nil {
 		return nil, errParams(err)
@@ -599,13 +599,6 @@ func removalReason(end string) string {
 		return "arm_failed"
 	}
 	return "disarm"
-}
-
-// DisarmResult summarizes a closed session.
-type DisarmResult struct {
-	Session  string `json:"session"`
-	Dir      string `json:"dir"`
-	Critical int    `json:"critical"`
 }
 
 // Disarm closes an ARMED session (PANIC needs unpanic first, spec §6.1).

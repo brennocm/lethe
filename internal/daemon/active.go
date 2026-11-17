@@ -15,14 +15,6 @@ import (
 // in active_checks.egress_ip.interval. The query runs outside the lock; it only ever leaves
 // through the tunnel (bound socket, tunnel resolver) or the Tor SOCKS port.
 
-// ExitView is the last agreed answer, without the IP (status, GUI header).
-type ExitView struct {
-	Country string    `json:"country,omitempty"`
-	ASN     uint32    `json:"asn,omitempty"`
-	At      time.Time `json:"at"`
-	Path    string    `json:"path"` // tunnel interface or "tor"
-}
-
 func (d *Daemon) activeOn(s *session) bool {
 	return s.prof.ActiveChecks.Enabled && !s.noActive
 }

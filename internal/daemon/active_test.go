@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"lethe/internal/baseline"
+	"lethe/internal/checks"
+	"lethe/internal/contracts"
 	"lethe/internal/geo"
 	"lethe/internal/sensors/egressip"
 )
@@ -59,4 +61,37 @@ func TestNET011_NoActiveSkipsTheLoop(t *testing.T) {
 		t.Fatal("--no-active must turn the queries off")
 	}
 	_, _ = f.d.Disarm()
+}
+
+func TestM13_GUIFullscreenResultOncePerAlert(t *testing.T) {
+	f := newFixture(t)
+	res := f.arm(t, "off")
+	f.d.mu.Lock()
+	f.d.findingLocked(checks.Finding{Check: "DNS-004", Severity: contracts.SeverityWarning, Data: map[string]any{"file": "/etc/resolv.conf"}})
+	f.d.mu.Unlock()
+	a := alertFor(f.d.Status(), "DNS-004")
+	if a == nil {
+		t.Fatal("no alert")
+	}
+	for range 3 {
+		if err := f.d.FullscreenResult(FullscreenReport{AlertID: a.ID, Result: "shown", LatencyMS: 120}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if f.d.FullscreenResult(FullscreenReport{AlertID: "A-9999", Result: "shown"}) == nil || f.d.FullscreenResult(FullscreenReport{AlertID: a.ID, Result: "shown", LatencyMS: -1}) == nil || f.d.FullscreenResult(FullscreenReport{AlertID: a.ID, Result: "yes"}) == nil {
+		t.Fatal("unknown alert and bad latency must be refused")
+	}
+	_, _ = f.d.Disarm()
+	n := 0
+	for _, ev := range f.events(t, res.Dir) {
+		if ev.Type == contracts.EvResponseExecuted && ev.Data["reported_by"] == "gui" {
+			n++
+			if ev.Data["fullscreen_result"] != "shown" || ev.Data["action"] != "alert_fullscreen" {
+				t.Fatalf("%+v", ev.Data)
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d reports journaled", n)
+	}
 }

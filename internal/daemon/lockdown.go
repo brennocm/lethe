@@ -9,20 +9,6 @@ import (
 	"lethe/internal/engine"
 )
 
-// Lockdown explains a network blocked by lethe in three parts (spec §10.6 item 5): what is
-// blocked, why (cause and alert, never a baseline value) and the exact way out.
-type Lockdown struct {
-	What   string   `json:"what"`
-	Why    string   `json:"why"`
-	Exit   string   `json:"exit"`
-	Tables []string `json:"tables,omitempty"` // leftover lethe* tables (status without a daemon)
-}
-
-// String is the human form used on the terminal and in error messages.
-func (l Lockdown) String() string {
-	return fmt.Sprintf("%s\n  por quê: %s\n  como sair: %s", l.What, l.Why, l.Exit)
-}
-
 // panicCause records why the session entered PANIC (for the lockdown explanation).
 type panicCause struct {
 	cause string // alert | operator | auth_failures

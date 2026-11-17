@@ -34,6 +34,7 @@ var Methods = map[string]Class{
 	"panic.engage":               ClassSafe,
 	"selftest.run":               ClassSafe,
 	"alert.ack":                  ClassSafe,
+	"gui.fullscreen_result":      ClassSafe, // the GUI says whether the full-screen alert got focus
 	"agent.report":               ClassAgent,
 	"session.arm":                ClassSensitive,
 	"session.disarm":             ClassSensitive,
