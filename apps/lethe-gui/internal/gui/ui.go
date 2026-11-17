@@ -82,6 +82,7 @@ type UI struct {
 	guardNote *widget.Label
 	startPass *SecretEntry
 	startBtn  *widget.Button
+	addNetBtn *widget.Button // register the current network in the baseline (no session)
 
 	rows       map[string]*widget.Label
 	timeline   *widget.List
@@ -274,7 +275,8 @@ func (u *UI) buildStart() {
 		x.Importance = widget.LowImportance
 		form.Add(x)
 	}
-	form.Add(container.NewHBox(u.startBtn))
+	u.addNetBtn = widget.NewButton(u.t("addnet_btn"), u.askAddNetwork)
+	form.Add(container.NewHBox(u.startBtn, u.addNetBtn))
 	u.refreshStrict()
 	// a reading column: the form does not stretch across a wide window
 	u.start = container.NewHBox(container.New(&maxWidth{w: 560}, form))

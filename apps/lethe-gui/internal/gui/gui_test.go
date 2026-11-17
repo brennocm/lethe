@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -603,5 +604,74 @@ func TestM10_FirstUseKeepsAnExistingBaseline(t *testing.T) {
 	u.wg.Wait()
 	if !lsetup.Exists(dir) {
 		t.Fatalf("with its passphrase: %q", u.flash.Text)
+	}
+}
+
+// overlayEntries lists the plain entries of the window's dialogs, in layout order.
+func overlayEntries(w fyne.Window) []*widget.Entry {
+	var out []*widget.Entry
+	var walk func(o fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		if e, ok := o.(*widget.Entry); ok {
+			out = append(out, e)
+			return
+		}
+		if c, ok := o.(*fyne.Container); ok {
+			for _, x := range c.Objects {
+				walk(x)
+			}
+		}
+		if wd, ok := o.(fyne.Widget); ok {
+			for _, x := range test.WidgetRenderer(wd).Objects() {
+				walk(x)
+			}
+		}
+	}
+	for _, o := range w.Canvas().Overlays().List() {
+		walk(o)
+	}
+	return out
+}
+
+// Register the current network from the start form: the machine fills gateway and resolvers,
+// the public IP comes on request, and the baseline gets the network with its passphrase.
+func TestM10_RegisterNetworkFromThePanel(t *testing.T) {
+	home := t.TempDir()
+	a0 := lsetup.Defaults(home)
+	a0.WorkLimit = 10
+	a0.Network.PublicIPv4 = "203.0.113.7"
+	if _, err := lsetup.Create(a0, home, []byte("lab passphrase"), t0, "test"); err != nil {
+		t.Fatal(err)
+	}
+	det := func(_ context.Context, askIP bool) lsetup.Detected {
+		d := lsetup.Detected{Network: lsetup.Network{GatewayIP: "198.51.100.1", Resolvers: []string{"198.51.100.53"}}}
+		if askIP {
+			d.Network.PublicIPv4 = "198.51.100.20"
+		}
+		return d
+	}
+	a := &trayApp{App: test.NewTempApp(t)}
+	u := New(a, &fake{}, Options{Lang: "pt-BR", Now: func() time.Time { return t0 }, Home: home, Detect: det, WorkFactor: 10})
+	u.Build()
+	test.Tap(u.addNetBtn)
+	u.wg.Wait()
+	es := overlayEntries(u.panel) // name, gateway, ip, resolvers
+	if len(es) != 4 || es[1].Text != "198.51.100.1" || es[3].Text != "198.51.100.53" || es[2].Text != "" {
+		t.Fatalf("local detection: %d entries", len(es))
+	}
+	test.Tap(overlayButton(t, u.panel, u.t("detect_ip_btn")))
+	u.wg.Wait()
+	if es[2].Text != "198.51.100.20" {
+		t.Fatalf("public IP on request: %q", es[2].Text)
+	}
+	test.Type(es[0], "escritório")
+	test.Type(overlaySecret(t, u.panel), "lab passphrase")
+	test.Tap(overlayButton(t, u.panel, u.t("addnet_save")))
+	u.wg.Wait()
+	if u.flash.Text != fmt.Sprintf(u.t("addnet_ok"), 2) {
+		t.Fatalf("%q", u.flash.Text)
+	}
+	if strings.Contains(u.flash.Text, "198.51.100") {
+		t.Fatal("a baseline value in the panel")
 	}
 }

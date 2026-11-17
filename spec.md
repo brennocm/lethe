@@ -956,7 +956,7 @@ UTC com microssegundos mais `CLOCK_MONOTONIC`. Saltos de relógio são registrad
 | Comando | Descrição |
 |---|---|
 | `lethe baseline create [--manual] [--allow-tunnel] [--out FILE] [--recipient AGE]` | Cria a baseline cifrada |
-| `lethe baseline add-network [--manual] FILE` | Adiciona uma rede conhecida |
+| `lethe baseline add-network [--manual] FILE` | Adiciona uma rede conhecida (na GUI: **Registrar a rede atual**, no formulário de início, sem sessão; recusa nome ou IP público repetidos e regrava a baseline de forma atômica) |
 | `lethe baseline show FILE` | Mostra o conteúdo (pede a passphrase) |
 | `lethe setup` | Assistente do primeiro uso no terminal: perfil + baseline, começando em `off` (§10.6 item 8; a GUI tem o mesmo formulário) |
 | `lethe profile init [--out FILE]` | Gera um perfil comentado (guarda `off`) |
