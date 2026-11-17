@@ -510,7 +510,8 @@ func TestM13_StartServiceFromThePanel(t *testing.T) {
 	be := &offBackend{}
 	started := 0
 	a := &trayApp{App: test.NewTempApp(t)}
-	u := New(a, be, Options{Lang: "pt-BR", Now: func() time.Time { return t0 }, Home: home,
+	det := func(context.Context, bool) lsetup.Detected { return lsetup.Detected{} } // never the real machine
+	u := New(a, be, Options{Lang: "pt-BR", Now: func() time.Time { return t0 }, Home: home, Detect: det,
 		StartService: func(context.Context) error {
 			started++
 			be.mu.Lock()
@@ -519,8 +520,7 @@ func TestM13_StartServiceFromThePanel(t *testing.T) {
 			return nil
 		}})
 	u.Build()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	u.wg.Wait() // the first-use form's local detection
 	u.poll()
 	if u.offline == nil || !u.svcBtn.Visible() || u.verdict.Text != "O lethe não está rodando" || !strings.Contains(u.routeNote.Text, "botão") {
 		t.Fatalf("offline: %v %q", u.offline, u.routeNote.Text)
@@ -533,8 +533,6 @@ func TestM13_StartServiceFromThePanel(t *testing.T) {
 	if started != 1 || u.offline != nil || u.svcBtn.Visible() || !u.firstForm.box.Visible() {
 		t.Fatalf("after the start: %d %v %q", started, u.offline, u.flash.Text)
 	}
-	go u.Run(ctx) // Run compiles and keeps polling (main.go starts it)
-	cancel()
 }
 
 // A block no session owns (a daemon restarted after a crash) shows Release the network; it asks
