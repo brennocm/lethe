@@ -34,6 +34,18 @@ func Start(ctx context.Context, user string) error {
 	return startUnit(ctx, unit)
 }
 
+// TrayHost reports whether the desktop shows tray icons (a StatusNotifierWatcher on the session
+// bus). Without one, a tray menu is invisible: GNOME without the AppIndicator extension, WSLg.
+func TrayHost(ctx context.Context) bool {
+	conn, err := dbus.SessionBus()
+	if err != nil {
+		return false
+	}
+	var has bool
+	err = conn.BusObject().CallWithContext(ctx, "org.freedesktop.DBus.NameHasOwner", 0, "org.kde.StatusNotifierWatcher").Store(&has)
+	return err == nil && has
+}
+
 // CleanupUnit removes leftover lethe* tables after a crash (packaging/systemd).
 const CleanupUnit = "lethe-cleanup.service"
 

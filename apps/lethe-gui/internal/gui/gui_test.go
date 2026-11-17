@@ -731,3 +731,21 @@ func TestM13_ReportsFromThePanel(t *testing.T) {
 		t.Fatalf("no reports dialog (flash %q)", u.flash.Text)
 	}
 }
+
+// Without a tray host the panel is the whole GUI: no tray menu is set and closing is not
+// intercepted (hiding it would leave a process nothing can bring back).
+func TestM13_NoTrayHostClosingQuits(t *testing.T) {
+	a := &trayApp{App: test.NewTempApp(t)}
+	u := New(a, &fake{st: armed()}, Options{Lang: "pt-BR", Now: func() time.Time { return t0 }, NoTray: true})
+	u.Build()
+	u.Apply(armed(), nil)
+	if a.menu != nil || u.tray != nil || u.trayStatus != nil {
+		t.Fatalf("a tray menu was set without a tray host")
+	}
+	b := &trayApp{App: test.NewTempApp(t)}
+	v := New(b, &fake{st: armed()}, Options{Lang: "pt-BR", Now: func() time.Time { return t0 }})
+	v.Build()
+	if b.menu == nil {
+		t.Fatalf("the tray menu is missing with a tray host")
+	}
+}

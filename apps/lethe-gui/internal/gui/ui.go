@@ -29,9 +29,12 @@ import (
 // Options configure the UI.
 type Options struct {
 	Lang string
-	X11  bool             // warn that same-UID programs can read the keyboard (spec §22 item 12)
-	Now  func() time.Time // nil = time.Now
-	Home string           // the operator's home: the default profile is Home/lethe/profile.yaml
+	// NoTray: the desktop shows no tray icons, so the panel is the GUI: closing it quits instead
+	// of hiding it where nothing could bring it back.
+	NoTray bool
+	X11    bool             // warn that same-UID programs can read the keyboard (spec §22 item 12)
+	Now    func() time.Time // nil = time.Now
+	Home   string           // the operator's home: the default profile is Home/lethe/profile.yaml
 	// Detect reads the machine for the first-use form (nil = setup.LiveDetect); askIP also asks
 	// the public IP. WorkFactor is the baseline's scrypt factor (0 = the default; tests lower it).
 	Detect     func(ctx context.Context, askIP bool) lsetup.Detected
@@ -215,7 +218,7 @@ func (u *UI) Build() {
 	u.panel.SetContent(container.NewPadded(container.NewBorder(u.top, container.NewVBox(widget.NewSeparator(), u.actions), nil, nil, u.body)))
 	u.panel.Resize(fyne.NewSize(1080, 760))
 
-	if desk, ok := u.app.(desktop.App); ok {
+	if desk, ok := u.app.(desktop.App); ok && !u.opt.NoTray {
 		u.trayStatus = fyne.NewMenuItem("lethe", nil)
 		u.trayStatus.Disabled = true
 		u.tray = fyne.NewMenu("lethe", u.trayStatus,

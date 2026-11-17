@@ -7,6 +7,7 @@ import (
 	"flag"
 	"os"
 	"os/user"
+	"time"
 
 	"fyne.io/fyne/v2"
 
@@ -34,6 +35,9 @@ func Setup(a fyne.App, args []string) (*gui.UI, error) {
 		}
 	}
 	opt.Cleanup = sysd.Cleanup
+	tctx, tcancel := context.WithTimeout(context.Background(), 2*time.Second)
+	opt.NoTray = !sysd.TrayHost(tctx)
+	tcancel()
 	u := gui.New(a, gui.Client{Socket: *sock, Others: gui.Sockets(os.Getuid())}, opt)
 	u.Build()
 	return u, nil
