@@ -1,0 +1,16 @@
+[1mlethe[0m  [33m[1m● ARMED[0m  Guarda: strict  Sessão: s-20261116-1245 (01:15:00)
+[90med25519:4f2a 9c1b 77de 0a31[0m
+Saída: wg0 · NL · AS64500 · 13:58:00
+[33mSensores parados: dbus-system[0m
+
+[1mAlertas[0m
+  [33mWARNING [0m HOST-005 Fuso ou idioma fora do perfil ×1  [90ma-2[0m
+
+[1mEventos[0m
+  12:45:00 [90m        [0m session.start         
+  14:00:00 [33mWARNING [0m check.alert            HOST-005 Fuso ou idioma fora do perfil
+  14:00:00 [90mINFO    [0m selftest.result       [90m [selftest][0m
+[90mDaemon:[0m
+[90m  lethe: agente conectado[0m
+
+[2mp pânico · a reconhecer · s selftest · q sair (sem desarmar)[0m

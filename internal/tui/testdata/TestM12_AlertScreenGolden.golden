@@ -1,0 +1,23 @@
+[41;97m                                                                                [0m
+[41;97m[1m  ALERTA CRÍTICO · NET-001 · a-3                                                [0m
+[41;97m                                                                                [0m
+[41;97m[1m  Tráfego fora do túnel                                                         [0m
+[41;97m  Um pacote saiu pela interface física sem passar pela VPN/Tor: o destino viu   [0m
+[41;97m  o seu IP real.                                                                [0m
+[41;97m                                                                                [0m
+[41;97m  → udp 203.0.113.9:443 · if eth0 · /usr/bin/firefox (pid 4242)                 [0m
+[41;97m                                                                                [0m
+[41;97m[1m  Ações já executadas:                                                          [0m
+[41;97m    Programas da lista encerrados. (falhou)                                     [0m
+[41;97m    Rede bloqueada.                                                             [0m
+[41;97m                                                                                [0m
+[41;97m[1m  O que fazer agora:                                                            [0m
+[41;97m  Pare o que estiver fazendo no programa envolvido. Confira o túnel; se não     [0m
+[41;97m  souber a causa, aperte p (pânico).                                            [0m
+[41;97m                                                                                [0m
+[41;97m[1m  Bloqueio: toda a rede                                                         [0m
+[41;97m  Como sair: lethe unpanic (pede a passphrase)                                  [0m
+[41;97m                                                                                [0m
+[41;97m                                                                                [0m
+[41;97m                                                                                [0m
+[41;97m  a reconhecer · p pânico                                                       [0m
