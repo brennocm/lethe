@@ -6,6 +6,7 @@ package daemon
 import (
 	"context"
 	"crypto/rand"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -28,6 +29,7 @@ import (
 	"lethe/internal/profile"
 	"lethe/internal/response"
 	"lethe/internal/sensors/dbusmon"
+	"lethe/internal/sensors/egressip"
 	"lethe/internal/sensors/nftmon"
 	"lethe/internal/sensors/sockdiag"
 )
@@ -84,6 +86,11 @@ type Config struct {
 	DNSFiles []string
 	// SelftestOps are the side effects of the selftest (default: netlink, nftables, sockets).
 	SelftestOps SelftestOps
+	// ActiveQuery runs one NET-011 round (default egressip.Query); ActiveRootCAs replaces the
+	// system roots (tests); a value on ActiveWake starts a round now (tests).
+	ActiveQuery   func(context.Context, egressip.Path, egressip.Config) egressip.Result
+	ActiveRootCAs *x509.CertPool
+	ActiveWake    chan struct{}
 }
 
 // Daemon is one lethe daemon. Methods are safe for concurrent use.
@@ -151,6 +158,10 @@ type session struct {
 	selftesting     bool
 	stExceptions    []guard.Exception // strict exceptions of the running case
 	stDeny          bool              // the selftest deny rule is active (ST-HOST-001)
+	noActive        bool              // run --no-active
+	exit            *ExitView         // last agreed NET-011 answer
+	hostTZ          string            // timezone and locale the host showed at the last reading
+	hostLocale      string
 }
 
 const recentMax = 2048
@@ -174,7 +185,7 @@ func New(cfg Config) *Daemon {
 		cfg.ProcRoot = "/proc"
 	}
 	if cfg.Geo == nil {
-		cfg.Geo, _ = geo.Embedded() // none before M11: TUN-006 stays inactive
+		cfg.Geo, _ = geo.Embedded() // nil in builds without internal/geo/data: TUN-006 and the country checks stay inactive
 	}
 	if cfg.Sensors && cfg.Sockets == nil {
 		cfg.Sockets = discovery.SystemSockets(cfg.ProcRoot)
@@ -205,6 +216,9 @@ func New(cfg Config) *Daemon {
 	}
 	if cfg.HostEvery == 0 {
 		cfg.HostEvery = hostEveryDefault
+	}
+	if cfg.ActiveQuery == nil {
+		cfg.ActiveQuery = egressip.Query
 	}
 	if cfg.SelftestOps == nil {
 		cfg.SelftestOps = liveOps{nft: func() (guard.Conn, error) { return cfg.NFT() }}

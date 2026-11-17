@@ -77,6 +77,7 @@ func (d *Daemon) ObserveHost(s *session, st hostinfo.State) {
 		return
 	}
 	s.beats[hostinfo.SourceID] = d.cfg.Now()
+	s.hostTZ, s.hostLocale = st.Timezone(), st.Locale()
 	in := checks.HostRules(s.prof, checks.HostInput{State: st, Snapshot: &d.snap, Known: s.known, Now: d.cfg.Now(), AgentKeyboard: s.agentKeyboard})
 	if s.stDeny {
 		in.Deny = append(in.Deny, checks.DenyRule{Match: "comm", Value: stDenyComm, Severity: contracts.SeverityWarning})

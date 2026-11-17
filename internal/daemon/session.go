@@ -47,7 +47,8 @@ type ArmRequest struct {
 	Guard      string             `json:"guard,omitempty"` // overrides guard.mode
 	Force      bool               `json:"force,omitempty"`
 	Reason     string             `json:"reason,omitempty"`
-	Manual     []preflight.Answer `json:"manual,omitempty"` // nil = checklist not asked
+	Manual     []preflight.Answer `json:"manual,omitempty"`    // nil = checklist not asked
+	NoActive   bool               `json:"no_active,omitempty"` // no NET-011 queries this session
 }
 
 // ArmResult is returned by a successful arm.
@@ -190,6 +191,7 @@ func (d *Daemon) armLocked(req ArmRequest) (ArmResult, preflight.Report, error) 
 	d.sess = s
 	d.snap = snap
 	s.known = known
+	s.noActive = req.NoActive
 	if host.BusRead {
 		s.armWiFi = append([]dbusmon.WiFi{}, host.Bus.NM.WiFi...)
 	}

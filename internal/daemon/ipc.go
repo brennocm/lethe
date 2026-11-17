@@ -31,6 +31,7 @@ type Status struct {
 	Agent       bool         `json:"agent"`
 	Confirming  bool         `json:"confirming,omitempty"` // strict arm waiting for the tunnel's proof
 	Lockdown    *Lockdown    `json:"lockdown,omitempty"`   // what lethe blocks, why and how to get out
+	Exit        *ExitView    `json:"exit,omitempty"`       // last agreed exit check (NET-011), never the IP
 }
 
 // AlertView is one alert in the status.
@@ -73,6 +74,7 @@ func (d *Daemon) Status() Status {
 	sortSensors(st.Sensors)
 	st.Confirming = s.confirming
 	st.Lockdown = d.lockdownLocked()
+	st.Exit = s.exit
 	return st
 }
 

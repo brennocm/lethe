@@ -80,7 +80,13 @@ func (d *Daemon) alertLocked(ev contracts.Event) {
 // conditionLocked feeds the current findings of a condition check and resolves the dedup keys
 // that disappeared since the last evaluation.
 func (d *Daemon) conditionLocked(check string, fs []checks.Finding) {
-	prev := d.sess.conditions[check]
+	d.conditionGroupLocked(check, check, fs)
+}
+
+// conditionGroupLocked is conditionLocked for one of several independent conditions of the same
+// check (PER-001's keyboard and its exit country): each group resolves only its own keys.
+func (d *Daemon) conditionGroupLocked(group, check string, fs []checks.Finding) {
+	prev := d.sess.conditions[group]
 	cur := map[string]map[string]any{}
 	for _, f := range fs {
 		cur[engine.DedupKey(f.Alert())] = f.Data
@@ -96,7 +102,7 @@ func (d *Daemon) conditionLocked(check string, fs []checks.Finding) {
 			d.eng.Observe(checks.Resolved(check, prev[k]))
 		}
 	}
-	d.sess.conditions[check] = cur
+	d.sess.conditions[group] = cur
 }
 
 func (d *Daemon) evaluateConditionsLocked(snap discovery.Snapshot) {

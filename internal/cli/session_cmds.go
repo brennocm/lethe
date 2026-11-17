@@ -226,8 +226,7 @@ func newRunCmd() *cobra.Command {
 			if tui {
 				return fmt.Errorf("%w: the TUI arrives with M12", ErrNotImplemented)
 			}
-			_ = noGUI    // the GUI (M13) is never started yet
-			_ = noActive // active checks (M11) are not wired yet
+			_ = noGUI // the GUI (M13) is never started yet
 			if os.Geteuid() != 0 {
 				return WithCode(ExitPrivileges, errors.New("run needs root (sudo lethe run ...)"))
 			}
@@ -240,6 +239,7 @@ func newRunCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			req.NoActive = noActive
 			sock := portableSocket(op)
 			d := daemon.New(daemon.Config{
 				Operator: op, SocketPath: sock, ToolVersion: buildinfo.Version, Sensors: true,

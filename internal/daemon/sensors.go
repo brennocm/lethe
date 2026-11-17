@@ -138,6 +138,14 @@ func (d *Daemon) startSensorsLocked(snap discovery.Snapshot) {
 	}()
 	go d.clockSetLoop(ctx, s)
 
+	if d.activeOn(s) {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			d.activeLoop(ctx, s)
+		}()
+	}
+
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()

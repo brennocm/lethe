@@ -43,6 +43,17 @@
     },
     "agent": { "type": "boolean" },
     "confirming": { "type": "boolean" },
+    "exit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at", "path"],
+      "properties": {
+        "country": { "type": "string" },
+        "asn": { "type": "integer", "minimum": 0 },
+        "at": { "type": "string" },
+        "path": { "type": "string" }
+      }
+    },
     "lockdown": {
       "type": "object",
       "additionalProperties": false,
