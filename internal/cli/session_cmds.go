@@ -17,6 +17,11 @@ import (
 	"text/tabwriter"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+
+	"lethe/internal/i18n"
+	tuipkg "lethe/internal/tui"
+
 	"github.com/godbus/dbus/v5"
 	"github.com/google/nftables"
 	"github.com/spf13/cobra"
@@ -137,14 +142,15 @@ func askManual(in io.Reader, out io.Writer) ([]preflight.Answer, error) {
 
 // armFlags are shared by run and arm.
 type armFlags struct {
-	profile  string
-	guard    string
-	force    bool
-	reason   string
-	noManual bool
-	secret   secretFlags
-	window   time.Duration // strict arm confirmation window of the profile (set by request)
-	lang     string        // ui.language of the profile (set by request)
+	profile     string
+	guard       string
+	force       bool
+	reason      string
+	noManual    bool
+	secret      secretFlags
+	window      time.Duration // strict arm confirmation window of the profile (set by request)
+	soundRepeat time.Duration // ui.sound_repeat of the profile (set by request)
+	lang        string        // ui.language of the profile (set by request)
 }
 
 // confirming tells the operator why the arm takes a while (spec §10.6 item 2).
@@ -194,7 +200,7 @@ func (f *armFlags) request(cmd *cobra.Command, op platform.Operator) (daemon.Arm
 	if err != nil {
 		return daemon.ArmRequest{}, fmt.Errorf("baseline: %w", err)
 	}
-	f.window, f.lang = 0, p.UI.Language
+	f.window, f.lang, f.soundRepeat = 0, p.UI.Language, p.UI.SoundRepeatDur
 	if mode := cmp.Or(f.guard, p.Guard.Mode); mode == "strict" {
 		f.window = p.Guard.ArmWindow
 	}
@@ -223,9 +229,6 @@ func newRunCmd() *cobra.Command {
 		Short: "Portable mode: start the daemon in the foreground and arm",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if tui {
-				return fmt.Errorf("%w: the TUI arrives with M12", ErrNotImplemented)
-			}
 			_ = noGUI // the GUI (M13) is never started yet
 			if os.Geteuid() != 0 {
 				return WithCode(ExitPrivileges, errors.New("run needs root (sudo lethe run ...)"))
@@ -241,10 +244,16 @@ func newRunCmd() *cobra.Command {
 			}
 			req.NoActive = noActive
 			sock := portableSocket(op)
+			daemonOut := cmd.ErrOrStderr()
+			var logs *tuipkg.Lines
+			if tui { // the daemon's lines go to the TUI, not over its screen
+				logs = tuipkg.NewLines(200)
+				daemonOut = logs
+			}
 			d := daemon.New(daemon.Config{
 				Operator: op, SocketPath: sock, ToolVersion: buildinfo.Version, Sensors: true,
 				Agent: []string{"agent", "--socket", sock}, AgentEnv: agentEnv(op, sock, f.lang),
-				HardenAfterArm: true, Out: cmd.ErrOrStderr(), Resolved: resolved(),
+				HardenAfterArm: true, Out: daemonOut, Resolved: resolved(),
 			})
 			defer d.Close()
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -259,11 +268,25 @@ func newRunCmd() *cobra.Command {
 			if err != nil {
 				stopDaemon()
 				<-errc
+				if logs != nil {
+					for _, l := range logs.Last(20) {
+						_, _ = fmt.Fprintln(cmd.ErrOrStderr(), l)
+					}
+				}
 				return armFailed(cmd.ErrOrStderr(), rep, err)
 			}
 			printArmed(cmd.OutOrStdout(), res)
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Ctrl-C desarma. Em PÂNICO, use `lethe unpanic` antes.")
-			<-ctx.Done()
+			waitSignal := true
+			if tui {
+				waitSignal, err = runTUI(ctx, cmd, sock, f, logs)
+				if err != nil {
+					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "lethe: TUI:", err)
+				}
+			}
+			if waitSignal {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Ctrl-C desarma. Em PÂNICO, use `lethe unpanic` antes.")
+				<-ctx.Done()
+			}
 			st := d.Status()
 			if st.State == "PANIC" {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "lethe: sessão encerrada em PÂNICO: o bloqueio fica ativo de propósito.\n  como sair: sudo lethe cleanup (remove só as tabelas lethe*), ou reinicie a máquina")
@@ -293,7 +316,7 @@ func newRunCmd() *cobra.Command {
 	}
 	f.register(cmd)
 	cmd.Flags().BoolVar(&noGUI, "no-gui", false, "do not start the GUI")
-	cmd.Flags().BoolVar(&tui, "tui", false, "terminal UI instead of the GUI")
+	cmd.Flags().BoolVar(&tui, "tui", false, "terminal UI instead of the GUI (the alert surface without a GUI)")
 	cmd.Flags().BoolVar(&noActive, "no-active", false, "disable the active checks (NET-011)")
 	return cmd
 }
@@ -803,4 +826,20 @@ func printPreflight(w io.Writer, r preflight.Report) {
 		_, _ = fmt.Fprintln(w, "WARN     checklist manual não respondido (--no-manual)")
 	}
 	_, _ = fmt.Fprintf(w, "preflight: %s\n", r.Result)
+}
+
+// runTUI shows the TUI over the session's socket until q (the session stays armed: wait for the
+// signal), Ctrl-C or a signal (disarm now).
+func runTUI(ctx context.Context, cmd *cobra.Command, sock string, f armFlags, logs *tuipkg.Lines) (bool, error) {
+	m := tuipkg.New(tuipkg.IPC{Socket: sock}, tuipkg.Options{Lang: f.lang, BellEvery: f.soundRepeat, Bell: cmd.OutOrStdout(), Logs: logs})
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx), tea.WithInput(cmd.InOrStdin()), tea.WithOutput(cmd.OutOrStdout()))
+	_, err := p.Run()
+	if ctx.Err() != nil || m.Result() == tuipkg.Interrupt {
+		return false, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), i18n.UI(f.lang, "quit_note"))
+	return true, nil
 }
