@@ -614,9 +614,17 @@ func (d *Daemon) stPauseCase(ctx context.Context, s *session) CaseResult {
 	if err := d.PauseSensor(src, stPause); err != nil {
 		return CaseResult{Result: CaseFail, Reason: err.Error()}
 	}
-	gray := waitState(ctx, func() bool { return d.Status().Color == string(engine.ColorGray) }, stPause+2*time.Second)
+	// The sensor must be reported down and the state must show it: GRAY, or RED when a real
+	// CRITICAL is open (red outranks gray, spec §6.1, so gray cannot appear then).
+	gray := waitState(ctx, func() bool {
+		if !d.sourceDown(s, src) {
+			return false
+		}
+		c := d.Status().Color
+		return c == string(engine.ColorGray) || c == string(engine.ColorRed)
+	}, stPause+2*time.Second)
 	if gray.IsZero() {
-		return CaseResult{Result: CaseFail, Reason: "the state did not turn GRAY"}
+		return CaseResult{Result: CaseFail, Reason: "the sensor was not reported down (no GRAY)"}
 	}
 	back := waitState(ctx, func() bool { return !d.sourceDown(s, src) }, stPause+3*time.Second)
 	if back.IsZero() {
