@@ -34,6 +34,9 @@ func (d *Daemon) deliver(s *session, fs ...checks.Finding) {
 
 func (d *Daemon) findingLocked(f checks.Finding) {
 	f = checks.NET009{}.Match(f, d.sess.known)
+	if d.selftestAbsorbLocked(f) {
+		return // caused by the selftest: journaled with selftest: true, responses in dry-run
+	}
 	ev, err := f.SealedAlert(d.sess.journal.Seal)
 	if err != nil {
 		ev = f.Alert() // sensitive fields are dropped, never written in clear

@@ -40,7 +40,7 @@ import (
 // TestMain lets the test binary act as the lethe CLI when the daemon re-executes
 // /proc/self/exe (agent) or when a test runs `lethe run` in a child process.
 func TestMain(m *testing.M) {
-	if len(os.Args) > 1 && os.Args[1] == "agent" {
+	if len(os.Args) > 1 && (os.Args[1] == "agent" || os.Args[1] == "selftest-deny") {
 		os.Exit(cli.Execute(os.Args[1:], os.Stdout, os.Stderr))
 	}
 	if args := os.Getenv("LETHE_E2E_CLI"); args != "" {

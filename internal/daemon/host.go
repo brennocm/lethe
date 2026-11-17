@@ -15,6 +15,7 @@ import (
 	"lethe/internal/checks"
 	"lethe/internal/contracts"
 	"lethe/internal/sensors/dbusmon"
+	"lethe/internal/sensors/fswatch"
 	"lethe/internal/sensors/hostinfo"
 )
 
@@ -77,6 +78,9 @@ func (d *Daemon) ObserveHost(s *session, st hostinfo.State) {
 	}
 	s.beats[hostinfo.SourceID] = d.cfg.Now()
 	in := checks.HostRules(s.prof, checks.HostInput{State: st, Snapshot: &d.snap, Known: s.known, Now: d.cfg.Now(), AgentKeyboard: s.agentKeyboard})
+	if s.stDeny {
+		in.Deny = append(in.Deny, checks.DenyRule{Match: "comm", Value: stDenyComm, Severity: contracts.SeverityWarning})
+	}
 	res := checks.EvaluateHost(in)
 	for _, id := range checks.HostChecks {
 		fs, ok := res[id]
@@ -218,4 +222,35 @@ func (d *Daemon) ShrinkCapture(iface string, n int) error {
 		return errParams(fmt.Errorf("no capture on %q", iface))
 	}
 	return c.SetReadBuffer(n)
+}
+
+// selftestDNSFile is the watched test file of ST-DNS-004 (never the real resolv.conf).
+func selftestDNSFile(s *session) string {
+	return filepath.Join(s.prof.Storage.Dir, "state", "selftest-resolv.conf")
+}
+
+// dnsWatcher watches the DNS configuration files and the selftest file (DNS-004).
+func (d *Daemon) dnsWatcher(s *session) (*fswatch.Watcher, error) {
+	st := selftestDNSFile(s)
+	if err := os.MkdirAll(filepath.Dir(st), 0o700); err == nil {
+		if _, err := os.Lstat(st); errors.Is(err, os.ErrNotExist) {
+			_ = os.WriteFile(st, []byte("# lethe selftest (ST-DNS-004)\n"), 0o600)
+		}
+	}
+	return fswatch.New(append(append([]string{}, d.cfg.DNSFiles...), st)...)
+}
+
+// onDNSChange raises DNS-004 and re-reads the discovery (the resolvers may have changed).
+func (d *Daemon) onDNSChange(s *session, c fswatch.Change) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.sess != s {
+		return
+	}
+	for _, f := range (checks.DNS004{}).Evaluate(c.Path) {
+		d.findingLocked(f)
+	}
+	if c.Path != selftestDNSFile(s) {
+		d.refreshLocked()
+	}
 }

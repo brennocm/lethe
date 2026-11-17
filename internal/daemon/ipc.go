@@ -225,6 +225,13 @@ func (d *Daemon) routes() {
 		}
 		return res, err
 	})
+	h("selftest.run", func(c *ipc.Call) (any, error) {
+		var r SelftestRequest
+		if err := decode(c, &r); err != nil {
+			return nil, err
+		}
+		return d.RunSelftest(c.Ctx, r, c.Authorize)
+	})
 	h("session.disarm", func(*ipc.Call) (any, error) { return d.Disarm() })
 	h("panic.release", func(*ipc.Call) (any, error) { return d.Unpanic() })
 	h("discovery.confirm_endpoint", func(c *ipc.Call) (any, error) { // sensitive: the server checks the proof

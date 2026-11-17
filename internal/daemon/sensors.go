@@ -14,6 +14,7 @@ import (
 	"lethe/internal/engine"
 	"lethe/internal/guard"
 	"lethe/internal/sensors/capture"
+	"lethe/internal/sensors/fswatch"
 	"lethe/internal/sensors/hostinfo"
 	"lethe/internal/sensors/netlinkmon"
 	"lethe/internal/sensors/nflog"
@@ -119,6 +120,15 @@ func (d *Daemon) startSensorsLocked(snap discovery.Snapshot) {
 
 	s.beats[sockdiag.SourceID] = now
 	d.goSensor(s, sockdiag.SourceID, func() error { return d.scanSockets(ctx, s) })
+
+	if w, err := d.dnsWatcher(s); err == nil {
+		s.beats[fswatch.SourceID] = now
+		d.goSensor(s, fswatch.SourceID, func() error {
+			return w.Run(ctx, func(c fswatch.Change) { d.onDNSChange(s, c) }, d.beat(s, fswatch.SourceID))
+		})
+	} else {
+		_, _ = fmt.Fprintf(d.cfg.Out, "lethe: DNS-004 off: %v\n", err)
+	}
 
 	s.beats[hostinfo.SourceID] = now
 	s.wg.Add(1)
@@ -332,6 +342,7 @@ func (d *Daemon) refreshLocked() {
 	old := d.snap
 	d.snap = snap
 	next := guardConfig(snap, s.prof, s.features)
+	next.Exceptions = s.stExceptions                       // a running selftest case keeps its exception
 	vpnChanged := !reflect.DeepEqual(s.gcfg.VPN, next.VPN) // a restarted client has a new cgroup ID
 	changed := vpnChanged || !slices.Equal(old.Endpoints, snap.Endpoints) || !slices.Equal(old.CaptureIfaces, snap.CaptureIfaces) || len(old.Ifaces) != len(snap.Ifaces)
 	d.endpointEventsLocked(old, snap)

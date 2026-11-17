@@ -80,6 +80,10 @@ type Config struct {
 	SystemBus func() dbusmon.Bus
 	HostEvery time.Duration
 	Boottime  func() time.Duration
+	// DNSFiles are the DNS configuration files DNS-004 watches (default /etc/resolv.conf).
+	DNSFiles []string
+	// SelftestOps are the side effects of the selftest (default: netlink, nftables, sockets).
+	SelftestOps SelftestOps
 }
 
 // Daemon is one lethe daemon. Methods are safe for concurrent use.
@@ -143,6 +147,10 @@ type session struct {
 	agentKeyboard   string
 	clockOffset     time.Duration        // realtime − boottime at the last tick (SELF-005)
 	paused          map[string]time.Time // heartbeats ignored until then (ST-SELF-001)
+	probes          []*stProbe           // selftest findings recognisers
+	selftesting     bool
+	stExceptions    []guard.Exception // strict exceptions of the running case
+	stDeny          bool              // the selftest deny rule is active (ST-HOST-001)
 }
 
 const recentMax = 2048
@@ -197,6 +205,12 @@ func New(cfg Config) *Daemon {
 	}
 	if cfg.HostEvery == 0 {
 		cfg.HostEvery = hostEveryDefault
+	}
+	if cfg.SelftestOps == nil {
+		cfg.SelftestOps = liveOps{nft: func() (guard.Conn, error) { return cfg.NFT() }}
+	}
+	if cfg.DNSFiles == nil {
+		cfg.DNSFiles = []string{"/etc/resolv.conf"}
 	}
 	if cfg.Boottime == nil {
 		cfg.Boottime = boottime
