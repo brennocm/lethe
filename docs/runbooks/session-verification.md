@@ -15,6 +15,8 @@ lethe verify DIR --baseline BASELINE --expect-fingerprint XXXX-XXXX-...
 
 ## Relatório
 
+Ao encerrar a sessão, o daemon verifica o log e grava `report.md` na pasta da sessão (quando o log não é cifrado para chaves institucionais). O painel o mostra em **Relatórios** (no formulário de início), sem passphrase e sem terminal. Para o caso, gere-o de novo com a impressão digital que você anotou:
+
 ```
 lethe report DIR --baseline BASELINE --expect-fingerprint ... [--format json]
 ```

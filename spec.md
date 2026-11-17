@@ -999,7 +999,9 @@ Toda saída com `--json` segue schemas em `internal/contracts/`. A saída humana
 
 ### 16.1 Bandeja
 
-Ícone com a cor do estado e um contador de alertas abertos. Menu: abrir painel, pânico, selftest, desarmar.
+Ícone com a cor do estado e um contador de alertas abertos. Menu: abrir painel, pânico, selftest, desarmar. Fechar o painel o esconde; a bandeja o traz de volta.
+
+Sem bandeja no desktop (nenhum `org.kde.StatusNotifierWatcher` no barramento da sessão: GNOME sem a extensão AppIndicator, WSLg), a GUI não põe menu de bandeja e fechar o painel encerra a GUI, nunca a sessão: esconder deixaria um processo que nada traz de volta. O pacote instala a entrada no menu de aplicativos (`lethe-gui.desktop`) e o ícone, para abrir a GUI de novo.
 
 ### 16.2 Painel
 

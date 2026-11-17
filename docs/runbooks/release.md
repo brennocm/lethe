@@ -10,16 +10,18 @@ Nenhuma chave, senha ou endereço interno vai para este repositório, para issue
 
 | Item | Evidência |
 |---|---|
-| M0–M14 implementados | `AGENTS.md` (seção Estado), ADRs 0001–0014 |
+| M0–M15 implementados, mais as revisões do ADR 0015 (GUI como caminho principal) | `AGENTS.md` (seção Estado), ADRs 0001–0015 |
 | Lint, vet, unit, race, deadcode, govulncheck, matriz de rastreabilidade, licenças | `mise run check:all` verde |
 | E2E completo no netlab, com seccomp em enforce, AC-12 incluído | `mise run e2e` verde (AC-07 dá SKIP sem o binário `tor`) |
 | Build reprodutível: dois builds do mesmo commit dão bytes idênticos (binários, `.deb`, `.rpm`) | `mise run release:repro` |
-| Pacotes deb/rpm com as unidades systemd; SBOM CycloneDX; `SHA256SUMS` | `mise run release -- VERSION` |
+| Pacotes deb/rpm com as unidades systemd (`lethed`, `lethed@`, `lethe-cleanup`, agente); `lethe-gui` com a entrada no menu, o ícone e as bibliotecas de execução declaradas; SBOM CycloneDX; `SHA256SUMS` | `mise run release -- VERSION --gui`; conteúdo conferido com `dpkg-deb -c` |
+| Binário `lethe-gui` compilado com cgo | `mise run build:gui` no WSL2 (Ubuntu 24.04), com os headers instalados por `scripts/gui-deps`; janela aberta no WSLg |
 | Runbooks de operação, recuperação, verificação, modo serviço e aceitação manual | `docs/runbooks/` |
 
 ### Feito, mas sem verificação aqui
 
-- **Binário `lethe-gui`:** compila com cgo e os headers de OpenGL/X11/Wayland. `mise run build:gui` e `mise run release -- VERSÃO --gui` instalam o que faltar (`scripts/gui-deps`, Debian/Ubuntu, Fedora, Arch, openSUSE; pergunta uma vez e pede a senha do `sudo`). O pacote `lethe-gui` declara as bibliotecas de execução: o operador só instala o pacote.
+- **`scripts/gui-deps` fora do Debian/Ubuntu:** os nomes de pacote de Fedora, Arch e openSUSE não foram testados numa máquina real. O script confere no fim, pelo `pkg-config`, o que ainda falta.
+- **Botões que falam com o systemd** (Iniciar o lethe, Liberar a rede): testados contra dublês do D-Bus; o polkit e o systemd reais só no AC-15 (seção 0 do `manual-acceptance.md`).
 - **Pacotes instalados de verdade** (`apt install`, `dnf install`) e as unidades sob systemd real: o conteúdo foi conferido com `dpkg-deb -c`, e as unidades com `systemd-analyze verify`.
 - **AC-07 (Tor real) e AC-15 (Wi-Fi, NetworkManager, Tor Browser, GUI em GNOME/KDE):** manuais, em `ac07-tor.md` e `manual-acceptance.md`.
 
@@ -33,9 +35,11 @@ Nenhuma chave, senha ou endereço interno vai para este repositório, para issue
 
 ### Limites conhecidos no lançamento
 
-- DNS-002 e DNS-003 e os sinais D-Bus do DNS-004 (resolved/NM) não estão implementados.
+- Os sinais D-Bus do DNS-004 (resolved/NM) não estão implementados. DNS-002 e DNS-003 releem o resolved a cada descoberta (5 s), então a mudança é vista em até 5 s.
+- Sem a base geo (`pins.json` vazio), TUN-006 e o país do NET-011/PER-001 ficam inativos.
 - A allowlist do seccomp só foi exercida nos caminhos do e2e. Uma syscall fora dela mata o daemon (`signal=SYS`): a rede fica fechada e o `service-mode.md` explica a coleta.
 - No GNOME/Wayland a janela de alerta pode não ficar por cima; a notificação e o som sempre acompanham o alerta.
+- No GNOME sem a extensão AppIndicator não há ícone na bandeja: o painel é a GUI inteira, e fechá-lo encerra a GUI (não a sessão).
 - `bridge lethe` e `socket cgroupv2` não rodam no kernel do WSL2. Valide-os nas distros reais (AC-15).
 
 ## 2. Contas, chaves e custos
@@ -120,7 +124,8 @@ O CI **não** recebe as chaves de assinatura. Ele só prova o build; quem assina
 4. **Verificar numa máquina de teste limpa:**
    - `apt install lethe` (ou `dnf install lethe`);
    - `lethe version`: o SHA-256 deve ser igual ao de `linux_amd64/lethe` no `SHA256SUMS`;
-   - `systemctl cat lethed` deve mostrar a unidade.
+   - `systemctl cat lethed@$USER` deve mostrar a unidade;
+   - o lethe deve aparecer no menu de aplicativos e abrir o painel.
 
 ### 4.7 Aceitação antes de liberar aos operadores (cerca de 1 dia)
 
@@ -155,7 +160,7 @@ O CI **não** recebe as chaves de assinatura. Ele só prova o build; quem assina
   - revogue-a e gere outra;
   - assine de novo as versões vigentes;
   - avise os operadores para trocar o `lethe.pub`.
-- **Na máquina do operador, se o lethe bloquear a rede:** `sudo lethe cleanup`, que remove só as tabelas `lethe*`, ou reinicie a máquina (`crash-recovery.md`). Não há migração de dados: as sessões antigas continuam legíveis pelo `lethe verify`/`report` de qualquer versão com o mesmo formato de log.
+- **Na máquina do operador, se o lethe bloquear a rede:** **Liberar a rede** no painel, ou `sudo lethe cleanup`, que remove só as tabelas `lethe*`, ou reinicie a máquina (`crash-recovery.md`). Não há migração de dados: as sessões antigas continuam legíveis pelo `lethe verify`/`report` de qualquer versão com o mesmo formato de log.
 
 ## 7. Depois da release
 

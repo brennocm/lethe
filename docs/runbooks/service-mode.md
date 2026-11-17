@@ -7,7 +7,7 @@ Para máquinas dedicadas, em que o lethe fica sempre instalado. No modo portáti
 | Arquivo | Para quê |
 |---|---|
 | `/usr/bin/lethe` | CLI e daemon |
-| `/usr/bin/lethe-gui` | GUI (pacote `lethe-gui`, opcional) |
+| `/usr/bin/lethe-gui` | GUI (pacote `lethe-gui`, opcional), com a entrada no menu de aplicativos (`/usr/share/applications/lethe-gui.desktop`) e o ícone |
 | `/usr/lib/systemd/system/lethed@.service` | daemon de um operador (a instância é o usuário): o mesmo que `lethed.service` com `LETHE_OPERATOR` e `~/lethe` já declarados |
 | `/usr/lib/systemd/system/lethed.service` | daemon, como root com capabilities reduzidas (spec §19.3); operador num drop-in |
 | `/usr/lib/systemd/system/lethe-cleanup.service` | `lethe cleanup` como oneshot: o botão Liberar a rede da GUI o sobe (polkit pede a senha) |
@@ -59,15 +59,18 @@ Para um `storage.dir` fora de `~/lethe`, ou uma home fora de `/home`, acrescente
 
 ## Usar
 
-- `lethe arm -p PERFIL`, `lethe status`, `lethe ack`, `lethe disarm`, como no modo portátil.
+- Pelo painel, como em `operation.md`: Iniciar sessão, Pânico, Reconhecer, Encerrar sessão.
+- No terminal: `lethe arm -p PERFIL`, `lethe status`, `lethe ack`, `lethe disarm`, como no modo portátil.
 - O socket é `/run/lethe/lethe.sock`. Ele aceita só root e o operador; qualquer outro UID é recusado e registrado (`ipc.denied`).
 - Cada processo do daemon atende uma sessão. Ao desarmar, ele termina e o systemd sobe outro para o próximo `arm`.
 
 ## Se algo der errado
 
-- **O daemon morreu com a guarda estrita aplicada:** a rede fica fechada, de propósito. `sudo lethe status` mostra o bloqueio e como sair. `sudo lethe cleanup` remove as tabelas `lethe*`; reiniciar a máquina também resolve.
-- **`systemctl status lethed` mostra `code=killed, signal=SYS`:** o seccomp matou o daemon por uma syscall fora da allowlist. Isso é um bug do lethe. Para coletar o que falta:
-  1. `sudo systemctl edit lethed` e acrescente `Environment=LETHE_SECCOMP=log`;
+- **O daemon morreu com a guarda estrita aplicada:** a rede fica fechada, de propósito. O systemd sobe o daemon de novo, e o painel mostra as tabelas que sobraram com o botão **Liberar a rede** (`lethe-cleanup.service`, o polkit pede a senha). No terminal: `sudo lethe status` mostra o bloqueio e `sudo lethe cleanup` remove as tabelas `lethe*`; reiniciar a máquina também resolve (`crash-recovery.md`).
+- **O botão Iniciar o lethe não aparece:** o nome do seu usuário não serve de nome de instância (só `^[a-z_][a-z0-9_-]{0,31}$`, nunca root). Use `lethed.service` com o drop-in acima.
+- **O polkit não pergunta a senha:** a sessão gráfica não tem agente de autenticação (algumas sessões mínimas). Rode `sudo systemctl start lethed@$USER` ou `sudo systemctl start lethe-cleanup`.
+- **`systemctl status lethed@$USER` (ou `lethed`) mostra `code=killed, signal=SYS`:** o seccomp matou o daemon por uma syscall fora da allowlist. Isso é um bug do lethe. Para coletar o que falta:
+  1. `sudo systemctl edit lethed@$USER` (ou `lethed`) e acrescente `Environment=LETHE_SECCOMP=log`;
   2. reproduza;
   3. `journalctl -k | grep type=1326` lista as syscalls;
   4. anexe a lista ao relatório do bug e **tire a linha**, porque nesse modo o filtro só registra e não mata.

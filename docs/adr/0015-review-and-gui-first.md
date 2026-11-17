@@ -44,6 +44,10 @@ GUI first:
 
 - The start form also offers **Register the current network**, which adds a network to the baseline with its passphrase. A duplicate name or public IP is refused, and the file is replaced atomically. It also offers **Reports**: past sessions and the `report.md` the daemon verified when each one ended.
 
+- **Opening the GUI needs no terminal.** The `lethe-gui` package installs a menu entry and an icon in the logo's colours, and declares every library GLFW links or loads (X11, Xcursor, Xrandr, Xinerama, Xi, Xxf86vm, Wayland, xkbcommon); the rpm names them by soname. Building it is one command: `scripts/gui-deps` installs the headers after one confirmation, and `mise run gui` builds and opens.
+- **No tray host, no hidden panel.** Without a `StatusNotifierWatcher` on the session bus, the GUI sets no tray menu and closing the panel quits the GUI (the session goes on). Hiding it would leave a process nothing can bring back.
+- **The panel shows the session key's fingerprint**, selectable, under the state line: the operator writes it down at the arm and `lethe verify` checks the log against it. Only the CLI printed it before.
+
 ## Consequences
 - An operator who knows the passphrase can always release the network from the panel, with or without a working tunnel. An attacker without it cannot.
 - The DNS leak test makes the system resolver ask for `bash.ws` names. When DNS is leaking, whoever sees it learns that someone ran the test. The GUI says so before running it.
