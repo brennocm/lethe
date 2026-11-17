@@ -2,6 +2,7 @@ package setup
 
 import (
 	"context"
+	"errors"
 	"net/netip"
 	"os"
 	"os/exec"
@@ -41,6 +42,14 @@ func TestM10_SetupCreatesProfileAndBaseline(t *testing.T) {
 	}
 	if _, err := Create(a, home, []byte("lab passphrase"), time.Now(), "test"); err == nil {
 		t.Fatal("overwrote the profile")
+	}
+	// a baseline already there is kept only with its own passphrase
+	_ = os.Remove(prof)
+	if _, err := Create(a, home, []byte("another passphrase"), time.Now(), "test"); !errors.Is(err, ErrBaselineExists) {
+		t.Fatalf("a passphrase that does not open the baseline: %v", err)
+	}
+	if _, err := Create(a, home, []byte("lab passphrase"), time.Now(), "test"); err != nil {
+		t.Fatal(err)
 	}
 	bad := Defaults(home)
 	bad.Country = "Holanda"

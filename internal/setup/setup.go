@@ -53,6 +53,8 @@ func Paths(dir string) (prof, base, data string) {
 
 var (
 	countryRe = regexp.MustCompile(`^[A-Z]{2}$`)
+	// ErrBaselineExists: a baseline is already there and the passphrase given does not open it.
+	ErrBaselineExists = errors.New("já existe uma baseline e esta passphrase não a abre; use a passphrase dela, ou mova o arquivo para criar outra")
 	// ErrPassphrase is an empty passphrase or one that differs from its confirmation.
 	ErrPassphrase = errors.New("the passphrase is empty or the two entries differ")
 )
@@ -90,8 +92,8 @@ func Exists(dir string) bool {
 }
 
 // Create writes the baseline (encrypted with pass, which the caller wipes) and the profile,
-// guard off, keep_tunnel on. An existing baseline is kept (pass and Network are then unused);
-// an existing profile is never overwritten.
+// guard off, keep_tunnel on. An existing baseline is kept (Network is then unused) and, when pass
+// is given, must open with it; an existing profile is never overwritten.
 func Create(a Answers, home string, pass []byte, now time.Time, version string) (profPath string, err error) {
 	if err := a.Validate(); err != nil {
 		return "", err
@@ -102,6 +104,13 @@ func Create(a Answers, home string, pass []byte, now time.Time, version string) 
 	}
 	if err := os.MkdirAll(a.Dir, 0o700); err != nil {
 		return "", err
+	}
+	if enc, err := os.ReadFile(basePath); err == nil && len(pass) > 0 { // #nosec G304 -- the operator's own dir
+		// kept as it is: the passphrase typed now must be the one that opens it, or the operator
+		// would leave believing in a passphrase that arms nothing
+		if _, derr := baseline.Decrypt(enc, pass); derr != nil {
+			return "", fmt.Errorf("%w: %s", ErrBaselineExists, basePath)
+		}
 	}
 	if _, err := os.Stat(basePath); err != nil {
 		if len(pass) == 0 {

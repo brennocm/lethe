@@ -150,6 +150,7 @@ detect_failed = "The services did not agree; fill it in by hand if you know it, 
 new_pass = "New passphrase (8 characters or more)"
 new_pass2 = "Repeat the passphrase"
 pass_mismatch = "The two passphrases differ, or have fewer than 8 characters."
+first_base_exists = "A baseline already exists at %s: it is used as it is. Type its passphrase (twice); the real-network questions apply only when one is created anew."
 first_btn = "Create profile"
 first_ok = "Profile created at %s. Keep the passphrase: without it there is no session and no report."
 [actions]

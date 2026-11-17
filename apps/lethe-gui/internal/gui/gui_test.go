@@ -570,3 +570,38 @@ func TestM81_ReleaseLeftoverBlockFromThePanel(t *testing.T) {
 		t.Fatal("offline: the release stays reachable")
 	}
 }
+
+// With a baseline already in ~/lethe the form asks for its passphrase, not a new one, and a
+// passphrase that does not open it creates nothing.
+func TestM10_FirstUseKeepsAnExistingBaseline(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, "lethe")
+	_ = os.MkdirAll(dir, 0o700)
+	b, _ := baseline.New(t0, "test")
+	enc, _ := baseline.Encrypt(b, []byte("old passphrase"), 10)
+	_ = os.WriteFile(filepath.Join(dir, "baseline.age"), enc, 0o600)
+	a := &trayApp{App: test.NewTempApp(t)}
+	det := func(context.Context, bool) lsetup.Detected { return lsetup.Detected{} }
+	u := New(a, &fake{}, Options{Lang: "pt-BR", Now: func() time.Time { return t0 }, Home: home, Detect: det})
+	u.offline = os.ErrNotExist
+	u.Build()
+	u.wg.Wait()
+	f := u.firstForm
+	if !f.baseExists {
+		t.Fatal("the existing baseline is not seen")
+	}
+	test.Type(f.pass1, "new passphrase")
+	test.Type(f.pass2, "new passphrase")
+	test.Tap(f.createBtn)
+	u.wg.Wait()
+	if lsetup.Exists(dir) || !strings.Contains(u.flash.Text, "não a abre") {
+		t.Fatalf("a passphrase that does not open the baseline: %q", u.flash.Text)
+	}
+	test.Type(f.pass1, "old passphrase")
+	test.Type(f.pass2, "old passphrase")
+	test.Tap(f.createBtn)
+	u.wg.Wait()
+	if !lsetup.Exists(dir) {
+		t.Fatalf("with its passphrase: %q", u.flash.Text)
+	}
+}

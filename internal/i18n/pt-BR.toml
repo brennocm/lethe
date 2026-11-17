@@ -152,6 +152,7 @@ detect_failed = "Os serviços não responderam igual; preencha à mão se souber
 new_pass = "Passphrase nova (8 caracteres ou mais)"
 new_pass2 = "Repita a passphrase"
 pass_mismatch = "As duas passphrases não são iguais, ou têm menos de 8 caracteres."
+first_base_exists = "Já existe uma baseline em %s: ela será usada como está. Digite a passphrase dela (duas vezes); as perguntas da rede real ficam para quando ela for criada de novo."
 first_btn = "Criar perfil"
 first_ok = "Perfil criado em %s. Guarde a passphrase: sem ela não há sessão nem relatório."
 [actions]

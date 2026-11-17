@@ -3,6 +3,7 @@ package gui
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -31,6 +32,7 @@ type firstUse struct {
 	detectBtn, createBtn        *widget.Button
 	pass1, pass2                *SecretEntry
 	egressLabels, egressByLabel map[string]string
+	baseExists                  bool // a baseline is already there: kept, opened with its passphrase
 }
 
 // needsFirstUse: the operator's home is known and its default profile is missing.
@@ -81,16 +83,23 @@ func (u *UI) buildFirstUse() {
 	field := func(key string, o fyne.CanvasObject) fyne.CanvasObject {
 		return container.NewVBox(widget.NewLabel(u.t(key)), o)
 	}
+	network := container.NewVBox(widget.NewSeparator(), sub,
+		container.NewGridWithColumns(2, field("net_name", f.netName), field("net_gateway", f.gateway)),
+		field("net_ip", container.NewBorder(nil, nil, nil, f.detectBtn, f.netIP)), f.detectNote,
+		field("net_resolvers", f.resolvers))
+	passes := container.NewGridWithColumns(2, field("new_pass", f.pass1), field("new_pass2", f.pass2))
+	_, base, _ := lsetup.Paths(u.firstDir())
+	if _, err := os.Stat(base); err == nil {
+		// the baseline is kept: its own passphrase, and no network questions (they would be lost)
+		f.baseExists = true
+		network = container.NewVBox(widget.NewSeparator(), wrapped(fmt.Sprintf(u.t("first_base_exists"), base)))
+		passes = container.NewGridWithColumns(2, field("passphrase", f.pass1), field("new_pass2", f.pass2))
+	}
 	form := container.NewVBox(title, intro,
 		container.NewGridWithColumns(2, field("op_id", f.opID), field("persona", f.persona)),
 		container.NewGridWithColumns(2, field("egress_type", f.egress), field("expect_country", f.country)),
 		container.NewGridWithColumns(3, field("persona_tz", f.tz), field("persona_locale", f.locale), field("persona_kb", f.kb)),
-		widget.NewSeparator(), sub,
-		container.NewGridWithColumns(2, field("net_name", f.netName), field("net_gateway", f.gateway)),
-		field("net_ip", container.NewBorder(nil, nil, nil, f.detectBtn, f.netIP)), f.detectNote,
-		field("net_resolvers", f.resolvers),
-		widget.NewSeparator(),
-		container.NewGridWithColumns(2, field("new_pass", f.pass1), field("new_pass2", f.pass2)))
+		network, widget.NewSeparator(), passes)
 	if u.opt.X11 {
 		x := wrapped(u.t("x11_warning"))
 		x.Importance = widget.LowImportance
@@ -175,7 +184,7 @@ func (u *UI) firstAnswers() lsetup.Answers {
 func (u *UI) createFirst() {
 	f := u.firstForm
 	p1, p2 := f.pass1.Take(), f.pass2.Take()
-	if len(p1) < minPassphrase || string(p1) != string(p2) {
+	if (len(p1) < minPassphrase && !f.baseExists) || len(p1) == 0 || string(p1) != string(p2) {
 		wipe(p1)
 		wipe(p2)
 		u.setFlash(u.t("pass_mismatch"))
