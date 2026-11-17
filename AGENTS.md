@@ -9,17 +9,17 @@ Distribuição: binário estático + deb/rpm — ver `docs/adr/0002-distribuicao
 
 ## Estado
 
-- Marco atual: **M13** (M0–M12 concluídos). Plano em `spec.md` §24. Próximo: **M13 — GUI** (Fyne em `apps/lethe-gui`, módulo separado com cgo, fala só IPC; bandeja, painel, alerta em tela cheia).
+- Marco atual: **M14** (M0–M13 concluídos). Plano em `spec.md` §24. Próximo: **M14 — Endurecimento e pacotes** (seccomp fase 2 com allowlist, unidades systemd, nfpm deb/rpm, build reprodutível, SBOM, runbooks).
+- Feito no M13 (ADR 0013): `apps/lethe-gui` (Fyne, módulo com cgo, `go.work` para editores e tarefas com `GOWORK=off`). Bandeja com cor e contador, painel (cabeçalho, grade por categoria, linha do tempo filtrável, Pânico/Sair do pânico/Selftest/Reconhecer/Desarmar), alerta em tela cheia que só fecha com motivo e passphrase, e `SecretEntry` (bytes mlocked, nunca string; aviso no X11). Tipos das respostas IPC movidos para `internal/contracts`; a GUI só importa contracts, ipc e i18n (teste impõe). O agente abre a GUI pelo systemd do usuário (D-Bus `StartTransientUnit`, binário conferido), sem exec. Método IPC `gui.fullscreen_result` vira `response.executed` (`reported_by: gui`, uma vez por alerta). `check:gui` no `check` (driver de teste da Fyne, goldens de markup); o binário só compila com os headers de OpenGL (job `gui` no CI, `mise run build:gui`). Roteiro manual AC-15 em `docs/runbooks/manual-acceptance.md`.
 - Feito no M12 (ADR 0012): TUI (`internal/tui`, bubbletea) como cliente IPC mesmo no `run --tui` (prova de passphrase e SELF-006 iguais ao `lethe ack`). Alerta em tela cheia vermelha com sino a cada `ui.sound_repeat`, que só sai com `a` (motivo e passphrase no CRITICAL); `q` sai sem desarmar, e Ctrl-C faz o `run` desarmar. Selftest completo ou rápido pelo `s`; saída do daemon num buffer exibido na TUI; impressão digital no cabeçalho. Textos de operador em `internal/i18n/*.toml` (subconjunto de TOML com parser próprio; título, significado e o que fazer por check), que agora alimentam o `checks.Title`. Goldens do `View()` com teatest/golden e e2e da TUI no netlab.
-- Feito no M11 (ADR 0011): NET-011 (`internal/sensors/egressip`: VPN com `SO_BINDTODEVICE` e resolvedor próprio preso ao túnel, DNS do túnel vindo de `active_checks.tunnel_dns`, do resolved do link ou do resolv.conf roteado pelo túnel, nunca loopback; Tor por socks5h na `SocksPort` de `GETINFO net/listeners/socks`; 2 endpoints sorteados que precisam concordar). Rodada no arm e depois em intervalo aleatório (`internal/daemon/active.go`), desligada por `active_checks.enabled: false` ou `run --no-active`. IP de saída selado, `status.exit` sem IP. Base geo DB-IP Lite embutida (`internal/geo`, `scripts/update-geo` com SHA-256 fixado em `pins.json`; os `.mmdb` ficam fora do git), que ativa o TUN-006. PER-001 com país de saída × timezone (`zone1970.tab`) × locale. `baseline create`/`add-network` online (IP público, ASN e provedor como sugestão; recusa com túnel sem `--allow-tunnel`). `lethe version` mostra a data da base.
-- Pendências: DNS-002/003 e os sinais D-Bus do DNS-004 (resolved/NM) não têm marco; os `.mmdb` só existem depois de o dono rodar `scripts/update-geo` (sem eles, TUN-006 e o país do NET-011/PER-001 ficam inativos); MACs permanentes na baseline chegam com a integração da descoberta no `baseline create`; o re-check do unpanic cobre NET-003/004, TUN-001 e TUN-003 e ganha DNS-002 quando existir; AC-07 dá SKIP sem o binário `tor` (roteiro em `docs/runbooks/ac07-tor.md`); a GUI é do M13 (`--no-gui` ainda não muda nada); seccomp fase 2 (allowlist, incluindo os ioctls de terminal da TUI) e unidades systemd no M14; `bridge lethe` e `socket cgroupv2` não rodam no kernel do WSL2 (SKIP/omitidos via `guard.Probe`); layout de sessão do GNOME (dconf) não é lido (§22 item 15).
+- Pendências: DNS-002/003 e os sinais D-Bus do DNS-004 (resolved/NM) não têm marco; os `.mmdb` só existem depois de o dono rodar `scripts/update-geo` (sem eles, TUN-006 e o país do NET-011/PER-001 ficam inativos); MACs permanentes na baseline chegam com a integração da descoberta no `baseline create`; o re-check do unpanic cobre NET-003/004, TUN-001 e TUN-003 e ganha DNS-002 quando existir; AC-07 dá SKIP sem o binário `tor` (roteiro em `docs/runbooks/ac07-tor.md`); o binário `lethe-gui` não compila no WSL2 sem `libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev` (o CI compila); a GUI não informa foco real (`shown`), limitação da Fyne; seccomp fase 2 (allowlist, incluindo os ioctls de terminal da TUI) e unidades systemd no M14; `bridge lethe` e `socket cgroupv2` não rodam no kernel do WSL2 (SKIP/omitidos via `guard.Probe`); layout de sessão do GNOME (dconf) não é lido (§22 item 15).
 
 ## Mapa
 
 | Caminho | O que fica ali |
 |---|---|
 | `apps/lethe` | CLI (cobra) e subcomandos `daemon`, `agent`, `run` — fino, só wiring |
-| `apps/lethe-gui` | GUI Fyne, módulo Go separado (cgo); fala só IPC |
+| `apps/lethe-gui` | GUI Fyne, módulo Go separado (cgo); fala só IPC; importa só contracts, ipc e i18n |
 | `internal/engine` | **Puro**: severidade, dedup, alertas, cor, máquina de sessão. Sem I/O, sem `time.Now` |
 | `internal/contracts` | JSON Schemas (event, ipc, profile, saídas `--json`) e tipos Go: fonte única dos formatos |
 | `internal/checks` | Um arquivo por check (`net001.go`…) + registry estático |
@@ -35,7 +35,8 @@ Distribuição: binário estático + deb/rpm — ver `docs/adr/0002-distribuicao
 ## Comandos
 
 - `mise install` — toolchain fixada
-- `mise run check` — **definição de pronto** (fmt, lint, depguard, vet, unit tests)
+- `mise run check` — **definição de pronto** (fmt, lint, depguard, vet, unit tests, e `check:gui` do módulo da GUI sem cgo)
+- `mise run build:gui` — binário `lethe-gui` (precisa de cgo e dos headers de OpenGL/X11/Wayland)
 - `mise run e2e` — testes em network namespaces (precisa de userns ou `sudo -E`)
 - `mise run fuzz` — fuzz dos parsers (60 s cada)
 - `mise run check:all` — tudo + build, deadcode, govulncheck, matriz de rastreabilidade (CI)

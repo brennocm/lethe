@@ -238,7 +238,7 @@ O agente de sessão é um **sensor de baixa confiança** (princípio 9): roda co
 
 | Modo | Como | Uso |
 |---|---|---|
-| Portátil (padrão) | `sudo ./lethe run -p op.yaml`: sobe o daemon em primeiro plano, re-executa a si mesmo como `SUDO_UID` para o agente e abre a GUI (ou a TUI, com `--tui`) | Instalação na hora |
+| Portátil (padrão) | `sudo ./lethe run -p op.yaml`: sobe o daemon em primeiro plano, re-executa a si mesmo como `SUDO_UID` para o agente e abre a GUI (ou a TUI, com `--tui`). A GUI é o `lethe-gui` ao lado do binário; quem a abre é o agente, pedindo ao systemd do usuário (D-Bus, `StartTransientUnit`) uma unidade transitória, porque o lethe não executa outros programas (princípio 10). Sem `lethe-gui` ou sem systemd de usuário, os alertas ficam nas notificações do agente e no terminal | Instalação na hora |
 | Serviço | `lethed.service` + `lethe arm/disarm`; o agente sobe por unidade de usuário (`lethe-agent.service`, `systemctl --user`) | Máquinas dedicadas |
 
 ### 5.3 Fluxo de dados e camadas de código
@@ -1043,6 +1043,7 @@ JSON-RPC 2.0, uma mensagem por linha, máximo de 64 KiB por mensagem (acima diss
 | `panic.engage`, `selftest.run` (sem RESP-001), `agent.report` (só para o agente) | controle seguro |
 | `session.arm`, `session.disarm`, `alert.ack` (CRITICAL), `panic.release`, `discovery.confirm_endpoint`, `selftest.run` com RESP-001 | **sensível** |
 | `alert.ack` (WARNING/INFO) | controle seguro |
+| `gui.fullscreen_result` (a GUI informa se o alerta em tela cheia apareceu: `focused`, `shown` ou `failed`; vira `response.executed` do `alert_fullscreen`, uma vez por alerta) | controle seguro |
 
 ### 17.3 Ações sensíveis
 
@@ -1232,7 +1233,7 @@ Fronteiras (impostas pelo `depguard` no `check`):
 - `internal/engine` não importa `net`, `os`, `syscall`, `time.Now` (recebe `Clock`) nem nenhum outro pacote `internal/` além de `contracts`.
 - `internal/checks` não importa `response` nem `guard`.
 - `os/exec` só pode aparecer em `internal/privsep`.
-- `apps/lethe-gui` só importa `internal/contracts` e `internal/ipc` (cliente).
+- `apps/lethe-gui` só importa `internal/contracts`, `internal/ipc` (cliente) e `internal/i18n` (os textos de operador; dados embutidos, sem I/O). Os tipos das respostas IPC (`Status`, `SelftestResult`…) ficam em `internal/contracts`. Um teste do módulo da GUI impõe essa fronteira.
 
 ---
 
