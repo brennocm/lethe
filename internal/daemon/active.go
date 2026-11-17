@@ -2,11 +2,13 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"math/rand/v2"
 	"net/netip"
 	"time"
 
 	"lethe/internal/checks"
+	"lethe/internal/contracts"
 	"lethe/internal/sensors/egressip"
 	"lethe/internal/sensors/hostinfo"
 )
@@ -14,6 +16,8 @@ import (
 // Active checks (NET-011, spec §9.9): one query at the arm, then at a uniformly random interval
 // in active_checks.egress_ip.interval. The query runs outside the lock; it only ever leaves
 // through the tunnel (bound socket, tunnel resolver) or the Tor SOCKS port.
+
+var errNoActive = errors.New("active checks are off in this session (active_checks.enabled or --no-active)")
 
 func (d *Daemon) activeOn(s *session) bool {
 	return s.prof.ActiveChecks.Enabled && !s.noActive
@@ -32,6 +36,7 @@ func (d *Daemon) activeLoop(ctx context.Context, s *session) {
 		case <-ctx.Done():
 			return
 		case <-d.cfg.ActiveWake:
+		case <-d.wake:
 		case <-time.After(wait):
 		}
 	}
@@ -108,6 +113,10 @@ func (d *Daemon) activeRound(ctx context.Context, s *session) {
 		return
 	}
 	view := ExitView{At: d.cfg.Now().UTC(), Path: name}
+	if _, real := s.known.IPs[res.IP.Unmap()]; !real {
+		view.IP = res.IP.String()
+		view.City, view.PlaceCountry, view.PlaceSource = res.Place.City, res.Place.Country, res.Place.Source
+	}
 	if d.cfg.Geo != nil {
 		if info, ok := d.cfg.Geo.Lookup(res.IP); ok {
 			view.Country = info.Country
@@ -125,4 +134,85 @@ func (d *Daemon) activeRound(ctx context.Context, s *session) {
 		}
 	}
 	s.exit = &view
+}
+
+// CheckNow starts a NET-011 round now (the GUI's "check now"). It fails when the session has no
+// active checks: the operator turned them off, or the profile did.
+func (d *Daemon) CheckNow() error {
+	d.mu.Lock()
+	s := d.sess
+	d.mu.Unlock()
+	if s == nil {
+		return errState(errNotArmed)
+	}
+	if !d.activeOn(s) {
+		return errState(errNoActive)
+	}
+	select {
+	case d.wake <- struct{}{}:
+	default: // a round is already coming
+	}
+	return nil
+}
+
+// DNSLeakTest runs the DNS leak test (spec §9.9): the system resolver resolves the test's names,
+// the answer comes through the tunnel or Tor. Addresses that are baseline values are not shown:
+// the field that matched is.
+func (d *Daemon) DNSLeakTest(ctx context.Context) (contracts.DNSLeakResult, error) {
+	d.mu.Lock()
+	s := d.sess
+	if s == nil {
+		d.mu.Unlock()
+		return contracts.DNSLeakResult{}, errState(errNotArmed)
+	}
+	if !d.activeOn(s) {
+		d.mu.Unlock()
+		return contracts.DNSLeakResult{}, errState(errNoActive)
+	}
+	path, name := d.activePathLocked(s)
+	cfg := egressip.LeakConfig{Config: egressip.Config{RootCAs: d.cfg.ActiveRootCAs}, Lookup: d.cfg.LeakLookup}
+	known := s.known
+	d.mu.Unlock()
+	out := contracts.DNSLeakResult{At: d.cfg.Now().UTC()}
+	if name == "" {
+		out.Verdict, out.Detail = "skipped", egressip.ErrNoPath.Error()
+		return out, nil
+	}
+	return LeakVerdict(d.cfg.DNSLeak(ctx, path, cfg), known, out.At), nil
+}
+
+// LeakVerdict turns the test's answer into what the operator sees.
+func LeakVerdict(r egressip.LeakResult, k checks.Known, at time.Time) contracts.DNSLeakResult {
+	out := contracts.DNSLeakResult{At: at, Verdict: "ok"}
+	if r.Skipped != "" {
+		out.Verdict, out.Detail = "skipped", r.Skipped
+		return out
+	}
+	view := func(s egressip.LeakServer, known map[netip.Addr]string) contracts.DNSLeakServer {
+		v := contracts.DNSLeakServer{Country: s.Country, ASN: s.ASN}
+		if f, ok := known[s.IP]; ok {
+			v.Matched = f
+			out.Verdict = "leak"
+			return v
+		}
+		if f, ok := k.IPs[s.IP]; ok {
+			v.Matched = f
+			out.Verdict = "leak"
+			return v
+		}
+		v.IP = s.IP.String()
+		return v
+	}
+	if r.Exit != nil {
+		e := view(*r.Exit, nil)
+		out.Exit = &e
+	}
+	for _, s := range r.DNS {
+		v := view(s, k.Resolvers)
+		if out.Verdict == "ok" && out.Exit != nil && out.Exit.Country != "" && v.Country != "" && v.Country != out.Exit.Country {
+			out.Verdict = "suspect"
+		}
+		out.DNS = append(out.DNS, v)
+	}
+	return out
 }

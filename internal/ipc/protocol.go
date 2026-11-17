@@ -35,6 +35,8 @@ var Methods = map[string]Class{
 	"selftest.run":               ClassSafe,
 	"alert.ack":                  ClassSafe,
 	"gui.fullscreen_result":      ClassSafe, // the GUI says whether the full-screen alert got focus
+	"active.check_now":           ClassSafe, // a NET-011 round now (through the tunnel)
+	"dns.leak_test":              ClassSafe, // the DNS leak test (spec §9.9)
 	"agent.report":               ClassAgent,
 	"session.arm":                ClassSensitive,
 	"session.disarm":             ClassSensitive,

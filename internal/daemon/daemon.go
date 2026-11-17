@@ -92,13 +92,18 @@ type Config struct {
 	// system roots (tests); a value on ActiveWake starts a round now (tests).
 	ActiveQuery   func(context.Context, egressip.Path, egressip.Config) egressip.Result
 	ActiveRootCAs *x509.CertPool
-	ActiveWake    chan struct{}
+	// DNSLeak runs the DNS leak test (default egressip.DNSLeak); LeakLookup replaces the system
+	// resolver in it (tests).
+	DNSLeak    func(context.Context, egressip.Path, egressip.LeakConfig) egressip.LeakResult
+	LeakLookup func(context.Context, string) error
+	ActiveWake chan struct{}
 }
 
 // Daemon is one lethe daemon. Methods are safe for concurrent use.
 type Daemon struct {
-	cfg Config
-	srv *ipc.Server
+	cfg  Config
+	srv  *ipc.Server
+	wake chan struct{} // CheckNow: starts a NET-011 round
 
 	mu       sync.Mutex
 	eng      *engine.Engine
@@ -223,6 +228,9 @@ func New(cfg Config) *Daemon {
 	if cfg.ActiveQuery == nil {
 		cfg.ActiveQuery = egressip.Query
 	}
+	if cfg.DNSLeak == nil {
+		cfg.DNSLeak = egressip.DNSLeak
+	}
 	if cfg.SelftestOps == nil {
 		cfg.SelftestOps = liveOps{nft: func() (guard.Conn, error) { return cfg.NFT() }}
 	}
@@ -232,7 +240,7 @@ func New(cfg Config) *Daemon {
 	if cfg.Boottime == nil {
 		cfg.Boottime = boottime
 	}
-	d := &Daemon{cfg: cfg, state: engine.StateReady, subs: map[int]chan contracts.Event{}, lastBeat: map[string]time.Time{}, ended: make(chan struct{})}
+	d := &Daemon{cfg: cfg, state: engine.StateReady, subs: map[int]chan contracts.Event{}, lastBeat: map[string]time.Time{}, ended: make(chan struct{}), wake: make(chan struct{}, 1)}
 	d.eng = engine.New(clock{cfg.Now}, engine.Config{}, engine.StateReady)
 	d.srv = &ipc.Server{
 		OperatorUID:    cfg.Operator.UID,

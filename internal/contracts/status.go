@@ -51,6 +51,34 @@ type ExitView struct {
 	ASN     uint32    `json:"asn,omitempty"`
 	At      time.Time `json:"at"`
 	Path    string    `json:"path"` // tunnel interface or "tor"
+	// IP is the exit address, only when it is not a baseline value (then NET-011 is CRITICAL
+	// and the address stays sealed in the journal).
+	IP string `json:"ip,omitempty"`
+	// City and PlaceCountry are what an endpoint says (PlaceSource), shown as its claim: the
+	// country that decides alerts is Country, from the offline database.
+	City         string `json:"city,omitempty"`
+	PlaceCountry string `json:"place_country,omitempty"`
+	PlaceSource  string `json:"place_source,omitempty"`
+}
+
+// DNSLeakServer is one address seen by the DNS leak test. IP is empty when it is a baseline
+// value; Matched then names the baseline field.
+type DNSLeakServer struct {
+	IP      string `json:"ip,omitempty"`
+	Country string `json:"country,omitempty"`
+	ASN     string `json:"asn,omitempty"`
+	Matched string `json:"matched,omitempty"`
+}
+
+// DNSLeakResult answers dns.leak_test (spec §9.9): which address the web sees and which DNS
+// servers resolved the names the system asked. Verdict: ok, leak (a resolver or the exit is
+// the real connection), suspect (a resolver in another country than the exit) or skipped.
+type DNSLeakResult struct {
+	Verdict string          `json:"verdict"`
+	Detail  string          `json:"detail,omitempty"`
+	Exit    *DNSLeakServer  `json:"exit,omitempty"`
+	DNS     []DNSLeakServer `json:"dns,omitempty"`
+	At      time.Time       `json:"at"`
 }
 
 // Lockdown explains a network blocked by lethe in three parts (spec §10.6 item 5): what is

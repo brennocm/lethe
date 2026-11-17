@@ -12,6 +12,7 @@
       "enum": [
         "auth.challenge", "status.get", "events.subscribe", "events.query", "discovery.get", "heartbeat",
         "panic.engage", "selftest.run", "agent.report", "alert.ack", "gui.fullscreen_result",
+        "active.check_now", "dns.leak_test",
         "session.arm", "session.disarm", "panic.release", "discovery.confirm_endpoint"
       ]
     },

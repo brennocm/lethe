@@ -213,6 +213,8 @@ func (d *Daemon) routes() {
 		return d.RunSelftest(c.Ctx, r, c.Authorize)
 	})
 	h("session.disarm", func(*ipc.Call) (any, error) { return d.Disarm() })
+	h("active.check_now", func(*ipc.Call) (any, error) { return map[string]any{"ok": true}, d.CheckNow() })
+	h("dns.leak_test", func(c *ipc.Call) (any, error) { return d.DNSLeakTest(c.Ctx) })
 	h("panic.release", func(*ipc.Call) (any, error) { return d.Unpanic() })
 	h("discovery.confirm_endpoint", func(c *ipc.Call) (any, error) { // sensitive: the server checks the proof
 		var p struct {

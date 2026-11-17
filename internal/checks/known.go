@@ -15,11 +15,13 @@ type Known struct {
 	SSIDs    map[string]string     // SSID → "baseline.networks[i].ssids"
 	IPs      map[netip.Addr]string // public IP → "baseline.networks[i].public_ipv4|6" (NET-011)
 	ASNs     map[uint32]string     // ASN → "baseline.networks[i].asn"
+	// Resolvers: DNS server → "baseline.networks[i].resolvers" (the DNS leak test).
+	Resolvers map[netip.Addr]string
 }
 
 // KnownFrom extracts Known from a decrypted baseline (nil = nothing known).
 func KnownFrom(b *baseline.Baseline) Known {
-	k := Known{SSIDs: map[string]string{}, IPs: map[netip.Addr]string{}, ASNs: map[uint32]string{}}
+	k := Known{SSIDs: map[string]string{}, IPs: map[netip.Addr]string{}, ASNs: map[uint32]string{}, Resolvers: map[netip.Addr]string{}}
 	if b == nil {
 		return k
 	}
@@ -32,6 +34,11 @@ func KnownFrom(b *baseline.Baseline) Known {
 		}
 		if n.ASN != 0 {
 			k.ASNs[n.ASN] = fmt.Sprintf("baseline.networks[%d].asn", i)
+		}
+		for _, r := range n.Resolvers {
+			if a, err := netip.ParseAddr(strings.TrimSpace(r)); err == nil {
+				k.Resolvers[a.Unmap()] = fmt.Sprintf("baseline.networks[%d].resolvers", i)
+			}
 		}
 		for _, s := range n.SSIDs {
 			if s != "" {

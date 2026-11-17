@@ -22,6 +22,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"golang.org/x/net/proxy"
 	"golang.org/x/sys/unix"
@@ -54,13 +55,24 @@ type Config struct {
 type Answer struct {
 	Endpoint string
 	IP       netip.Addr
+	Place    Place
 	Err      error
+}
+
+// Place is where an endpoint says the address is (am.i.mullvad.net answers country and city).
+// It is the endpoint's claim, untrusted: shown to the operator with its source, never used to
+// decide an alert (the country of NET-011 comes from the offline database).
+type Place struct {
+	Country string
+	City    string
+	Source  string // endpoint host
 }
 
 // Result of one round. Skipped explains why there is no result (no tunnel DNS, too few
 // endpoints); Agreed is false when the endpoints disagree or failed.
 type Result struct {
 	IP      netip.Addr
+	Place   Place // the first endpoint that said where the address is
 	Agreed  bool
 	Skipped string
 	Answers []Answer
@@ -89,12 +101,18 @@ func Query(ctx context.Context, p Path, cfg Config) Result {
 	res := Result{}
 	for _, i := range pick(len(cfg.Endpoints)) {
 		ep := cfg.Endpoints[i]
-		ip, err := ask(ctx, client, ep)
-		res.Answers = append(res.Answers, Answer{Endpoint: ep, IP: ip, Err: err})
+		ip, place, err := ask(ctx, client, ep)
+		res.Answers = append(res.Answers, Answer{Endpoint: ep, IP: ip, Place: place, Err: err})
 	}
 	a, b := res.Answers[0], res.Answers[1]
 	if a.Err == nil && b.Err == nil && a.IP == b.IP {
 		res.IP, res.Agreed = a.IP, true
+		for _, x := range res.Answers {
+			if x.Place.Country != "" || x.Place.City != "" {
+				res.Place = x.Place
+				break
+			}
+		}
 	}
 	return res
 }
@@ -161,30 +179,85 @@ func tunnelResolver(iface string, servers []netip.Addr, timeout time.Duration) *
 	}}
 }
 
-func ask(ctx context.Context, c *http.Client, endpoint string) (netip.Addr, error) {
+func ask(ctx context.Context, c *http.Client, endpoint string) (netip.Addr, Place, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Scheme != "https" || u.Host == "" {
-		return netip.Addr{}, fmt.Errorf("endpoint %q is not an https URL", endpoint)
+		return netip.Addr{}, Place{}, fmt.Errorf("endpoint %q is not an https URL", endpoint)
+	}
+	body, err := get(ctx, c, endpoint)
+	if err != nil {
+		return netip.Addr{}, Place{}, err
+	}
+	ip, err := ParseIP(body)
+	if err != nil {
+		return netip.Addr{}, Place{}, err
+	}
+	p := ParsePlace(body)
+	if p.Country != "" || p.City != "" {
+		p.Source = u.Host
+	}
+	return ip, p, nil
+}
+
+// get fetches endpoint (https, at most 64 KiB of answer) with a browser User-Agent.
+func get(ctx context.Context, c *http.Client, endpoint string) ([]byte, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return netip.Addr{}, err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("Accept", "*/*")
 	resp, err := c.Do(req)
 	if err != nil {
-		return netip.Addr{}, err
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return netip.Addr{}, fmt.Errorf("%s: %s", u.Host, resp.Status)
+		return nil, fmt.Errorf("%s: %s", u.Host, resp.Status)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	if err != nil {
-		return netip.Addr{}, err
+	return io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+}
+
+// ParsePlace reads country and city from a JSON answer (country or country_name, city). The
+// text is cleaned: printable characters only, at most 64 of them.
+func ParsePlace(body []byte) Place {
+	var obj map[string]any
+	if json.Unmarshal(body, &obj) != nil {
+		return Place{}
 	}
-	return ParseIP(body)
+	str := func(keys ...string) string {
+		for _, k := range keys {
+			if s, ok := obj[k].(string); ok {
+				if c := Clean(s); c != "" {
+					return c
+				}
+			}
+		}
+		return ""
+	}
+	return Place{Country: str("country", "country_name"), City: str("city")}
+}
+
+// Clean keeps the printable characters of s (no control or format characters, which could
+// reorder or hide text on the operator's screen) and cuts it at 64.
+func Clean(s string) string {
+	var b strings.Builder
+	n := 0
+	for _, r := range strings.TrimSpace(s) {
+		if n == 64 {
+			break
+		}
+		if !unicode.IsPrint(r) {
+			continue
+		}
+		b.WriteRune(r)
+		n++
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // ParseIP reads the address from a JSON object (ip, IP, query, origin) or from plain text.

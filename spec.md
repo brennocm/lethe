@@ -550,7 +550,9 @@ Falhas de **túnel** (TUN-001, TUN-003 e TUN-008 em CRITICAL) não podem ser con
 - **Tor:** SOCKS5 no `SocksPort` descoberto, com resolução remota (`socks5h`).
 - Cabeçalhos HTTP mínimos e um User-Agent genérico e comum. Nenhum identificador da ferramenta, para que a consulta não vire assinatura capaz de ligar personas.
 - País e ASN resolvidos **offline** (§20). IP ou ASN da baseline = C; país diferente de `expect_country` = W. ASN fora de `expect_asn` (quando definido) = W. Endpoints que não concordam ou falham = W.
-- O IP de saída vai **selado** no evento (pode ser o da baseline); o campo casado aparece pelo nome. O `status` mostra só país, ASN (nunca um ASN da baseline), caminho e horário da última resposta concordante.
+- O IP de saída vai **selado** no evento (pode ser o da baseline); o campo casado aparece pelo nome. O `status` mostra país e ASN (nunca um ASN da baseline), caminho e horário da última resposta concordante; quando o IP de saída **não** é da baseline, mostra também o IP e a cidade e o país que o endpoint diz (`place_source`), como afirmação dele: o país que decide alertas continua sendo o da base offline. Um IP da baseline nunca aparece no `status`.
+- **Verificar agora:** `active.check_now` antecipa uma rodada (o botão "Verificar agora" da GUI). Com checks ativos desligados na sessão, responde erro de estado.
+- **Teste de vazamento de DNS** (`dns.leak_test`, só sob pedido do operador, nunca periódico): resolve 10 nomes aleatórios `N.ID.bash.ws` pelo **resolvedor do sistema**, que é o caminho testado, e busca em `https://bash.ws/dnsleak/test/ID?json`, pelo mesmo caminho do NET-011 (túnel ou Tor), quais servidores DNS perguntaram e qual IP a web vê. Sem caminho pelo túnel, o teste é pulado antes de resolver qualquer nome. Veredito: `leak` quando um resolvedor está em `baseline.networks[].resolvers` ou um endereço é IP público da baseline (mostrado pelo nome do campo, nunca pelo valor), `suspect` quando um resolvedor está em outro país que a saída, `ok` nos outros casos e `skipped` com o motivo. O próprio teste revela a quem vê o DNS fora do túnel que alguém consultou `bash.ws`; a GUI diz isso antes de rodar. O resultado não entra no log (não há tipo de evento para ele, §14.1) e não gera alerta.
 - Com o país do IP de saída, o PER-001 compara o país do timezone da máquina (`zone1970.tab` do sistema; timezone de vários países casa com qualquer um) e o território do locale. Sem base geo no binário, a parte de país do NET-011 e do PER-001 fica inativa, e o IP/ASN da baseline continua sendo verificado pelo IP.
 
 ---
@@ -1045,6 +1047,7 @@ JSON-RPC 2.0, uma mensagem por linha, máximo de 64 KiB por mensagem (acima diss
 | `panic.engage`, `selftest.run` (sem RESP-001), `agent.report` (só para o agente) | controle seguro |
 | `session.arm`, `session.disarm`, `alert.ack` (CRITICAL), `panic.release`, `discovery.confirm_endpoint`, `selftest.run` com RESP-001 | **sensível** |
 | `alert.ack` (WARNING/INFO) | controle seguro |
+| `active.check_now` (uma rodada do NET-011 agora), `dns.leak_test` (teste de vazamento de DNS, §9.9) | controle seguro |
 | `gui.fullscreen_result` (a GUI informa se o alerta em tela cheia apareceu: `focused`, `shown` ou `failed`; vira `response.executed` do `alert_fullscreen`, uma vez por alerta) | controle seguro |
 
 ### 17.3 Ações sensíveis

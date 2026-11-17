@@ -51,7 +51,11 @@
         "country": { "type": "string" },
         "asn": { "type": "integer", "minimum": 0 },
         "at": { "type": "string" },
-        "path": { "type": "string" }
+        "path": { "type": "string" },
+        "ip": { "type": "string" },
+        "city": { "type": "string" },
+        "place_country": { "type": "string" },
+        "place_source": { "type": "string" }
       }
     },
     "lockdown": {

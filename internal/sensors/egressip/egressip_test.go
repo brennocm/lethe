@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func servers(t *testing.T, bodies map[string]string) (Path, Config, *[]http.Header) {
@@ -93,5 +94,52 @@ func TestNET011_TunnelDNS(t *testing.T) {
 		[]string{"127.0.0.53", "10.64.0.1", "192.168.1.1"}, via)
 	if len(got) != 2 || got[0].String() != "10.2.0.1" || got[1].String() != "10.64.0.1" {
 		t.Fatal(got)
+	}
+}
+
+// The place an endpoint claims is kept with its source, cleaned of control characters.
+func TestNET011_PlaceFromTheEndpoint(t *testing.T) {
+	p, cfg, _ := servers(t, map[string]string{
+		"/a": `{"IsTor":false,"IP":"203.0.113.9"}`,
+		"/b": `{"ip":"203.0.113.9","country":"Netherlands","city":"Amster\u202edam\u0007"}`,
+	})
+	r := Query(context.Background(), p, cfg)
+	if !r.Agreed || r.Place.Country != "Netherlands" || r.Place.City != "Amsterdam" || r.Place.Source != "example.com" {
+		t.Fatalf("%+v", r.Place)
+	}
+	if got := Clean(strings.Repeat("x", 100)); len(got) != 64 {
+		t.Fatalf("not cut: %d", len(got))
+	}
+}
+
+// The test resolves names through the given lookup (the system path) and fetches the result
+// through the tunnel path; resolvers and the exit come from the answer.
+func TestNET011_DNSLeakTest(t *testing.T) {
+	body := `[{"ip":"203.0.113.9","country":"NL","country_name":"Netherlands","asn":"AS64500 Example","type":"ip"},
+		{"ip":"198.51.100.53","country":"BR","country_name":"Brazil","asn":false,"type":"dns"},
+		{"ip":"","type":"conclusion"}]`
+	p, cfg, _ := servers(t, map[string]string{"/dnsleak/test/1234567": body, "/unused": ""})
+	var asked []string
+	res := DNSLeak(context.Background(), p, LeakConfig{
+		API: "https://example.com/dnsleak/test/%s", Config: cfg,
+		ID:     func() (string, error) { return "1234567", nil },
+		Lookup: func(_ context.Context, h string) error { asked = append(asked, h); return nil },
+		Sleep:  func(context.Context, time.Duration) {},
+	})
+	if res.Skipped != "" || res.Exit == nil || res.Exit.Country != "NL" || len(res.DNS) != 1 || res.DNS[0].Country != "BR" || res.DNS[0].ASN != "" {
+		t.Fatalf("%+v", res)
+	}
+	if len(asked) != 10 || asked[0] != "1.1234567.bash.ws" {
+		t.Fatalf("asked %v", asked)
+	}
+	// no tunnel path: no fetch through the system, the test is skipped
+	if r := DNSLeak(context.Background(), Path{}, LeakConfig{Lookup: func(context.Context, string) error {
+		t.Fatal("names resolved without a path to fetch the answer")
+		return nil
+	}}); r.Skipped == "" {
+		t.Fatal("must skip")
+	}
+	if _, err := ParseLeak([]byte(`{"oops":1}`)); err == nil {
+		t.Fatal("bad answer accepted")
 	}
 }
