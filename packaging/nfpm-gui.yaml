@@ -1,5 +1,7 @@
 # lethe-gui package: the Fyne GUI (cgo), next to /usr/bin/lethe so `lethe run` and the agent find
-# it (ADR 0013). Built only where the OpenGL/X11/Wayland headers exist (the gui CI job).
+# it (ADR 0013). Built only where the OpenGL/X11/Wayland headers exist (scripts/gui-deps). The
+# depends are the runtime libraries GLFW links (OpenGL and X11) and loads (Wayland, xkbcommon):
+# installing the package pulls them, so the operator never installs anything by hand.
 name: lethe-gui
 arch: ${ARCH}
 platform: linux
@@ -17,11 +19,30 @@ overrides:
   rpm:
     depends:
       - lethe = ${VERSION}-1
-      - mesa-libGL
+      # by soname, so Fedora and openSUSE (different package names) both resolve them
+      - libGL.so.1()(64bit)
+      - libX11.so.6()(64bit)
+      - libXcursor.so.1()(64bit)
+      - libXrandr.so.2()(64bit)
+      - libXinerama.so.1()(64bit)
+      - libXi.so.6()(64bit)
+      - libXxf86vm.so.1()(64bit)
+      - libwayland-client.so.0()(64bit)
+      - libwayland-egl.so.1()(64bit)
+      - libxkbcommon.so.0()(64bit)
   deb:
     depends:
       - lethe (= ${VERSION}-1)
       - libgl1
+      - libx11-6
+      - libxcursor1
+      - libxrandr2
+      - libxinerama1
+      - libxi6
+      - libxxf86vm1
+      - libwayland-client0
+      - libwayland-egl1
+      - libxkbcommon0
 contents:
   - src: dist/stage/lethe-gui
     dst: /usr/bin/lethe-gui
