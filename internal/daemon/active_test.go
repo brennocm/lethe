@@ -142,4 +142,21 @@ func TestNET011_DNSLeakTestVerdicts(t *testing.T) {
 	if err := f.d.CheckNow(); err != nil {
 		t.Fatal("a second request while one waits is not an error")
 	}
+	// one test at a time: a second call while the first waits is refused, not run in parallel
+	release, entered := make(chan struct{}), make(chan struct{})
+	f.d.cfg.DNSLeak = func(context.Context, egressip.Path, egressip.LeakConfig) egressip.LeakResult {
+		close(entered)
+		<-release
+		return answer
+	}
+	done := make(chan error, 1)
+	go func() { _, err := f.d.DNSLeakTest(context.Background()); done <- err }()
+	<-entered
+	if _, err := f.d.DNSLeakTest(context.Background()); err == nil || !strings.Contains(err.Error(), "already running") {
+		t.Fatalf("a parallel test: %v", err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
 }

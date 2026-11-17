@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/nftables"
@@ -101,9 +102,10 @@ type Config struct {
 
 // Daemon is one lethe daemon. Methods are safe for concurrent use.
 type Daemon struct {
-	cfg  Config
-	srv  *ipc.Server
-	wake chan struct{} // CheckNow: starts a NET-011 round
+	cfg      Config
+	srv      *ipc.Server
+	wake     chan struct{} // CheckNow: starts a NET-011 round
+	leakBusy atomic.Bool   // a DNS leak test is running (one at a time)
 
 	mu       sync.Mutex
 	eng      *engine.Engine

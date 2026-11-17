@@ -17,7 +17,10 @@ import (
 // in active_checks.egress_ip.interval. The query runs outside the lock; it only ever leaves
 // through the tunnel (bound socket, tunnel resolver) or the Tor SOCKS port.
 
-var errNoActive = errors.New("active checks are off in this session (active_checks.enabled or --no-active)")
+var (
+	errNoActive = errors.New("active checks are off in this session (active_checks.enabled or --no-active)")
+	errLeakBusy = errors.New("a DNS leak test is already running; wait for its answer")
+)
 
 func (d *Daemon) activeOn(s *session) bool {
 	return s.prof.ActiveChecks.Enabled && !s.noActive
@@ -169,6 +172,11 @@ func (d *Daemon) DNSLeakTest(ctx context.Context) (contracts.DNSLeakResult, erro
 		d.mu.Unlock()
 		return contracts.DNSLeakResult{}, errState(errNoActive)
 	}
+	if !d.leakBusy.CompareAndSwap(false, true) {
+		d.mu.Unlock()
+		return contracts.DNSLeakResult{}, errState(errLeakBusy)
+	}
+	defer d.leakBusy.Store(false)
 	path, name := d.activePathLocked(s)
 	cfg := egressip.LeakConfig{Config: egressip.Config{RootCAs: d.cfg.ActiveRootCAs}, Lookup: d.cfg.LeakLookup,
 		Domain: s.prof.ActiveChecks.DNSLeak.Domain, API: s.prof.ActiveChecks.DNSLeak.API}
