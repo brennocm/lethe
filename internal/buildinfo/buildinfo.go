@@ -14,7 +14,8 @@ import (
 // Version is overridden at release time with -ldflags "-X lethe/internal/buildinfo.Version=v1.2.3".
 var Version = "dev"
 
-// GeoDBDate is the build date of the embedded offline geo database ("none" until M11).
+// GeoDBDate is the build date of the embedded offline geo database ("none" without one; the
+// version command fills it from internal/geo).
 var GeoDBDate = "none"
 
 // Info describes the running binary. Its JSON form is validated by the "version" schema.

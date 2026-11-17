@@ -8,6 +8,7 @@ import (
 
 	"lethe/internal/buildinfo"
 	"lethe/internal/contracts"
+	"lethe/internal/geo"
 )
 
 func newVersionCmd() *cobra.Command {
@@ -20,6 +21,9 @@ func newVersionCmd() *cobra.Command {
 			info, err := buildinfo.Read("")
 			if err != nil {
 				return err
+			}
+			if db, err := geo.EmbeddedMMDB(); err == nil {
+				info.GeoDBDate = db.Built().Format("2006-01-02")
 			}
 			out := cmd.OutOrStdout()
 			if asJSON {

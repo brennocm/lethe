@@ -24,3 +24,5 @@ CLAUDE.md
 .claude/
 .cursor/
 .aider*
+# geo data is embedded at release by scripts/update-geo (DB-IP Lite, CC BY 4.0)
+/internal/geo/data/*.mmdb

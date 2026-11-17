@@ -11,6 +11,7 @@ require (
 	github.com/google/nftables v0.3.0
 	github.com/gopacket/gopacket v1.7.7
 	github.com/gowebpki/jcs v1.0.2
+	github.com/oschwald/maxminddb-golang/v2 v2.9.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/spf13/cobra v1.10.2
 	github.com/vishvananda/netlink v1.3.1
