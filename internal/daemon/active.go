@@ -179,7 +179,15 @@ func (d *Daemon) DNSLeakTest(ctx context.Context) (contracts.DNSLeakResult, erro
 		out.Verdict, out.Detail = "skipped", egressip.ErrNoPath.Error()
 		return out, nil
 	}
-	return LeakVerdict(d.cfg.DNSLeak(ctx, path, cfg), known, out.At), nil
+	res := LeakVerdict(d.cfg.DNSLeak(ctx, path, cfg), known, out.At)
+	if res.Verdict != "skipped" {
+		d.mu.Lock()
+		if d.sess == s {
+			d.conditionGroupLocked("DNS-002/leak_test", "DNS-002", checks.DNS002{}.EvaluateLeakTest(res))
+		}
+		d.mu.Unlock()
+	}
+	return res, nil
 }
 
 // LeakVerdict turns the test's answer into what the operator sees.

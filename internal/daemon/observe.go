@@ -111,6 +111,8 @@ func (d *Daemon) evaluateConditionsLocked(snap discovery.Snapshot) {
 	}
 	d.conditionLocked("NET-003", checks.NET003{}.Evaluate(&snap, d.sess.prof.Expect.IPv6))
 	d.conditionLocked("NET-004", checks.NET004{}.Evaluate(&snap))
+	d.conditionLocked("DNS-002", checks.DNS002{}.Evaluate(&snap, d.sess.known))
+	d.conditionLocked("DNS-003", checks.DNS003{}.Evaluate(&snap))
 	d.conditionLocked("TUN-001", checks.TUN001{}.Evaluate(d.tunnelExpectLocked(), &snap))
 	d.conditionLocked("TUN-002", checks.TUN002{}.Evaluate(d.sess.tx, &snap, d.cfg.Now()))
 	d.conditionLocked("TUN-003", checks.TUN003{}.Evaluate(d.sess.torExpected, &snap))

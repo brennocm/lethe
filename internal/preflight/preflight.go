@@ -107,6 +107,8 @@ func Run(in Input) Report {
 	torInUse := checks.TorExpected(egressType, in.Snapshot)
 	add("NET-003", checks.NET003{}.Evaluate(in.Snapshot, expectV6))
 	add("NET-004", checks.NET004{}.Evaluate(in.Snapshot))
+	add("DNS-002", checks.DNS002{}.Evaluate(in.Snapshot, in.Known))
+	add("DNS-003", checks.DNS003{}.Evaluate(in.Snapshot))
 	add("TUN-001", checks.TUN001{}.Evaluate(checks.TunnelExpect{Ifaces: TunnelIfaces(in.Snapshot), Require: checks.RequiresTunnel(egressType, torInUse)}, in.Snapshot))
 	add("TUN-003", checks.TUN003{}.Evaluate(torInUse, in.Snapshot))
 	add("TUN-005", checks.TUN005{}.Evaluate(in.Snapshot))

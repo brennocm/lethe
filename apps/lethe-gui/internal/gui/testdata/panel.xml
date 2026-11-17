@@ -97,6 +97,16 @@
 										</widget>
 										<widget pos="0,78" size="267x35" type="*widget.Label">
 											<widget size="267x35" type="*widget.RichText">
+												<text color="disabled" pos="8,8" size="249x19">DNS-002  DNS da sua rede real em u…</text>
+											</widget>
+										</widget>
+										<widget pos="0,117" size="267x35" type="*widget.Label">
+											<widget size="267x35" type="*widget.RichText">
+												<text color="disabled" pos="8,8" size="248x19">DNS-003  DNS da rede física pode re…</text>
+											</widget>
+										</widget>
+										<widget pos="0,156" size="267x35" type="*widget.Label">
+											<widget size="267x35" type="*widget.RichText">
 												<text color="disabled" pos="8,8" size="248x19">DNS-004  Configuração de DNS alter…</text>
 											</widget>
 										</widget>

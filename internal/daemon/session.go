@@ -686,6 +686,7 @@ func (d *Daemon) Unpanic() (map[string]any, error) {
 	recheck := append(checks.NET003{}.Evaluate(&snap, d.sess.prof.Expect.IPv6), checks.NET004{}.Evaluate(&snap)...)
 	recheck = append(recheck, checks.TUN001{}.Evaluate(d.tunnelExpectLocked(), &snap)...)
 	recheck = append(recheck, checks.TUN003{}.Evaluate(d.sess.torExpected, &snap)...)
+	recheck = append(recheck, checks.DNS002{}.Evaluate(&snap, d.sess.known)...)
 	for _, f := range recheck {
 		if f.Severity == contracts.SeverityCritical {
 			failed = append(failed, f.Check)
@@ -701,7 +702,7 @@ func (d *Daemon) Unpanic() (map[string]any, error) {
 		return nil, err
 	}
 	d.sess.panic = panicCause{}
-	data := map[string]any{"recheck": []any{"NET-003", "NET-004", "TUN-001"}}
+	data := map[string]any{"recheck": []any{"NET-003", "NET-004", "DNS-002", "TUN-001", "TUN-003"}}
 	if up := d.restoreLinksLocked(); len(up) > 0 {
 		data["links_up"] = up
 	}

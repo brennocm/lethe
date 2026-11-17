@@ -133,6 +133,9 @@ func TestNET011_DNSLeakTestVerdicts(t *testing.T) {
 	if r.Verdict != "leak" || strings.Contains(string(raw), "198.51.100.53") || !strings.Contains(string(raw), "baseline.networks[0].resolvers") {
 		t.Fatalf("%s", raw)
 	}
+	if a := alertFor(f.d.Status(), "DNS-002"); a == nil || a.Severity != "CRITICAL" {
+		t.Fatalf("a leak found by the test raises DNS-002: %+v", f.d.Status().Alerts)
+	}
 	if err := f.d.CheckNow(); err != nil {
 		t.Fatal(err)
 	}

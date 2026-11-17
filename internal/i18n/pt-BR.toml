@@ -210,6 +210,16 @@ todo = "Confira o resolvedor em uso e use o DNS do túnel. Se não souber a caus
 
 
 
+[DNS-002]
+title = "DNS da sua rede real em uso"
+meaning = "O sistema está usando um servidor DNS da sua rede real (o da baseline): o provedor vê os nomes que você resolve, mesmo com a VPN ligada."
+todo = "Pare a operação. Configure o DNS da VPN (ou ~. no túnel do systemd-resolved) e confira com Testar vazamento de DNS antes de continuar."
+
+[DNS-003]
+title = "DNS da rede física pode responder qualquer nome"
+meaning = "O systemd-resolved pode mandar consultas para o DNS da interface física, porque nenhum túnel reivindica todos os domínios (~.)."
+todo = "Na VPN, ative o roteamento de todos os domínios pelo túnel (DNS=... e Domains=~. no link do túnel) ou desligue o DefaultRoute da interface física."
+
 [DNS-004]
 title = "Configuração de DNS alterada"
 meaning = "A configuração de DNS do sistema mudou durante a sessão."

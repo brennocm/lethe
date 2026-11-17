@@ -208,6 +208,16 @@ todo = "Check the resolver in use and use the tunnel's DNS. If you do not know t
 
 
 
+[DNS-002]
+title = "Your real network's DNS in use"
+meaning = "The system uses a DNS server of your real network (the baseline's): the provider sees the names you resolve, even with the VPN up."
+todo = "Stop the operation. Set the VPN's DNS (or ~. on the tunnel in systemd-resolved) and check with Test for DNS leaks before going on."
+
+[DNS-003]
+title = "The physical network's DNS may answer any name"
+meaning = "systemd-resolved may send queries to the DNS of the physical interface, because no tunnel claims every domain (~.)."
+todo = "In the VPN, route every domain through the tunnel (DNS=... and Domains=~. on the tunnel link) or turn off DefaultRoute on the physical interface."
+
 [DNS-004]
 title = "DNS configuration changed"
 meaning = "The system DNS configuration changed during the session."
