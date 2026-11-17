@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"lethe/internal/setup"
+
 	"lethe/internal/baseline"
 	"lethe/internal/discovery"
 	"lethe/internal/geo"
@@ -103,7 +105,7 @@ func TestM10_SetupNoStrictWithStaleOrFailedSelftest(t *testing.T) {
 			ran := false
 			w, out := fakeWizard(t, dir, "s\n", &ran)
 			profPath, _, dataDir := w.paths()
-			text, _ := setYAML(string(profile.Template), "dir", quote(dataDir))
+			text, _ := setup.SetYAML(string(profile.Template), "dir", setup.Quote(dataDir))
 			_ = os.WriteFile(profPath, []byte(text), 0o600)
 			_ = os.MkdirAll(filepath.Join(dataDir, "state"), 0o700)
 			_ = os.WriteFile(filepath.Join(dataDir, "state", "selftest.json"), []byte(rec), 0o600)

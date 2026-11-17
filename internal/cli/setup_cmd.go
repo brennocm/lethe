@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"lethe/internal/baseline"
 	"lethe/internal/buildinfo"
 	"lethe/internal/contracts"
 	"lethe/internal/discovery"
@@ -21,6 +19,7 @@ import (
 	"lethe/internal/preflight"
 	"lethe/internal/profile"
 	"lethe/internal/sensors/hostinfo"
+	"lethe/internal/setup"
 )
 
 // lethe setup (spec §10.6 item 8): profile and baseline from simple questions, the profile in
@@ -143,7 +142,7 @@ func (w *wizard) run() error {
 	w.say("lethe setup: perfil e baseline em %s. Enter aceita o valor entre colchetes.\n\n", w.dir)
 
 	snap := w.env.discover(nil)
-	kind := suggestEgress(snap)
+	kind := setup.SuggestEgress(snap)
 	w.say("Descoberta: %s.\n", describeSnap(snap))
 	facts := w.env.host()
 
@@ -190,63 +189,30 @@ func (w *wizard) run() error {
 		w.say("Nota: o sistema está em %s; o HOST-005 vai avisar até você ajustar o fuso.\n", facts.Timezone)
 	}
 
+	ans := setup.Answers{Dir: w.dir, OpID: opID, Persona: persona, Egress: egress, Country: country,
+		Timezone: tz, Locale: loc, Keyboard: kb, WorkLimit: w.work}
+	var pw []byte
 	if _, err := os.Stat(basePath); err == nil {
 		w.say("Usando a baseline que já existe em %s.\n", basePath)
-	} else if err := w.makeBaseline(basePath); err != nil {
-		return err
-	}
-
-	text := string(profile.Template)
-	for _, kv := range [][2]string{
-		{"id", quote(opID)}, {"persona", quote(persona)},
-		{"type", egress}, {"expect_country", country},
-		{"timezone", quote(tz)}, {"locale", quote(loc)}, {"keyboard", quote(kb)},
-		{"file", quote(basePath)}, {"dir", quote(dataDir)},
-	} {
-		if text, err = setYAML(text, kv[0], kv[1]); err != nil {
+	} else {
+		w.say("\nBaseline: os dados reais desta máquina e das suas redes, cifrados. Responda SEM o túnel ligado,\n" +
+			"numa rede conhecida. Os valores nunca aparecem nos logs, só o nome do campo que casou.\n")
+		if ans.Network, err = askNetwork(w.pr); err != nil {
 			return err
 		}
+		if pw, err = w.pass(); err != nil {
+			return WithCode(ExitAuth, err)
+		}
+		defer wipeBytes(pw)
 	}
-	if _, _, err := profile.Parse([]byte(text), w.home); err != nil {
-		return fmt.Errorf("internal: generated profile is invalid: %w", err)
-	}
-	if err := writeNew(profPath, []byte(text)); err != nil {
+	if _, err := setup.Create(ans, w.home, pw, w.env.now(), buildinfo.Version); err != nil {
 		return err
+	}
+	if _, err := os.Stat(basePath); err == nil {
+		w.say("Baseline gravada em %s. Guarde a passphrase: sem ela não há arm nem relatório.\n", basePath)
 	}
 	w.say("\nPerfil gravado em %s com o guarda em off (só observa; nada é bloqueado).\n", profPath)
 	return w.offerStrict(profPath, dataDir)
-}
-
-// makeBaseline runs the manual baseline questions (no network queries).
-func (w *wizard) makeBaseline(path string) error {
-	w.say("\nBaseline: os dados reais desta máquina e das suas redes, cifrados. Responda SEM o túnel ligado,\n" +
-		"numa rede conhecida. Os valores nunca aparecem nos logs, só o nome do campo que casou.\n")
-	b, err := baseline.New(time.Now(), buildinfo.Version)
-	if err != nil {
-		return err
-	}
-	baseline.CollectLocal("/", os.Getenv).Apply(b)
-	n, err := askNetwork(w.pr)
-	if err != nil {
-		return err
-	}
-	if err := b.AddNetwork(n); err != nil {
-		return err
-	}
-	pw, err := w.pass()
-	if err != nil {
-		return WithCode(ExitAuth, err)
-	}
-	defer wipeBytes(pw)
-	enc, err := baseline.Encrypt(b, pw, w.work)
-	if err != nil {
-		return err
-	}
-	if err := writeNew(path, enc); err != nil {
-		return err
-	}
-	w.say("Baseline gravada em %s. Guarde a passphrase: sem ela não há arm nem relatório.\n", path)
-	return nil
 }
 
 // selftestOK says whether this machine has a recent approved full selftest.
@@ -296,7 +262,7 @@ func (w *wizard) offerStrict(profPath, dataDir string) error {
 		}
 		return err
 	}
-	text, err := setYAML(string(raw), "mode", "strict")
+	text, err := setup.SetYAML(string(raw), "mode", "strict")
 	if err != nil {
 		return err
 	}
@@ -314,43 +280,6 @@ func (w *wizard) offerStrict(profPath, dataDir string) error {
 		w.say("O preflight falharia: resolva os itens FAIL acima antes de armar (o `lethe arm` recusa).\n")
 	}
 	return nil
-}
-
-// setYAML replaces the value of the first "  key: value" line, keeping its comment.
-func setYAML(text, key, value string) (string, error) {
-	re := regexp.MustCompile(`(?m)^(  ` + regexp.QuoteMeta(key) + `: )("[^"]*"|\S+)`)
-	loc := re.FindStringSubmatchIndex(text)
-	if loc == nil {
-		return "", fmt.Errorf("internal: profile template has no %q", key)
-	}
-	return text[:loc[4]] + value + text[loc[5]:], nil
-}
-
-func quote(s string) string { b, _ := json.Marshal(s); return string(b) }
-
-// suggestEgress guesses egress.type from the discovery.
-func suggestEgress(s discovery.Snapshot) string {
-	wg, tun := false, false
-	for _, t := range s.Tunnels {
-		switch t.Kind {
-		case "wireguard":
-			wg = true
-		default:
-			tun = true
-		}
-	}
-	tor := s.Tor != nil && s.Tor.Reachable
-	switch {
-	case (wg || tun) && tor:
-		return "vpn+tor"
-	case wg:
-		return "wireguard"
-	case tun:
-		return "openvpn"
-	case tor:
-		return "tor"
-	}
-	return "auto"
 }
 
 func describeSnap(s discovery.Snapshot) string {

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"lethe/internal/setup"
+
 	"filippo.io/age"
 	"github.com/spf13/cobra"
 
@@ -84,7 +86,7 @@ func newBaselineCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := writeNew(out, enc); err != nil {
+			if err := setup.WriteNew(out, enc); err != nil {
 				return err
 			}
 			if len(recs) > 0 {
@@ -92,7 +94,7 @@ func newBaselineCreateCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := writeNew(out+".recovery", rec); err != nil {
+				if err := setup.WriteNew(out+".recovery", rec); err != nil {
 					return err
 				}
 			}
