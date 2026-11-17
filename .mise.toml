@@ -73,8 +73,14 @@ run = "./scripts/fuzz.sh"
 description = "Static release build of the lethe binary"
 run = "go build -ldflags='-s -w -buildid=' -o bin/lethe ./apps/lethe"
 
+[tasks."deps:gui"]
+description = "Install what building the GUI needs (C compiler, pkg-config, OpenGL/X11/Wayland headers); asks once, nothing to do when present"
+run = "scripts/gui-deps"
+raw = true # the confirmation and sudo's password read the terminal
+
 [tasks."build:gui"]
-description = "lethe-gui (cgo + OpenGL/X11/Wayland headers: libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev)"
+description = "lethe-gui (cgo); installs the build headers first if they are missing (deps:gui)"
+depends = ["deps:gui"]
 dir = "apps/lethe-gui"
 env = { CGO_ENABLED = "1" }
 run = "go build -ldflags='-s -w -buildid=' -o ../../bin/lethe-gui ."

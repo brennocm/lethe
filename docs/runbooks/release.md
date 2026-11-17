@@ -19,7 +19,7 @@ Nenhuma chave, senha ou endereço interno vai para este repositório, para issue
 
 ### Feito, mas sem verificação aqui
 
-- **Binário `lethe-gui`:** compila só com cgo e os headers de OpenGL/X11/Wayland, que faltam no ambiente de desenvolvimento (WSL2). O job `gui` do CI compila; os testes da GUI rodam no driver de teste da Fyne.
+- **Binário `lethe-gui`:** compila com cgo e os headers de OpenGL/X11/Wayland. `mise run build:gui` e `mise run release -- VERSÃO --gui` instalam o que faltar (`scripts/gui-deps`, Debian/Ubuntu, Fedora, Arch, openSUSE; pergunta uma vez e pede a senha do `sudo`). O pacote `lethe-gui` declara as bibliotecas de execução: o operador só instala o pacote.
 - **Pacotes instalados de verdade** (`apt install`, `dnf install`) e as unidades sob systemd real: o conteúdo foi conferido com `dpkg-deb -c`, e as unidades com `systemd-analyze verify`.
 - **AC-07 (Tor real) e AC-15 (Wi-Fi, NetworkManager, Tor Browser, GUI em GNOME/KDE):** manuais, em `ac07-tor.md` e `manual-acceptance.md`.
 
@@ -71,7 +71,7 @@ O CI **não** recebe as chaves de assinatura. Ele só prova o build; quem assina
    - em `.github/workflows/ci.yml`, troque `actions/checkout@v4` e `jdx/mise-action@v2` pelo SHA completo do commit de cada versão (o comentário no arquivo pede isso);
    - faça o commit e o push: `! git push -u origin main`.
 3. **Esperado:** jobs `check`, `gui`, `release` e `e2e` verdes.
-4. **Se falhar:** o `e2e` precisa de `sudo` no runner e do `wireguard-tools`. O `gui` precisa dos pacotes de headers listados no job.
+4. **Se falhar:** o `e2e` precisa de `sudo` no runner e do `wireguard-tools`. O `gui` instala os headers com `scripts/gui-deps --yes`; se um nome de pacote mudou na distro do runner, o script diz qual módulo do `pkg-config` ainda falta.
 
 ### 4.2 Base geo (a cada release, cerca de 10 min)
 

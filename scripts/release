@@ -45,6 +45,7 @@ for arch in amd64 arm64; do
   done
 done
 if [[ $gui == 1 ]]; then
+  scripts/gui-deps # the build headers; asks once if they are missing
   # cgo: only for the host architecture (cross-compiling OpenGL needs a sysroot)
   arch=$(go env GOARCH)
   export ARCH=$arch

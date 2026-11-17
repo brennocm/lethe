@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Installs what building lethe-gui needs (cgo: a C compiler, pkg-config and the OpenGL, X11 and
+# Wayland headers), on Debian/Ubuntu, Fedora/RHEL, Arch and openSUSE. Nothing to do when they are
+# all there. Only for building: the lethe-gui package pulls its runtime libraries by itself.
+#
+#   scripts/gui-deps          check; if something is missing, say what and install it (asks once)
+#   scripts/gui-deps --yes    install without asking (CI)
+#   scripts/gui-deps --check  only check: exit 1 and say what is missing
+set -euo pipefail
+
+mode=ask
+case "${1:-}" in
+  --yes) mode=yes ;;
+  --check) mode=check ;;
+  "") ;;
+  *) echo "usage: scripts/gui-deps [--yes|--check]" >&2; exit 2 ;;
+esac
+
+# pkg-config modules GLFW (X11 and Wayland) and Fyne link against
+modules=(gl x11 xrandr xxf86vm xi xcursor xinerama wayland-client wayland-egl xkbcommon)
+
+missing=()
+command -v cc >/dev/null 2>&1 || missing+=("C compiler (cc)")
+if command -v pkg-config >/dev/null 2>&1; then
+  for m in "${modules[@]}"; do
+    pkg-config --exists "$m" || missing+=("$m")
+  done
+else
+  missing+=(pkg-config "${modules[@]}")
+fi
+
+if [[ ${#missing[@]} -eq 0 ]]; then
+  echo "gui-deps: tudo pronto para compilar a GUI"
+  exit 0
+fi
+
+# the distribution's family, from os-release (ID, then ID_LIKE)
+family=""
+if [[ -r /etc/os-release ]]; then
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  for id in ${ID:-} ${ID_LIKE:-}; do
+    case "$id" in
+      debian | ubuntu) family=apt ;;
+      fedora | rhel | centos) family=dnf ;;
+      arch) family=pacman ;;
+      suse | opensuse*) family=zypper ;;
+    esac
+    [[ -n $family ]] && break
+  done
+fi
+
+case "$family" in
+  apt)
+    install=(apt-get install -y gcc pkg-config libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev)
+    refresh=(apt-get update) ;;
+  dnf)
+    install=(dnf install -y gcc pkgconf-pkg-config mesa-libGL-devel mesa-libEGL-devel libX11-devel libXcursor-devel libXrandr-devel
+      libXinerama-devel libXi-devel libXxf86vm-devel wayland-devel libxkbcommon-devel)
+    refresh=() ;;
+  pacman)
+    install=(pacman -S --needed --noconfirm gcc pkgconf mesa libx11 libxcursor libxrandr libxinerama libxi libxxf86vm wayland libxkbcommon)
+    refresh=() ;;
+  zypper)
+    install=(zypper --non-interactive install gcc pkg-config Mesa-libGL-devel Mesa-libEGL-devel libX11-devel libXcursor-devel libXrandr-devel
+      libXinerama-devel libXi-devel libXxf86vm-devel wayland-devel libxkbcommon-devel)
+    refresh=() ;;
+esac
+
+echo "gui-deps: faltam para compilar a GUI: ${missing[*]}"
+if [[ -z $family ]]; then
+  echo "gui-deps: distribuição não reconhecida; instale um compilador C, pkg-config e os headers de OpenGL, X11, Wayland e xkbcommon" >&2
+  exit 1
+fi
+echo "gui-deps: comando: sudo ${install[*]}"
+if [[ $mode == check ]]; then
+  exit 1
+fi
+if [[ $mode == ask ]]; then
+  if [[ ! -t 0 ]]; then
+    echo "gui-deps: sem terminal para confirmar; rode scripts/gui-deps --yes" >&2
+    exit 1
+  fi
+  read -r -p "Instalar agora? [S/n] " answer
+  case "${answer,,}" in
+    "" | s | sim | y | yes) ;;
+    *) echo "gui-deps: nada instalado"; exit 1 ;;
+  esac
+fi
+
+sudo=()
+[[ $(id -u) -ne 0 ]] && sudo=(sudo)
+if [[ ${#refresh[@]} -gt 0 ]]; then
+  "${sudo[@]}" "${refresh[@]}"
+fi
+"${sudo[@]}" "${install[@]}"
+
+# confirm: a package name that changed in some release must not pass silently
+exec "$0" --check
