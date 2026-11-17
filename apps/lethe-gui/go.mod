@@ -4,6 +4,7 @@ go 1.27.4
 
 require (
 	fyne.io/fyne/v2 v2.8.2
+	github.com/godbus/dbus/v5 v5.2.4
 	golang.org/x/sys v0.50.0
 	lethe v0.0.0-00010101000000-000000000000
 )
@@ -26,7 +27,6 @@ require (
 	github.com/go-text/render v0.2.1 // indirect
 	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
-	github.com/godbus/dbus/v5 v5.2.4 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/gowebpki/jcs v1.0.2 // indirect
 	github.com/hack-pad/go-indexeddb v0.3.2 // indirect

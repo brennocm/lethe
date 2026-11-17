@@ -1012,6 +1012,9 @@ Toda saída com `--json` segue schemas em `internal/contracts/`. A saída humana
 - **Botões:** Pânico (sempre visível, separado dos outros), Reconhecer, Selftest, Encerrar sessão.
 - **Tema:** as cores da logo (carvão, ouro envelhecido, verde-azulado, sálvia); ouro só para a ação principal e a rota protegida, tijolo para CRITICAL e pânico (ADR 0015).
 
+- Sem resposta do daemon, o painel diz que o lethe não está rodando e oferece **Iniciar o lethe**: `StartUnit` de `lethed@<usuário>.service` pelo D-Bus do sistema, com autorização interativa (o polkit pede a senha de administrador; nenhum `exec`). Só um nome de usuário simples (`^[a-z_][a-z0-9_-]{0,31}$`, nunca root) chega ao nome da unidade. A unidade é a `lethed.service` com `LETHE_OPERATOR=%i` e `ReadWritePaths=-/home/%i/lethe`, e conflita com ela.
+- Sem perfil em `~/lethe`, o painel mostra o formulário do primeiro uso (§10.6 item 8) no lugar do início de sessão, mesmo sem o daemon.
+
 ### 16.3 Alerta em tela cheia
 
 - Fundo vermelho, título do check, uma frase dizendo o que significa, destino e processo envolvidos, ações já executadas ("Rede bloqueada. Navegadores encerrados.") e o que fazer agora.

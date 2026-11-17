@@ -36,6 +36,9 @@ type Options struct {
 	// the public IP. WorkFactor is the baseline's scrypt factor (0 = the default; tests lower it).
 	Detect     func(ctx context.Context, askIP bool) lsetup.Detected
 	WorkFactor int
+	// StartService starts the service for this operator (lethed@<user>.service through systemd's
+	// D-Bus API, polkit asking for the password); nil = the panel only says how.
+	StartService func(ctx context.Context) error
 }
 
 const maxEvents = 500
@@ -59,6 +62,7 @@ type UI struct {
 	route     *routeView
 	routeNote *widget.Label
 	routeActs *fyne.Container
+	svcBtn    *widget.Button // start the service (offline)
 	dnsOut    *widget.Label
 	block     *fyne.Container
 	blockWhat *widget.Label
@@ -131,6 +135,9 @@ func (u *UI) Build() {
 		widget.NewButton(u.t("dns_btn"), u.askDNS))
 	u.flash = wrapped("")
 	u.flash.Hide()
+	u.svcBtn = widget.NewButton(u.t("service_btn"), u.startService)
+	u.svcBtn.Importance = widget.HighImportance
+	u.svcBtn.Hide()
 
 	u.blockWhat = wrapped("")
 	u.blockWhat.TextStyle = fyne.TextStyle{Bold: true}
@@ -191,7 +198,7 @@ func (u *UI) Build() {
 	u.top = container.NewVBox(
 		u.verdict, u.header,
 		u.route.box,
-		container.NewBorder(nil, nil, nil, u.routeActs, u.routeNote),
+		container.NewBorder(nil, nil, nil, container.NewHBox(u.routeActs, u.svcBtn), u.routeNote),
 		u.dnsOut, u.block, u.flash, widget.NewSeparator())
 	u.body = container.NewStack(u.start, u.firstForm.box, u.work)
 	u.panel.SetContent(container.NewPadded(container.NewBorder(u.top, container.NewVBox(widget.NewSeparator(), u.actions), nil, nil, u.body)))
@@ -535,6 +542,12 @@ func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 	note := RouteOf(st, u.lang).Note
 	if u.offline != nil {
 		note = u.t("offline_how")
+		if u.opt.StartService != nil {
+			note = u.t("offline_how_btn")
+			u.svcBtn.Show()
+		}
+	} else {
+		u.svcBtn.Hide()
 	}
 	u.routeNote.SetText(note)
 	session := st.Session != "" && u.offline == nil

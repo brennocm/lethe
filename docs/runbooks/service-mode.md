@@ -1,4 +1,4 @@
-# Modo serviço (`lethed.service`)
+# Modo serviço (`lethed@<usuário>.service` ou `lethed.service`)
 
 Para máquinas dedicadas, em que o lethe fica sempre instalado. No modo portátil (`sudo lethe run`) nada disto é necessário.
 
@@ -8,12 +8,25 @@ Para máquinas dedicadas, em que o lethe fica sempre instalado. No modo portáti
 |---|---|
 | `/usr/bin/lethe` | CLI e daemon |
 | `/usr/bin/lethe-gui` | GUI (pacote `lethe-gui`, opcional) |
-| `/usr/lib/systemd/system/lethed.service` | daemon, como root com capabilities reduzidas (spec §19.3) |
+| `/usr/lib/systemd/system/lethed@.service` | daemon de um operador (a instância é o usuário): o mesmo que `lethed.service` com `LETHE_OPERATOR` e `~/lethe` já declarados |
+| `/usr/lib/systemd/system/lethed.service` | daemon, como root com capabilities reduzidas (spec §19.3); operador num drop-in |
 | `/usr/lib/systemd/user/lethe-agent.service` | agente de sessão, como o operador |
 
 Nenhuma unidade é habilitada pelo pacote.
 
-## Configurar (uma vez)
+## Caminho curto: pela GUI
+
+Com o perfil em `~/lethe` (o que o primeiro uso da GUI cria), não há nada para configurar. Com o serviço parado, o painel mostra o botão **Iniciar o lethe**. Ele pede ao systemd, pelo D-Bus, que suba `lethed@<seu usuário>.service`, e o polkit pede a senha de administrador. No terminal, o equivalente é:
+
+```
+sudo systemctl enable --now lethed@alice
+```
+
+As duas unidades usam o mesmo `/run/lethe`: `lethed@.service` declara `Conflicts=lethed.service`, então só uma roda por vez.
+
+Para um `storage.dir` fora de `~/lethe`, ou uma home fora de `/home`, acrescente o caminho num drop-in (`sudo systemctl edit lethed@alice`, com `ReadWritePaths=<storage.dir>`).
+
+## Configurar à mão (`lethed.service`)
 
 1. Declare o operador e a pasta de armazenamento do perfil (`storage.dir`):
 

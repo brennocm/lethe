@@ -485,3 +485,52 @@ func TestM10_FirstUseFromThePanel(t *testing.T) {
 		t.Fatal("a baseline value in the panel")
 	}
 }
+
+// offBackend is a daemon that does not answer until it is started.
+type offBackend struct {
+	fake
+	up bool
+}
+
+func (o *offBackend) Status() (contracts.Status, error) {
+	o.mu.Lock()
+	up := o.up
+	o.mu.Unlock()
+	if !up {
+		return contracts.Status{}, os.ErrNotExist
+	}
+	return o.fake.Status()
+}
+
+// The panel goes offline when the daemon does not answer and offers to start the service; once
+// started, the next poll finds it (spec §16.2, ADR 0015).
+func TestM13_StartServiceFromThePanel(t *testing.T) {
+	home := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(home, "lethe"), 0o700)
+	_ = os.WriteFile(filepath.Join(home, "lethe", "profile.yaml"), profile.Template, 0o600)
+	be := &offBackend{}
+	started := 0
+	a := &trayApp{App: test.NewTempApp(t)}
+	u := New(a, be, Options{Lang: "pt-BR", Now: func() time.Time { return t0 }, Home: home,
+		StartService: func(context.Context) error {
+			started++
+			be.mu.Lock()
+			be.up = true
+			be.mu.Unlock()
+			return nil
+		}})
+	u.Build()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	u.poll()
+	if u.offline == nil || !u.svcBtn.Visible() || u.verdict.Text != "O lethe não está rodando" || !strings.Contains(u.routeNote.Text, "botão") {
+		t.Fatalf("offline: %v %q", u.offline, u.routeNote.Text)
+	}
+	test.Tap(u.svcBtn)
+	u.wg.Wait()
+	if started != 1 || u.offline != nil || u.svcBtn.Visible() || !u.start.Visible() {
+		t.Fatalf("after the start: %d %v %q", started, u.offline, u.flash.Text)
+	}
+	go u.Run(ctx) // Run compiles and keeps polling (main.go starts it)
+	cancel()
+}

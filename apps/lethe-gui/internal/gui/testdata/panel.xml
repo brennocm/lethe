@@ -348,20 +348,22 @@
 							</widget>
 						</widget>
 						<container pos="665,0" size="318x36">
-							<widget size="119x36" type="*widget.Button">
-								<rectangle fillColor="button" radius="5" size="119x36"/>
-								<rectangle size="119x36"/>
-								<widget pos="8,8" size="103x19" type="*widget.RichText">
-									<text alignment="center" bold size="103x19">Verificar agora</text>
+							<container size="318x36">
+								<widget size="119x36" type="*widget.Button">
+									<rectangle fillColor="button" radius="5" size="119x36"/>
+									<rectangle size="119x36"/>
+									<widget pos="8,8" size="103x19" type="*widget.RichText">
+										<text alignment="center" bold size="103x19">Verificar agora</text>
+									</widget>
 								</widget>
-							</widget>
-							<widget pos="123,0" size="194x36" type="*widget.Button">
-								<rectangle fillColor="button" radius="5" size="194x36"/>
-								<rectangle size="194x36"/>
-								<widget pos="8,8" size="178x19" type="*widget.RichText">
-									<text alignment="center" bold size="178x19">Testar vazamento de DNS</text>
+								<widget pos="123,0" size="194x36" type="*widget.Button">
+									<rectangle fillColor="button" radius="5" size="194x36"/>
+									<rectangle size="194x36"/>
+									<widget pos="8,8" size="178x19" type="*widget.RichText">
+										<text alignment="center" bold size="178x19">Testar vazamento de DNS</text>
+									</widget>
 								</widget>
-							</widget>
+							</container>
 						</container>
 					</container>
 					<widget pos="0,152" size="984x1" type="*widget.Separator">

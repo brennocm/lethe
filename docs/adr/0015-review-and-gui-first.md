@@ -33,7 +33,8 @@ GUI first:
 - The panel starts sessions. It reads the profile and the baseline it names as the operator and sends `session.arm` with the passphrase and the chosen protection.
 - To find `baseline.file`, the GUI now also imports `internal/profile`. That package does parsing only and depends only on `internal/contracts`. The import test enforces the new list.
 - The profile path is never stored: a remembered path could name the operation. The default is the one `lethe setup` writes (`~/lethe/profile.yaml`).
-- The GUI finds the daemon on the portable socket, then the service socket. When neither answers, it says how to start the service.
+- The GUI finds the daemon on the portable socket, then the service socket. When neither answers, it offers **Start lethe**: `StartUnit("lethed@<user>.service")` on the system bus with interactive authorization, so polkit asks an administrator's password. No exec is involved. The template unit is `lethed.service` plus `LETHE_OPERATOR=%i` and `ReadWritePaths=-/home/%i/lethe`, and it conflicts with `lethed.service`. Only a plain user name (never root) names the instance.
+- The GUI's `main` moved to `apps/lethe-gui/internal/launch`, which the tests compile without the GL driver. An earlier rewrite of the panel had dropped `UI.Run`. Since `main.go` only compiles with cgo, `check` did not see it.
 - Theme: the palette of the logo. Charcoal canvas, aged gold for the one primary action and a protected route, teal for selection, sage, ochre and brick for ok, warning and critical. Only the dark composition exists: the panel is watched for hours in dim rooms.
 
 ## Consequences

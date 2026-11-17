@@ -21,6 +21,9 @@ contents:
   - src: packaging/systemd/lethed.service
     dst: /usr/lib/systemd/system/lethed.service
     file_info: { mode: 0644, owner: root, group: root }
+  - src: packaging/systemd/lethed@.service
+    dst: /usr/lib/systemd/system/lethed@.service
+    file_info: { mode: 0644, owner: root, group: root }
   - src: packaging/systemd/lethe-agent.service
     dst: /usr/lib/systemd/user/lethe-agent.service
     file_info: { mode: 0644, owner: root, group: root }

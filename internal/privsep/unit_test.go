@@ -61,6 +61,16 @@ func TestM14_ServiceUnitMatchesSpec(t *testing.T) {
 	if _, ok := d["ReadWritePaths"]; ok {
 		t.Error("ReadWritePaths belongs to the operator's drop-in (storage.dir), not to the packaged unit")
 	}
+	// the per-operator template is the same unit with the drop-in written by systemd's instance
+	tpl := unitDirectives(t, "../../packaging/systemd/lethed@.service")
+	for k, v := range d {
+		if tpl[k] != v {
+			t.Errorf("lethed@.service %s=%q, lethed.service has %q", k, tpl[k], v)
+		}
+	}
+	if tpl["Environment"] != "LETHE_OPERATOR=%i" || tpl["ReadWritePaths"] != "-/home/%i/lethe" || len(tpl) != len(d)+2 {
+		t.Errorf("lethed@.service adds only the operator and its default storage: %v", tpl)
+	}
 	a := unitDirectives(t, "../../packaging/systemd/lethe-agent.service")
 	if a["ExecStart"] != "/usr/bin/lethe agent --socket /run/lethe/lethe.sock" || a["Environment"] == "" {
 		t.Errorf("agent unit: %v", a)

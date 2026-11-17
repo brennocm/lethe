@@ -1,0 +1,46 @@
+# lethe in service mode for one operator, named by the instance (spec §5.2, §19.3): the GUI
+# starts lethed@<user>.service through systemd's D-Bus API and polkit asks for an
+# administrator's password; by hand: sudo systemctl enable --now lethed@<user>.
+# It is lethed.service with the drop-in already written: LETHE_OPERATOR is the instance and the
+# default storage (~/lethe, as the first use writes it) is writable. A profile whose storage.dir
+# is elsewhere, or a home outside /home, needs a drop-in (systemctl edit lethed@<user>) with
+# ReadWritePaths=<storage.dir>. See docs/runbooks/service-mode.md.
+[Unit]
+Description=lethe OpSec monitor (service mode, operator %i)
+# one daemon owns /run/lethe: never both units at once
+Conflicts=lethed.service
+Documentation=file:/usr/share/doc/lethe/service-mode.md
+After=network-pre.target dbus.service
+Wants=network-pre.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/lethe daemon
+Environment=LETHE_OPERATOR=%i
+ReadWritePaths=-/home/%i/lethe
+Restart=always
+RestartSec=1s
+# The tables stay when the daemon dies: the network stays closed and `lethe status` names
+# `sudo lethe cleanup`. Nothing here removes them behind the operator's back.
+KillMode=mixed
+TimeoutStopSec=20s
+RuntimeDirectory=lethe lethe-state
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+UMask=0077
+
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_KILL CAP_SYS_PTRACE CAP_DAC_READ_SEARCH CAP_IPC_LOCK
+AmbientCapabilities=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_PACKET AF_INET AF_INET6
+LockPersonality=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target
