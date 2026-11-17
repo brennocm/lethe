@@ -55,3 +55,28 @@ func TestHOST001_ListFixture(t *testing.T) {
 		t.Fatal("missing root")
 	}
 }
+
+func TestHOST002_ScanDevicesAndCmdline(t *testing.T) {
+	root := t.TempDir()
+	d := filepath.Join(root, "7")
+	_ = os.MkdirAll(filepath.Join(d, "fd"), 0o755)
+	_ = os.WriteFile(filepath.Join(d, "comm"), []byte("zoom\n"), 0o600)
+	_ = os.WriteFile(filepath.Join(d, "cmdline"), []byte("/opt/zoom/zoom\x00--profile\x00x\x00"), 0o600)
+	for i, tgt := range []string{"/dev/video0", "/dev/snd/pcmC0D0c", "/dev/snd/pcmC0D0p", "/dev/null", "/dev/video0"} {
+		_ = os.Symlink(tgt, filepath.Join(d, "fd", string(rune('0'+i))))
+	}
+	ps, err := Scan(root, Detail{Cmdline: true, Devices: true})
+	if err != nil || len(ps) != 1 {
+		t.Fatal(err, ps)
+	}
+	p := ps[0]
+	if len(p.Cmdline) != 3 || p.Cmdline[1] != "--profile" {
+		t.Fatalf("cmdline %q", p.Cmdline)
+	}
+	if len(p.Devices) != 2 {
+		t.Fatalf("devices %q (playback and duplicates must not count)", p.Devices)
+	}
+	if ps, _ := List(root); ps[0].Cmdline != nil || ps[0].Devices != nil {
+		t.Fatal("List must stay cheap")
+	}
+}
