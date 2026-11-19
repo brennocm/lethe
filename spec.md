@@ -1005,19 +1005,28 @@ Sem bandeja no desktop (nenhum `org.kde.StatusNotifierWatcher` no barramento da 
 
 ### 16.2 Painel
 
-- **Veredito:** uma linha que responde "estou coberto?" (Protegido, Protegido com avisos, Vazamento detectado, Rede bloqueada pelo lethe, Nenhuma sessão, O lethe não está rodando, com o comando que o inicia), seguida do estado, do modo do guarda e do tempo de sessão, e da impressão digital da chave da sessão (selecionável), para o operador anotar fora da máquina.
-- **Rota:** esta máquina, o túnel e onde a web vê o operador (IP, cidade e país do último check ativo, §9.9), cada trecho colorido pelo estado; botões "Verificar agora" (`active.check_now`) e "Testar vazamento de DNS" (`dns.leak_test`, explicado antes de rodar). Escondidos no pânico.
-- **Bloqueio:** quando a rede está bloqueada, o quadro com o quê, por quê e como sair (§10.6 item 5), com os botões "Sair do pânico" e "Encerrar sessão" (§10.6 item 10).
-- **Iniciar sessão** (sem sessão): perfil (padrão `~/lethe/profile.yaml`, outro pelo seletor de arquivo, nunca lembrado em disco), proteção (como no perfil, só observar ou estrita) e passphrase. O GUI lê perfil e baseline com os direitos do operador e chama `session.arm`.
-- **Grade de checks:** um grupo por categoria; cada check com estado e severidade.
-- **Linha do tempo:** eventos filtráveis por severidade e por check.
-- **Botões:** Pânico (sempre visível, separado dos outros), Reconhecer, Selftest, Encerrar sessão.
-- **Tema:** as cores da logo (carvão, ouro envelhecido, verde-azulado, sálvia); ouro só para a ação principal e a rota protegida, tijolo para CRITICAL e pânico (ADR 0015).
+O painel é uma barra lateral de páginas ao lado de uma barra de topo (ADR 0016). Tudo o que ele mostra vem do `status` e dos eventos do daemon; a GUI não mede nada por conta própria (nem latência, nem vazão, nem tráfego que não seja vazamento).
+
+- **Barra lateral:** a logo, uma pílula com o estado (protegido, com avisos, vazamento, rede bloqueada, sem sessão, desligado) e a interface do túnel, as páginas, e no pé a linha do daemon (conectado ou fora do ar, sensores ativos) e a versão.
+- **Barra de topo:** o nome da página, onde a web vê o operador (o mesmo da rota, colorido pelo estado), o tempo de sessão e o botão **Pânico**, sempre visível durante a sessão e separado dos outros.
+- **Bloqueio:** quando a rede está bloqueada, o quadro com o quê, por quê e como sair (§10.6 item 5), com os botões "Reconhecer", "Sair do pânico", "Encerrar sessão" (§10.6 item 10) e "Liberar a rede", logo abaixo da barra de topo em todas as páginas.
+- Uma mudança de situação (sem perfil, sem sessão, sessão, daemon fora do ar) leva à página que serve a ela; fora isso, a página escolhida pelo operador fica.
+
+Páginas:
+
+1. **Visão geral:** o **veredito**, uma linha que responde "estou coberto?" (Protegido, Protegido com avisos, Vazamento detectado, Rede bloqueada pelo lethe, Nenhuma sessão, O lethe não está rodando, com o comando que o inicia), seguida do modo do guarda, do estado e do tempo de sessão, e da impressão digital da chave da sessão (selecionável), para o operador anotar fora da máquina; os botões "Verificar agora" (`active.check_now`) e "Testar vazamento de DNS" (`dns.leak_test`, explicado antes de rodar), escondidos no pânico. Quatro cartões por área (fuga de pacotes, DNS, túnel, máquina e persona) com os alertas abertos e a pior severidade. A **rota**: esta máquina, o túnel e onde a web vê o operador (IP, cidade e país do último check ativo, §9.9), cada trecho colorido pelo estado, com a duração, a última verificação, os alertas abertos e os sensores. Os eventos mais recentes.
+2. **DNS e IP:** a identidade de saída (endereço, local, ASN, caminho, hora e fonte da verificação); os servidores DNS do último teste, com país, ASN e situação (um servidor que é valor da baseline aparece pelo nome do campo, nunca pelo endereço); e a superfície de vazamento: IPv4, IPv6, DNS, WebRTC/STUN, rede local e saída/persona, cada vetor com os seus checks e o pior alerta.
+3. **Eventos:** contadores da sessão (fora do túnel, bloqueados pelo guarda, alertas abertos, eventos no painel); a tabela de eventos (hora, check, processo, protocolo e porta, destino, interface, situação), filtrável por interface, severidade, check e "só vazamentos e bloqueios"; e o detalhe do evento escolhido (o que significa, o que fazer, os campos do evento, as ações executadas). Campo cifrado com a chave sensível aparece como cifrado. O lethe registra vazamentos e mudanças de estado, nunca o tráfego inteiro.
+4. **Guarda e pânico:** o modo da sessão e o que ele faz, os três modos (só observar, reativa, estrita) com o atual marcado, as respostas padrão do modo (§10.4) e o selftest (rápido, ou completo com passphrase) com o último resultado.
+5. **Checks:** a grade de checks, um grupo por categoria; cada check com estado e severidade.
+6. **Sessão:** com sessão, o ID, o início, a proteção, a impressão digital e os botões Reconhecer, Selftest, Encerrar sessão e Relatórios. Sem sessão, **Iniciar sessão**: perfil (padrão `~/lethe/profile.yaml`, outro pelo seletor de arquivo, nunca lembrado em disco), proteção (como no perfil, só observar ou estrita) e passphrase; a GUI lê perfil e baseline com os direitos do operador e chama `session.arm`.
+
+- **Tema:** as cores da logo (carvão, ouro envelhecido, verde-azulado, sálvia) e a fonte da plataforma, com monoespaçada para endereços, interfaces, portas e IDs; ouro só para a ação principal, o modo atual e a rota protegida, tijolo para CRITICAL, bloqueio e pânico (ADR 0015, ADR 0016).
 
 - Sem resposta do daemon, o painel diz que o lethe não está rodando e oferece **Iniciar o lethe**: `StartUnit` de `lethed@<usuário>.service` pelo D-Bus do sistema, com autorização interativa (o polkit pede a senha de administrador; nenhum `exec`). Só um nome de usuário simples (`^[a-z_][a-z0-9_-]{0,31}$`, nunca root) chega ao nome da unidade. A unidade é a `lethed.service` com `LETHE_OPERATOR=%i` e `ReadWritePaths=-/home/%i/lethe`, e conflita com ela.
 - Sem perfil em `~/lethe`, o painel mostra o formulário do primeiro uso (§10.6 item 8) no lugar do início de sessão, mesmo sem o daemon.
 
-- **Relatórios** (no formulário de início) lista as sessões de `storage.dir/sessions`, da mais recente, e abre o `report.md` que o daemon gravou ao encerrar, já conferido contra o log. É texto sem caracteres de controle nem bidi, com no máximo 1 MiB lido. Uma sessão sem relatório (queda, ou log cifrado para chaves institucionais) diz como gerá-lo com `lethe report`.
+- **Relatórios** (na página Sessão) lista as sessões de `storage.dir/sessions`, da mais recente, e abre o `report.md` que o daemon gravou ao encerrar, já conferido contra o log. É texto sem caracteres de controle nem bidi, com no máximo 1 MiB lido. Uma sessão sem relatório (queda, ou log cifrado para chaves institucionais) diz como gerá-lo com `lethe report`.
 ### 16.3 Alerta em tela cheia
 
 - Fundo vermelho, título do check, uma frase dizendo o que significa, destino e processo envolvidos, ações já executadas ("Rede bloqueada. Navegadores encerrados.") e o que fazer agora.
