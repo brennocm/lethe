@@ -33,11 +33,11 @@ O pacote `lethe-gui` puxa sozinho as bibliotecas gráficas de que precisa. Confi
 3. **Iniciar o lethe**: o painel sobe o serviço e o sistema pede a senha de administrador.
 4. **Ligue a VPN** (ou o Tor) e clique em **Iniciar sessão**. Comece em *Só observar*; a proteção
    *Estrita* aparece depois de um **Selftest** aprovado nesta máquina.
-5. Durante a sessão, a primeira linha responde "estou coberto?", e a rota mostra por onde a web
-   vê você. Um vazamento crítico abre um alerta vermelho em tela cheia que só fecha com motivo e
+5. Durante a sessão, a **Visão geral** responde "estou coberto?" e a rota mostra por onde a web
+   vê você. As outras páginas detalham o IP e o DNS, os eventos, o guarda e os checks. Um vazamento crítico abre um alerta vermelho em tela cheia que só fecha com motivo e
    passphrase. **Pânico** bloqueia a rede na hora.
 6. **Encerrar sessão** pede a passphrase, tira as regras e fecha o log. O relatório da sessão
-   fica em **Relatórios**.
+   fica em **Relatórios**, na página **Sessão**.
 
 Outras redes reais (casa, escritório, café): **Registrar a rede atual**, sem a VPN, para que o IP
 e os DNS delas também contem como vazamento.

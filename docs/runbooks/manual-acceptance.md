@@ -30,8 +30,10 @@ Use máquinas de teste, nunca a máquina de operação. Anexe ao relatório de r
 | 0.6 | **Iniciar o lethe** | O polkit pede a senha de administrador; o painel conecta sozinho; `systemctl status lethed@$USER` ativo | ☐ |
 | 0.7 | O mesmo, cancelando o polkit | O painel diz que não iniciou; nada muda | ☐ |
 | 0.8 | Sem a VPN, numa segunda rede: **Registrar a rede atual** | Rede registrada (o painel diz quantas a baseline tem); repetir o mesmo nome é recusado | ☐ |
-| 0.9 | Sessão armada | O cabeçalho mostra a impressão digital da chave, selecionável; é a mesma do `lethe status` | ☐ |
-| 0.10 | Encerrar a sessão e abrir **Relatórios** | A sessão aparece no topo com o relatório | ☐ |
+| 0.9 | Sessão armada | O painel vai para a **Visão geral**; ela e a página **Sessão** mostram a impressão digital da chave, selecionável; é a mesma do `lethe status` | ☐ |
+| 0.9a | Percorrer as seis páginas pela barra lateral numa janela de 1280 px e na menor largura que o desktop permitir | Nada cortado nem sobreposto; a barra de topo mostra a saída, o tempo de sessão e **Pânico** em todas | ☐ |
+| 0.9b | **Testar vazamento de DNS** pela Visão geral | O painel vai para **DNS e IP** e preenche a tabela de servidores | ☐ |
+| 0.10 | Encerrar a sessão e abrir **Relatórios** (página **Sessão**) | A sessão aparece no topo com o relatório | ☐ |
 | 0.11 | Arme em estrito e mate o daemon (`sudo kill -9 $(pidof lethe)`) | O systemd o reinicia; o painel mostra as tabelas que sobraram e **Liberar a rede**; Iniciar sessão é recusado | ☐ |
 | 0.12 | **Liberar a rede** | O polkit pede a senha; a rede volta; `sudo nft list tables` sem `lethe*` | ☐ |
 | 0.13 | Modo portátil (`sudo lethe run`), estrito, `kill -9` | Com o daemon parado, o painel mostra **Liberar a rede** ao lado de **Iniciar o lethe** | ☐ |
