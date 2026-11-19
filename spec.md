@@ -9,7 +9,6 @@
 | Plataforma v1 | Linux (x86_64 e arm64) |
 | Nome | `lethe` (binários `lethe` e `lethe-gui`; antes chamado `opsecmon`) |
 | Status | Pronto para implementação (decisões padrão em §25; revisáveis por ADR) |
-| Versão anterior | `docs/archive/spec-v0.1.md` |
 
 ---
 
@@ -1247,7 +1246,6 @@ lethe/
 └── docs/
     ├── adr/                  # NNNN-titulo.md
     ├── runbooks/             # operação, recuperação após crash, verificação de sessão
-    ├── archive/spec-v0.1.md
     └── THIRD_PARTY.md
 ```
 

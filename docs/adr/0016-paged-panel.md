@@ -1,10 +1,10 @@
-# 0016. A paged panel, from the Stitch study
+# 0016. A paged panel, from a design study
 
 - Status: accepted
 - Date: 2026-11-19
 
 ## Context
-The panel was one dense window: verdict, route, block notice, the start form, the check grid and the timeline in a split, and the actions at the bottom. A design study made in Stitch (four screens: overview and tunnel, DNS and IP leak test, traffic inspector, kill switch) proposed a sidebar of pages, a top bar with the exit and a kill-switch button, summary cards, a topology of the tunnel and a table of traffic.
+The panel was one dense window: verdict, route, block notice, the start form, the check grid and the timeline in a split, and the actions at the bottom. A design study (four screens: overview and tunnel, DNS and IP leak test, traffic inspector, kill switch) proposed a sidebar of pages, a top bar with the exit and a kill-switch button, summary cards, a topology of the tunnel and a table of traffic.
 
 About half of what the study shows is not something lethe does, and some of it goes against the spec. The panel must show only what the daemon reports.
 
