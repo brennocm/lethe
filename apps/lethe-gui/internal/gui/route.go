@@ -7,6 +7,9 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 
 	"lethe/internal/contracts"
 	"lethe/internal/i18n"
@@ -106,7 +109,7 @@ func exitPlace(e *contracts.ExitView, lang string) string {
 	return s
 }
 
-func hopColor(h HopState) color.Color {
+func hopColor(h HopState) color.NRGBA {
 	switch h {
 	case HopOK:
 		return colGold
@@ -116,32 +119,46 @@ func hopColor(h HopState) color.Color {
 	return colDim
 }
 
-// routeView draws a Route: three labels joined by two lines that take the free width.
+// routeView draws a Route as a topology: three nodes (an icon in a tile, a caption and the
+// value) joined by two lines that take the free width.
 type routeView struct {
-	labels [3]*canvas.Text
+	labels [3]*canvas.Text // the values: machine, tunnel, exit
+	tiles  [3]*canvas.Rectangle
 	lines  [2]*canvas.Line
 	box    *fyne.Container
 }
 
-func newRouteView() *routeView {
+func newRouteView(lang string) *routeView {
 	v := &routeView{}
+	icons := []fyne.Resource{theme.ComputerIcon(), theme.VisibilityOffIcon(), theme.SearchIcon()}
+	caps := []string{"route_cap_machine", "route_cap_tunnel", "route_cap_exit"}
 	objs := make([]fyne.CanvasObject, 0, 5)
 	for i := range v.labels {
-		t := canvas.NewText("", colText)
-		t.TextSize = 15
+		v.labels[i] = text("", colText, 14, i == 0, i > 0)
+		tile := canvas.NewRectangle(colCanvas)
+		tile.CornerRadius = 10
+		tile.StrokeWidth = 1.5
+		tile.StrokeColor = colDim
+		tile.SetMinSize(fyne.NewSize(44, 44))
+		v.tiles[i] = tile
+		node := container.NewVBox(
+			container.NewCenter(container.NewStack(tile, pad(widget.NewIcon(icons[i]), 8, 8))),
+			container.NewCenter(caption(i18n.UI(lang, caps[i]))),
+			container.NewCenter(v.labels[i]))
 		if i > 0 {
-			t.TextStyle = fyne.TextStyle{Monospace: true}
+			objs = append(objs, v.lineAt(i-1))
 		}
-		v.labels[i] = t
+		objs = append(objs, node)
 	}
-	for i := range v.lines {
-		l := canvas.NewLine(colDim)
-		l.StrokeWidth = 3
-		v.lines[i] = l
-	}
-	objs = append(objs, v.labels[0], v.lines[0], v.labels[1], v.lines[1], v.labels[2])
 	v.box = fyne.NewContainerWithLayout(routeLayout{}, objs...) //nolint:staticcheck // a custom layout needs this constructor
 	return v
+}
+
+func (v *routeView) lineAt(i int) *canvas.Line {
+	l := canvas.NewLine(colDim)
+	l.StrokeWidth = 3
+	v.lines[i] = l
+	return l
 }
 
 func (v *routeView) set(r Route) {
@@ -149,23 +166,26 @@ func (v *routeView) set(r Route) {
 	for i, t := range v.labels {
 		t.Text = texts[i]
 		t.Color = colText
-		t.Refresh()
 	}
-	v.labels[1].Color = hopColor(r.Tun)
-	if r.Tun == HopOK {
-		v.labels[1].Color = colText
-	}
+	v.labels[1].Color = map[HopState]color.Color{HopBroken: colBrick, HopOK: colText, HopUnknown: colText2}[r.Tun]
 	v.labels[2].Color = map[HopState]color.Color{HopBroken: colBrick, HopOK: colText, HopUnknown: colText2}[r.Out]
-	v.labels[1].Refresh()
-	v.labels[2].Refresh()
+	tiles := [3]HopState{HopOK, r.Tun, r.Out}
+	if r.Tun == HopUnknown {
+		tiles[0] = HopUnknown
+	}
+	for i, h := range tiles {
+		v.tiles[i].StrokeColor = hopColor(h)
+		v.tiles[i].Refresh()
+		v.labels[i].Refresh()
+	}
 	for i, h := range []HopState{r.Tun, r.Out} {
 		v.lines[i].StrokeColor = hopColor(h)
 		v.lines[i].Refresh()
 	}
 }
 
-// routeLayout: label, line, label, line, label on one row; the lines share the free width and
-// sit on the text's middle.
+// routeLayout: node, line, node, line, node on one row; the lines share the free width and
+// sit at the height of the tiles.
 type routeLayout struct{}
 
 const routeGap = 12
@@ -175,22 +195,19 @@ func (routeLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 	for i := 0; i < len(objs); i += 2 {
 		used += objs[i].MinSize().Width
 	}
-	free := size.Width - used - 4*routeGap
-	if free < 0 {
-		free = 0
-	}
+	free := max(size.Width-used-4*routeGap, 0)
 	x := float32(0)
 	for i, o := range objs {
 		if i%2 == 0 {
 			m := o.MinSize()
 			o.Resize(m)
-			o.Move(fyne.NewPos(x, (size.Height-m.Height)/2))
+			o.Move(fyne.NewPos(x, 0))
 			x += m.Width
 			continue
 		}
 		x += routeGap
 		l := o.(*canvas.Line)
-		y := size.Height / 2
+		y := float32(22) // the middle of a 44 px tile
 		l.Position1 = fyne.NewPos(x, y)
 		l.Position2 = fyne.NewPos(x+free/2, y)
 		x += free/2 + routeGap
@@ -204,5 +221,5 @@ func (routeLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
 		w += m.Width
 		h = max(h, m.Height)
 	}
-	return fyne.NewSize(w+4*routeGap+2*24, h+12)
+	return fyne.NewSize(w+4*routeGap+2*32, h)
 }

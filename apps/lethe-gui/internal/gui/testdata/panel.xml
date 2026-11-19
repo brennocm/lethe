@@ -1,416 +1,593 @@
 <canvas padded size="1000x720">
 	<content>
 		<container pos="4,4" size="992x712">
-			<container pos="4,4" size="984x704">
-				<container pos="0,196" size="984x462">
-					<container size="984x462">
-						<widget size="984x462" type="*container.Split">
-							<widget size="538x462" type="*widget.Scroll">
-								<container size="538x1754">
-									<container size="267x582">
-										<widget size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text bold pos="8,8" size="34x19">Rede</text>
-											</widget>
-										</widget>
-										<widget pos="0,39" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="223x19">NET-001  Tráfego fora do túnel: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,78" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="244x19">NET-002  Vazamento bloqueado pel…</text>
-											</widget>
-										</widget>
-										<widget pos="0,117" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="201x19">NET-003  IPv6 fora do túnel: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,156" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="246x19">NET-004  Rota efetiva fora do túnel: …</text>
-											</widget>
-										</widget>
-										<widget pos="0,195" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="196x19">NET-005  Mudança de rota: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,234" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="248x19">NET-006  Interface nova ou link up: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,273" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="235x19">NET-007  Mudança de rede Wi-Fi: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,312" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="195x19">NET-008  MAC real em uso: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,351" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="244x19">NET-009  Broadcast na LAN com ide…</text>
-											</widget>
-										</widget>
-										<widget pos="0,390" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="247x19">NET-010  Socket na interface física: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,429" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="233x19">NET-011  IP de saída inesperado: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,468" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="245x19">NET-012  STUN/WebRTC fora do tún…</text>
-											</widget>
-										</widget>
-										<widget pos="0,508" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="248x19">NET-013  Checagem de conectividad…</text>
-											</widget>
-										</widget>
-										<widget pos="0,547" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="243x19">NET-014  DHCP envia o hostname: ok</text>
-											</widget>
-										</widget>
+			<container pos="236,0" size="756x712">
+				<container pos="16,12" size="724x688">
+					<container pos="0,40" size="724x648">
+						<widget size="724x648" type="*widget.Scroll">
+							<container size="724x769">
+								<container pos="4,4" size="716x761">
+									<container size="716x160">
+										<rectangle fillColor="button" radius="12" size="716x160" strokeColor="inputBorder" strokeWidth="1"/>
+										<container size="716x160">
+											<container pos="16,14" size="684x132">
+												<container size="450x132">
+													<text bold color="warning" size="450x35" textSize="26">Protegido, com avisos</text>
+													<container pos="0,39" size="450x35">
+														<widget pos="126,0" size="324x35" type="*widget.Label">
+															<widget size="324x35" type="*widget.RichText">
+																<text color="disabled" pos="8,8" size="247x19">Armado, proteção estrita, há 01:15:00</text>
+															</widget>
+														</widget>
+														<container size="122x35">
+															<container pos="0,8" size="122x18">
+																<rectangle fillColor="rgba(201,173,116,38)" radius="6" size="122x18"/>
+																<container size="122x18">
+																	<text bold color="focus" monospace pos="8,3" size="106x12" textSize="11">PROTEÇÃO ESTRITA</text>
+																</container>
+															</container>
+														</container>
+													</container>
+													<widget pos="0,78" size="450x54" type="*widget.Label">
+														<widget size="450x54" type="*widget.focusSelectable">
+														</widget>
+														<widget size="450x54" type="*widget.RichText">
+															<text pos="8,8" size="430x19">Impressão digital da chave da sessão (anote fora desta máquina):</text>
+															<text pos="8,27" size="124x19">ed25519:4f2a 9c1b</text>
+														</widget>
+													</widget>
+												</container>
+												<container pos="454,0" size="230x132">
+													<container size="230x132">
+														<container size="230x76">
+															<widget size="230x36" type="*widget.Button">
+																<rectangle fillColor="focus" radius="5" size="230x36"/>
+																<rectangle size="230x36"/>
+																<widget pos="75,8" size="103x20" type="*widget.RichText">
+																	<text alignment="center" bold color="background" size="103x19">Verificar agora</text>
+																</widget>
+																<image fillMode="contain" pos="51,8" rsc="viewRefreshIcon" size="iconInlineSize" themed="foregroundOnPrimary"/>
+															</widget>
+															<widget pos="0,40" size="230x36" type="*widget.Button">
+																<rectangle fillColor="button" radius="5" size="230x36"/>
+																<rectangle size="230x36"/>
+																<widget pos="37,8" size="178x20" type="*widget.RichText">
+																	<text alignment="center" bold size="178x19">Testar vazamento de DNS</text>
+																</widget>
+																<image fillMode="contain" pos="13,8" rsc="searchIcon" size="iconInlineSize" themed="foreground"/>
+															</widget>
+														</container>
+													</container>
+												</container>
+											</container>
+										</container>
 									</container>
-									<container pos="271,0" size="267x582">
-										<widget size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text bold pos="8,8" size="29x19">DNS</text>
-											</widget>
-										</widget>
-										<widget pos="0,39" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="204x19">DNS-001  DNS fora do túnel: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,78" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="249x19">DNS-002  DNS da sua rede real em u…</text>
-											</widget>
-										</widget>
-										<widget pos="0,117" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="248x19">DNS-003  DNS da rede física pode re…</text>
-											</widget>
-										</widget>
-										<widget pos="0,156" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="248x19">DNS-004  Configuração de DNS alter…</text>
-											</widget>
-										</widget>
+									<container pos="0,164" size="716x212">
+										<container size="716x212">
+											<container size="176x212">
+												<rectangle fillColor="button" radius="12" size="176x212" strokeColor="inputBorder" strokeWidth="1"/>
+												<container size="176x212">
+													<container pos="16,14" size="144x184">
+														<container size="144x32">
+															<container size="32x32">
+																<rectangle fillColor="background" radius="8" size="32x32"/>
+																<container size="32x32">
+																	<widget pos="4,4" size="24x24" type="*widget.Icon">
+																		<image fillMode="contain" rsc="upload.svg" size="24x24" themed="foreground"/>
+																	</widget>
+																</container>
+															</container>
+															<container pos="114,0" size="29x32">
+																<container pos="0,6" size="29x18">
+																	<rectangle fillColor="rgba(143,174,138,38)" radius="6" size="29x18"/>
+																	<container size="29x18">
+																		<text bold color="success" monospace pos="8,3" size="13x12" textSize="11">OK</text>
+																	</container>
+																</container>
+															</container>
+														</container>
+														<text bold color="placeholder" monospace pos="0,36" size="144x12" textSize="11">FUGA DE PACOTES</text>
+														<container pos="0,52" size="144x34">
+															<text bold monospace size="18x34" textSize="30">0</text>
+															<container pos="22,0" size="81x34">
+																<text color="placeholder" pos="0,9" size="81x16" textSize="12">não resolvidos</text>
+															</container>
+														</container>
+														<widget pos="0,91" size="144x73" type="*widget.Label">
+															<widget size="144x73" type="*widget.RichText">
+																<text color="disabled" pos="8,8" size="102x19">Pacotes fora do</text>
+																<text color="disabled" pos="8,27" size="103x19">túnel, IPv6, rota</text>
+																<text color="disabled" pos="8,46" size="117x19">efetiva e WebRTC.</text>
+															</widget>
+														</widget>
+													</container>
+												</container>
+											</container>
+											<container pos="180,0" size="176x212">
+												<rectangle fillColor="button" radius="12" size="176x212" strokeColor="inputBorder" strokeWidth="1"/>
+												<container size="176x212">
+													<container pos="16,14" size="144x184">
+														<container size="144x32">
+															<container size="32x32">
+																<rectangle fillColor="background" radius="8" size="32x32"/>
+																<container size="32x32">
+																	<widget pos="4,4" size="24x24" type="*widget.Icon">
+																		<image fillMode="contain" rsc="searchIcon" size="24x24" themed="foreground"/>
+																	</widget>
+																</container>
+															</container>
+															<container pos="114,0" size="29x32">
+																<container pos="0,6" size="29x18">
+																	<rectangle fillColor="rgba(143,174,138,38)" radius="6" size="29x18"/>
+																	<container size="29x18">
+																		<text bold color="success" monospace pos="8,3" size="13x12" textSize="11">OK</text>
+																	</container>
+																</container>
+															</container>
+														</container>
+														<text bold color="placeholder" monospace pos="0,36" size="144x12" textSize="11">DNS</text>
+														<container pos="0,52" size="144x34">
+															<text bold monospace size="18x34" textSize="30">0</text>
+															<container pos="22,0" size="81x34">
+																<text color="placeholder" pos="0,9" size="81x16" textSize="12">não resolvidos</text>
+															</container>
+														</container>
+														<widget pos="0,91" size="144x92" type="*widget.Label">
+															<widget size="144x92" type="*widget.RichText">
+																<text color="disabled" pos="8,8" size="115x19">Consultas fora do</text>
+																<text color="disabled" pos="8,27" size="45x19">túnel e</text>
+																<text color="disabled" pos="8,46" size="104x19">resolvedores da</text>
+																<text color="disabled" pos="8,65" size="62x19">rede real.</text>
+															</widget>
+														</widget>
+													</container>
+												</container>
+											</container>
+											<container pos="360,0" size="176x212">
+												<rectangle fillColor="button" radius="12" size="176x212" strokeColor="inputBorder" strokeWidth="1"/>
+												<container size="176x212">
+													<container pos="16,14" size="144x184">
+														<container size="144x32">
+															<container size="32x32">
+																<rectangle fillColor="background" radius="8" size="32x32"/>
+																<container size="32x32">
+																	<widget pos="4,4" size="24x24" type="*widget.Icon">
+																		<image fillMode="contain" rsc="visibilityOffIcon" size="24x24" themed="foreground"/>
+																	</widget>
+																</container>
+															</container>
+															<container pos="114,0" size="29x32">
+																<container pos="0,6" size="29x18">
+																	<rectangle fillColor="rgba(143,174,138,38)" radius="6" size="29x18"/>
+																	<container size="29x18">
+																		<text bold color="success" monospace pos="8,3" size="13x12" textSize="11">OK</text>
+																	</container>
+																</container>
+															</container>
+														</container>
+														<text bold color="placeholder" monospace pos="0,36" size="144x12" textSize="11">TÚNEL</text>
+														<container pos="0,52" size="144x34">
+															<text bold monospace size="18x34" textSize="30">0</text>
+															<container pos="22,0" size="81x34">
+																<text color="placeholder" pos="0,9" size="81x16" textSize="12">não resolvidos</text>
+															</container>
+														</container>
+														<widget pos="0,91" size="144x92" type="*widget.Label">
+															<widget size="144x92" type="*widget.RichText">
+																<text color="disabled" pos="8,8" size="63x19">Interface,</text>
+																<text color="disabled" pos="8,27" size="98x19">handshake, kill</text>
+																<text color="disabled" pos="8,46" size="122x19">switch de terceiros</text>
+																<text color="disabled" pos="8,65" size="109x19">e split tunneling.</text>
+															</widget>
+														</widget>
+													</container>
+												</container>
+											</container>
+											<container pos="540,0" size="176x212">
+												<rectangle fillColor="button" radius="12" size="176x212" strokeColor="inputBorder" strokeWidth="1"/>
+												<container size="176x212">
+													<container pos="16,14" size="144x184">
+														<container size="144x32">
+															<container size="32x32">
+																<rectangle fillColor="background" radius="8" size="32x32"/>
+																<container size="32x32">
+																	<widget pos="4,4" size="24x24" type="*widget.Icon">
+																		<image fillMode="contain" rsc="computerIcon" size="24x24" themed="foreground"/>
+																	</widget>
+																</container>
+															</container>
+															<container pos="94,0" size="49x32">
+																<container pos="0,6" size="49x18">
+																	<rectangle fillColor="rgba(217,164,65,38)" radius="6" size="49x18"/>
+																	<container size="49x18">
+																		<text bold color="warning" monospace pos="8,3" size="33x12" textSize="11">AVISO</text>
+																	</container>
+																</container>
+															</container>
+														</container>
+														<text bold color="placeholder" monospace pos="0,36" size="144x12" textSize="11">MÁQUINA E PERSONA</text>
+														<container pos="0,52" size="144x34">
+															<text bold color="warning" monospace size="18x34" textSize="30">1</text>
+															<container pos="22,0" size="81x34">
+																<text color="placeholder" pos="0,9" size="81x16" textSize="12">não resolvidos</text>
+															</container>
+														</container>
+														<widget pos="0,91" size="144x92" type="*widget.Label">
+															<widget size="144x92" type="*widget.RichText">
+																<text color="disabled" pos="8,8" size="125x19">Processos, câmera,</text>
+																<text color="disabled" pos="8,27" size="106x19">hostname, fuso,</text>
+																<text color="disabled" pos="8,46" size="56x19">idioma e</text>
+																<text color="disabled" pos="8,65" size="73x19">navegador.</text>
+															</widget>
+														</widget>
+													</container>
+												</container>
+											</container>
+										</container>
 									</container>
-									<container pos="0,586" size="267x582">
-										<widget size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text bold pos="8,8" size="38x19">Túnel</text>
-											</widget>
-										</widget>
-										<widget pos="0,39" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="239x19">TUN-001  Túnel ausente ou caído: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,78" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="246x19">TUN-002  Handshake WireGuard vel…</text>
-											</widget>
-										</widget>
-										<widget pos="0,117" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="192x19">TUN-003  Tor sem circuito: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,156" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="211x19">TUN-004  Kill switch alterado: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,195" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="219x19">TUN-005  Split tunneling ativo: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,234" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="224x19">TUN-006  Endpoint inesperado: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,273" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="242x19">TUN-007  Firewall legado invisível: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,312" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="245x19">TUN-008  Transporte plugável não s…</text>
-											</widget>
-										</widget>
-									</container>
-									<container pos="271,586" size="267x582">
-										<widget size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text bold pos="8,8" size="61x19">Máquina</text>
-											</widget>
-										</widget>
-										<widget pos="0,39" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="249x19">HOST-001  Processo da lista de nega…</text>
-											</widget>
-										</widget>
-										<widget pos="0,78" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="254x19">HOST-002  Câmera ou microfone em …</text>
-											</widget>
-										</widget>
-										<widget pos="0,117" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="248x19">HOST-003  Compartilhamento de tel…</text>
-											</widget>
-										</widget>
-										<widget pos="0,156" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="192x19">HOST-004  Hostname real: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,195" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="warning" pos="8,8" size="247x19">HOST-005  Fuso ou idioma fora do p…</text>
-											</widget>
-										</widget>
-										<widget pos="0,234" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="248x19">HOST-006  Disco ou swap sem cifra: …</text>
-											</widget>
-										</widget>
-										<widget pos="0,273" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="253x19">HOST-007  Sincronização de horário: …</text>
-											</widget>
-										</widget>
-										<widget pos="0,312" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="241x19">HOST-008  Rede Wi-Fi conhecida co…</text>
-											</widget>
-										</widget>
-										<widget pos="0,351" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="254x19">HOST-009  Serviço de geolocalização …</text>
-											</widget>
-										</widget>
-									</container>
-									<container pos="0,1172" size="267x582">
-										<widget size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text bold pos="8,8" size="56x19">Persona</text>
-											</widget>
-										</widget>
-										<widget pos="0,39" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="211x19">PER-001  Persona incoerente: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,78" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="248x19">PER-002  Configuração de navegado…</text>
-											</widget>
-										</widget>
-										<widget pos="0,117" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="248x19">PER-003  Perfil pessoal do navegado…</text>
-											</widget>
-										</widget>
-									</container>
-									<container pos="271,1172" size="267x582">
-										<widget size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text bold pos="8,8" size="106x19">O próprio lethe</text>
-											</widget>
-										</widget>
-										<widget pos="0,39" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="185x19">SELF-001  Sensor parado: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,78" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="242x19">SELF-002  Perda de pacotes na capt…</text>
-											</widget>
-										</widget>
-										<widget pos="0,117" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="243x19">SELF-003  Agente ou GUI desconect…</text>
-											</widget>
-										</widget>
-										<widget pos="0,156" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="232x19">SELF-004  Selftest desatualizado: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,195" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="197x19">SELF-005  Relógio alterado: ok</text>
-											</widget>
-										</widget>
-										<widget pos="0,234" size="267x35" type="*widget.Label">
-											<widget size="267x35" type="*widget.RichText">
-												<text color="disabled" pos="8,8" size="249x19">SELF-006  Tentativas de passphrase: …</text>
-											</widget>
-										</widget>
-									</container>
-								</container>
-								<widget pos="0,462" size="538x0" type="*widget.Shadow">
-									<linearGradient endColor="shadow" pos="0,-8" size="538x8"/>
-								</widget>
-								<widget pos="532,0" size="6x462" type="*widget.scrollBarArea">
-									<widget pos="3,0" size="3x121" type="*widget.scrollBar">
-										<rectangle fillColor="scrollbar" radius="3" size="3x121"/>
-									</widget>
-								</widget>
-							</widget>
-							<widget pos="538,0" size="5x462" type="*container.divider">
-								<rectangle fillColor="shadow" size="5x462"/>
-								<rectangle fillColor="foreground" pos="2,223" size="1x16"/>
-							</widget>
-							<container pos="543,0" size="440x462">
-								<widget pos="0,39" size="440x423" type="*widget.List">
-									<widget size="440x423" type="*widget.Scroll">
-										<container size="440x423">
-											<widget size="440x35" type="*widget.listItem">
-												<widget size="440x35" type="*widget.Label">
-													<widget size="440x35" type="*widget.RichText">
-														<text pos="8,8" size="473x19">14:00:00  WARNING  check.alert  HOST-005 Fuso ou idioma fora do perfil</text>
+									<container pos="0,380" size="716x244">
+										<rectangle fillColor="button" radius="12" size="716x244" strokeColor="inputBorder" strokeWidth="1"/>
+										<container size="716x244">
+											<container pos="16,14" size="684x216">
+												<text bold color="placeholder" monospace size="684x12" textSize="11">ROTA DO TRÁFEGO</text>
+												<widget pos="0,16" size="684x1" type="*widget.Separator">
+													<rectangle fillColor="inputBorder" size="684x1"/>
+												</widget>
+												<container pos="0,21" size="684x103">
+													<container pos="8,10" size="668x83">
+														<container size="95x83">
+															<container size="95x44">
+																<container pos="25,0" size="44x44">
+																	<rectangle fillColor="background" radius="10" size="44x44" strokeColor="focus" strokeWidth="1.5"/>
+																	<container size="44x44">
+																		<widget pos="8,8" size="28x28" type="*widget.Icon">
+																			<image fillMode="contain" rsc="computerIcon" size="28x28" themed="foreground"/>
+																		</widget>
+																	</container>
+																</container>
+															</container>
+															<container pos="0,48" size="95x12">
+																<text bold color="placeholder" monospace pos="27,0" size="39x12" textSize="11">ORIGEM</text>
+															</container>
+															<container pos="0,64" size="95x19">
+																<text bold size="95x19">Esta máquina</text>
+															</container>
+														</container>
+														<line pos="107,22" size="213x0" strokeColor="focus" strokeWidth="3"/>
+														<container pos="333,0" size="44x81">
+															<container size="44x44">
+																<container size="44x44">
+																	<rectangle fillColor="background" radius="10" size="44x44" strokeColor="focus" strokeWidth="1.5"/>
+																	<container size="44x44">
+																		<widget pos="8,8" size="28x28" type="*widget.Icon">
+																			<image fillMode="contain" rsc="visibilityOffIcon" size="28x28" themed="foreground"/>
+																		</widget>
+																	</container>
+																</container>
+															</container>
+															<container pos="0,48" size="44x12">
+																<text bold color="placeholder" monospace pos="5,0" size="33x12" textSize="11">TÚNEL</text>
+															</container>
+															<container pos="0,64" size="44x16">
+																<text monospace pos="9,0" size="25x16">wg0</text>
+															</container>
+														</container>
+														<line pos="389,22" size="213x0" strokeColor="focus" strokeWidth="3"/>
+														<container pos="615,0" size="53x81">
+															<container size="53x44">
+																<container pos="4,0" size="44x44">
+																	<rectangle fillColor="background" radius="10" size="44x44" strokeColor="focus" strokeWidth="1.5"/>
+																	<container size="44x44">
+																		<widget pos="8,8" size="28x28" type="*widget.Icon">
+																			<image fillMode="contain" rsc="searchIcon" size="28x28" themed="foreground"/>
+																		</widget>
+																	</container>
+																</container>
+															</container>
+															<container pos="0,48" size="53x12">
+																<text bold color="placeholder" monospace size="53x12" textSize="11">A WEB VÊ</text>
+															</container>
+															<container pos="0,64" size="53x16">
+																<text monospace pos="18,0" size="16x16">NL</text>
+															</container>
+														</container>
+													</container>
+												</container>
+												<widget pos="0,129" size="684x35" type="*widget.Label">
+													<widget size="684x35" type="*widget.RichText">
+														<text color="disabled" pos="8,8" size="142x19">Verificado às 13:58:00</text>
 													</widget>
 												</widget>
-											</widget>
+												<container pos="0,168" size="684x47">
+													<container size="168x47">
+														<rectangle fillColor="background" radius="8" size="168x47"/>
+														<container size="168x47">
+															<container pos="10,8" size="148x31">
+																<text bold color="placeholder" monospace size="148x12" textSize="11">DURAÇÃO</text>
+																<text monospace pos="0,16" size="148x15" textSize="13">01:15:00</text>
+															</container>
+														</container>
+													</container>
+													<container pos="172,0" size="168x47">
+														<rectangle fillColor="background" radius="8" size="168x47"/>
+														<container size="168x47">
+															<container pos="10,8" size="148x31">
+																<text bold color="placeholder" monospace size="148x12" textSize="11">ÚLTIMA VERIFICAÇÃO</text>
+																<text monospace pos="0,16" size="148x15" textSize="13">13:58:00</text>
+															</container>
+														</container>
+													</container>
+													<container pos="344,0" size="168x47">
+														<rectangle fillColor="background" radius="8" size="168x47"/>
+														<container size="168x47">
+															<container pos="10,8" size="148x31">
+																<text bold color="placeholder" monospace size="148x12" textSize="11">ALERTAS ABERTOS</text>
+																<text monospace pos="0,16" size="148x15" textSize="13">1</text>
+															</container>
+														</container>
+													</container>
+													<container pos="516,0" size="168x47">
+														<rectangle fillColor="background" radius="8" size="168x47"/>
+														<container size="168x47">
+															<container pos="10,8" size="148x31">
+																<text bold color="placeholder" monospace size="148x12" textSize="11">SENSORES</text>
+																<text monospace pos="0,16" size="148x15" textSize="13">—</text>
+															</container>
+														</container>
+													</container>
+												</container>
+											</container>
 										</container>
-									</widget>
-								</widget>
-								<container size="440x35">
-									<widget size="218x35" type="*widget.Select">
-										<rectangle fillColor="button" radius="3" size="218x35"/>
-										<rectangle size="0x0"/>
-										<widget pos="4,4" size="186x27" type="*widget.RichText">
-											<text pos="4,4" size="38x19">Todas</text>
-										</widget>
-										<widget pos="190,7" size="20x20" type="*widget.Icon">
-											<image fillMode="contain" rsc="menuDropDownIcon" size="iconInlineSize" themed="foreground"/>
-										</widget>
-									</widget>
-									<widget pos="222,0" size="218x35" type="*widget.Entry">
-										<rectangle fillColor="button" pos="1,1" radius="3" size="216x33"/>
-										<rectangle radius="3" size="216x33" strokeColor="inputBorder" strokeWidth="1"/>
-										<widget pos="0,1" size="218x33" type="*widget.Scroll">
-											<widget size="218x33" type="*widget.entryContent">
-												<widget size="218x33" type="*widget.RichText">
-													<text color="placeholder" pos="8,7" size="132x19">Check (ex.: NET-001)</text>
-												</widget>
-												<widget size="218x33" type="*widget.RichText">
-													<text pos="8,7" size="0x19"></text>
-												</widget>
-											</widget>
-										</widget>
-									</widget>
+									</container>
+									<container pos="0,629" size="716x131">
+										<container size="716x131">
+											<rectangle fillColor="button" radius="12" size="716x131" strokeColor="inputBorder" strokeWidth="1"/>
+											<container size="716x131">
+												<container pos="16,14" size="684x103">
+													<container size="684x36">
+														<text bold color="placeholder" monospace size="106x36" textSize="11">EVENTOS RECENTES</text>
+														<widget pos="601,0" size="82x36" type="*widget.Button">
+															<rectangle radius="5" size="82x36"/>
+															<rectangle size="82x36"/>
+															<widget pos="8,8" size="66x19" type="*widget.RichText">
+																<text alignment="center" bold size="66x19">Ver todos</text>
+															</widget>
+														</widget>
+													</container>
+													<container pos="0,40" size="684x63">
+														<container size="684x24">
+															<rectangle fillColor="background" radius="8" size="684x24"/>
+															<container size="684x24">
+																<container size="112x24">
+																	<text bold color="placeholder" monospace pos="8,6" size="96x12" textSize="11">HORA</text>
+																</container>
+																<container pos="118,0" size="267x24">
+																	<text bold color="placeholder" monospace pos="8,6" size="251x12" textSize="11">CHECK / EVENTO</text>
+																</container>
+																<container pos="392,0" size="158x24">
+																	<text bold color="placeholder" monospace pos="8,6" size="142x12" textSize="11">DESTINO</text>
+																</container>
+																<container pos="556,0" size="121x24">
+																	<text bold color="placeholder" monospace pos="8,6" size="105x12" textSize="11">STATUS</text>
+																</container>
+															</container>
+														</container>
+														<container pos="0,28" size="684x35">
+															<widget size="112x35" type="*widget.Label">
+																<widget size="112x35" type="*widget.RichText">
+																	<text color="disabled" monospace pos="8,8" size="92x16">14:00:00.0…</text>
+																</widget>
+															</widget>
+															<widget pos="118,0" size="267x35" type="*widget.Label">
+																<widget size="267x35" type="*widget.RichText">
+																	<text pos="8,8" size="247x19">HOST-005  Fuso ou idioma fora do p…</text>
+																</widget>
+															</widget>
+															<widget pos="392,0" size="158x35" type="*widget.Label">
+																<widget size="158x35" type="*widget.RichText">
+																	<text monospace pos="8,8" size="0x16"></text>
+																</widget>
+															</widget>
+															<widget pos="556,0" size="121x35" type="*widget.Label">
+																<widget size="121x35" type="*widget.RichText">
+																	<text color="warning" monospace pos="8,8" size="42x16">AVISO</text>
+																</widget>
+															</widget>
+														</container>
+													</container>
+												</container>
+											</container>
+										</container>
+									</container>
 								</container>
 							</container>
-						</widget>
-					</container>
-				</container>
-				<container size="984x192">
-					<text bold color="warning" size="984x32" textSize="24">Protegido, com avisos</text>
-					<widget pos="0,36" size="984x35" type="*widget.Label">
-						<widget size="984x35" type="*widget.RichText">
-							<text color="disabled" pos="8,8" size="247x19">Armado, proteção estrita, há 01:15:00</text>
-						</widget>
-					</widget>
-					<widget pos="0,75" size="984x35" type="*widget.Label">
-						<widget size="984x35" type="*widget.focusSelectable">
-						</widget>
-						<widget size="984x35" type="*widget.RichText">
-							<text pos="8,8" size="557x19">Impressão digital da chave da sessão (anote fora desta máquina): ed25519:4f2a 9c1b</text>
-						</widget>
-					</widget>
-					<container pos="0,114" size="984x32">
-						<text pos="0,6" size="95x20" textSize="15">Esta máquina</text>
-						<line pos="107,16" size="397x0" strokeColor="focus" strokeWidth="3"/>
-						<text monospace pos="517,7" size="27x17" textSize="15">wg0</text>
-						<line pos="556,16" size="397x0" strokeColor="focus" strokeWidth="3"/>
-						<text monospace pos="965,7" size="18x17" textSize="15">NL</text>
-					</container>
-					<container pos="0,151" size="984x36">
-						<widget size="661x36" type="*widget.Label">
-							<widget size="661x36" type="*widget.RichText">
-								<text color="disabled" pos="8,8" size="142x19">Verificado às 13:58:00</text>
+							<widget pos="0,648" size="724x0" type="*widget.Shadow">
+								<linearGradient endColor="shadow" pos="0,-8" size="724x8"/>
+							</widget>
+							<widget pos="718,0" size="6x648" type="*widget.scrollBarArea">
+								<widget pos="3,0" size="3x545" type="*widget.scrollBar">
+									<rectangle fillColor="scrollbar" radius="3" size="3x545"/>
+								</widget>
 							</widget>
 						</widget>
-						<container pos="665,0" size="318x36">
-							<container size="318x36">
-								<widget size="119x36" type="*widget.Button">
-									<rectangle fillColor="button" radius="5" size="119x36"/>
-									<rectangle size="119x36"/>
-									<widget pos="8,8" size="103x19" type="*widget.RichText">
-										<text alignment="center" bold size="103x19">Verificar agora</text>
+					</container>
+					<container size="724x36">
+						<container size="724x36">
+							<container size="110x36">
+								<text bold pos="0,4" size="110x27" textSize="20">Visão geral</text>
+							</container>
+							<container pos="430,0" size="293x36">
+								<container size="72x36">
+									<rectangle fillColor="button" radius="8" size="72x36" strokeColor="inputBorder" strokeWidth="1"/>
+									<container size="72x36">
+										<container pos="10,6" size="52x24">
+											<text bold color="placeholder" monospace size="33x24" textSize="11">SAÍDA</text>
+											<text color="focus" monospace pos="37,0" size="15x24" textSize="13">NL</text>
+										</container>
+									</container>
+								</container>
+								<container pos="76,0" size="126x36">
+									<rectangle fillColor="button" radius="8" size="126x36" strokeColor="inputBorder" strokeWidth="1"/>
+									<container size="126x36">
+										<container pos="10,6" size="106x24">
+											<text bold color="placeholder" monospace size="39x24" textSize="11">SESSÃO</text>
+											<text color="placeholder" monospace pos="43,0" size="62x24" textSize="13">01:15:00</text>
+										</container>
+									</container>
+								</container>
+								<widget pos="207,0" size="86x36" type="*widget.Button">
+									<rectangle fillColor="error" radius="5" size="86x36"/>
+									<rectangle size="86x36"/>
+									<widget pos="32,8" size="46x20" type="*widget.RichText">
+										<text alignment="center" bold color="background" size="46x19">Pânico</text>
 									</widget>
-								</widget>
-								<widget pos="123,0" size="194x36" type="*widget.Button">
-									<rectangle fillColor="button" radius="5" size="194x36"/>
-									<rectangle size="194x36"/>
-									<widget pos="8,8" size="178x19" type="*widget.RichText">
-										<text alignment="center" bold size="178x19">Testar vazamento de DNS</text>
-									</widget>
+									<image fillMode="contain" pos="8,8" rsc="warningIcon" size="iconInlineSize" themed="foregroundOnError"/>
 								</widget>
 							</container>
 						</container>
 					</container>
-					<widget pos="0,191" size="984x1" type="*widget.Separator">
-						<rectangle fillColor="inputBorder" size="984x1"/>
-					</widget>
 				</container>
-				<container pos="0,663" size="984x41">
-					<widget size="984x1" type="*widget.Separator">
-						<rectangle fillColor="inputBorder" size="984x1"/>
-					</widget>
-					<container pos="0,5" size="984x36">
-						<widget size="62x36" type="*widget.Button">
-							<rectangle fillColor="error" radius="5" size="62x36"/>
-							<rectangle size="62x36"/>
-							<widget pos="8,8" size="46x19" type="*widget.RichText">
-								<text alignment="center" bold color="background" size="46x19">Pânico</text>
-							</widget>
-						</widget>
-						<container pos="683,0" size="300x36">
-							<widget size="97x36" type="*widget.Button">
-								<rectangle fillColor="button" radius="5" size="97x36"/>
-								<rectangle size="97x36"/>
-								<widget pos="8,8" size="81x19" type="*widget.RichText">
-									<text alignment="center" bold size="81x19">Reconhecer</text>
+			</container>
+			<container size="232x712">
+				<container size="232x712">
+					<rectangle fillColor="rgba(25,28,29,255)" size="232x712"/>
+					<container size="232x712">
+						<container pos="14,16" size="204x680">
+							<container size="204x296">
+								<container size="204x36">
+									<image fillMode="contain" rsc="lethe.svg" size="34x36"/>
+									<container pos="38,0" size="96x36">
+										<text bold size="96x20" textSize="15">LETHE</text>
+										<text color="placeholder" monospace pos="0,24" size="96x11" textSize="10">MONITOR DE OPSEC</text>
+									</container>
+								</container>
+								<widget pos="0,40" size="204x1" type="*widget.Separator">
+									<rectangle fillColor="inputBorder" size="204x1"/>
 								</widget>
-							</widget>
-							<widget pos="101,0" size="69x36" type="*widget.Button">
-								<rectangle fillColor="button" radius="5" size="69x36"/>
-								<rectangle size="69x36"/>
-								<widget pos="8,8" size="53x19" type="*widget.RichText">
-									<text alignment="center" bold size="53x19">Selftest</text>
+								<container pos="0,45" size="204x18">
+									<container size="95x18">
+										<rectangle fillColor="rgba(217,164,65,38)" radius="6" size="95x18"/>
+										<container size="95x18">
+											<text bold color="warning" monospace pos="8,3" size="79x12" textSize="11">● COM AVISOS</text>
+										</container>
+									</container>
+									<text color="placeholder" monospace pos="184,0" size="19x18" textSize="11">wg0</text>
+								</container>
+								<widget pos="0,67" size="204x1" type="*widget.Separator">
+									<rectangle fillColor="inputBorder" size="204x1"/>
 								</widget>
-							</widget>
-							<widget pos="175,0" size="125x36" type="*widget.Button">
-								<rectangle fillColor="button" radius="5" size="125x36"/>
-								<rectangle size="125x36"/>
-								<widget pos="8,8" size="109x19" type="*widget.RichText">
-									<text alignment="center" bold size="109x19">Encerrar sessão</text>
-								</widget>
-							</widget>
+								<container pos="0,72" size="204x224">
+									<widget size="204x34" type="*gui.navItem">
+										<container size="204x34">
+											<rectangle fillColor="rgba(46,87,83,153)" radius="8" size="204x34"/>
+											<container size="204x34">
+												<container pos="4,6" size="196x22">
+													<text bold pos="31,0" size="165x22" textSize="13">Visão geral</text>
+													<container size="27x22">
+														<rectangle fillColor="focus" radius="2" size="3x22"/>
+														<widget pos="7,0" size="20x22" type="*widget.Icon">
+															<image fillMode="contain" rsc="homeIcon" size="20x22" themed="primary"/>
+														</widget>
+													</container>
+												</container>
+											</container>
+										</container>
+									</widget>
+									<widget pos="0,38" size="204x34" type="*gui.navItem">
+										<container size="204x34">
+											<rectangle radius="8" size="204x34"/>
+											<container size="204x34">
+												<container pos="4,6" size="196x22">
+													<text color="placeholder" pos="31,0" size="165x22" textSize="13">DNS e IP</text>
+													<container size="27x22">
+														<rectangle radius="2" size="3x22"/>
+														<widget pos="7,0" size="20x22" type="*widget.Icon">
+															<image fillMode="contain" rsc="searchIcon" size="20x22" themed="placeholder"/>
+														</widget>
+													</container>
+												</container>
+											</container>
+										</container>
+									</widget>
+									<widget pos="0,76" size="204x34" type="*gui.navItem">
+										<container size="204x34">
+											<rectangle radius="8" size="204x34"/>
+											<container size="204x34">
+												<container pos="4,6" size="196x22">
+													<text color="placeholder" pos="31,0" size="165x22" textSize="13">Eventos</text>
+													<container size="27x22">
+														<rectangle radius="2" size="3x22"/>
+														<widget pos="7,0" size="20x22" type="*widget.Icon">
+															<image fillMode="contain" rsc="list.svg" size="20x22" themed="placeholder"/>
+														</widget>
+													</container>
+												</container>
+											</container>
+										</container>
+									</widget>
+									<widget pos="0,114" size="204x34" type="*gui.navItem">
+										<container size="204x34">
+											<rectangle radius="8" size="204x34"/>
+											<container size="204x34">
+												<container pos="4,6" size="196x22">
+													<text color="placeholder" pos="31,0" size="165x22" textSize="13">Guarda e pânico</text>
+													<container size="27x22">
+														<rectangle radius="2" size="3x22"/>
+														<widget pos="7,0" size="20x22" type="*widget.Icon">
+															<image fillMode="contain" rsc="warningIcon" size="20x22" themed="placeholder"/>
+														</widget>
+													</container>
+												</container>
+											</container>
+										</container>
+									</widget>
+									<widget pos="0,152" size="204x34" type="*gui.navItem">
+										<container size="204x34">
+											<rectangle radius="8" size="204x34"/>
+											<container size="204x34">
+												<container pos="4,6" size="196x22">
+													<text color="placeholder" pos="31,0" size="165x22" textSize="13">Checks</text>
+													<container size="27x22">
+														<rectangle radius="2" size="3x22"/>
+														<widget pos="7,0" size="20x22" type="*widget.Icon">
+															<image fillMode="contain" rsc="grid.svg" size="20x22" themed="placeholder"/>
+														</widget>
+													</container>
+												</container>
+											</container>
+										</container>
+									</widget>
+									<widget pos="0,190" size="204x34" type="*gui.navItem">
+										<container size="204x34">
+											<rectangle radius="8" size="204x34"/>
+											<container size="204x34">
+												<container pos="4,6" size="196x22">
+													<text color="placeholder" pos="31,0" size="165x22" textSize="13">Sessão</text>
+													<container size="27x22">
+														<rectangle radius="2" size="3x22"/>
+														<widget pos="7,0" size="20x22" type="*widget.Icon">
+															<image fillMode="contain" rsc="settingsIcon" size="20x22" themed="placeholder"/>
+														</widget>
+													</container>
+												</container>
+											</container>
+										</container>
+									</widget>
+								</container>
+							</container>
+							<container pos="0,599" size="204x80">
+								<container size="204x63">
+									<rectangle fillColor="button" radius="10" size="204x63"/>
+									<container size="204x63">
+										<container pos="10,8" size="184x47">
+											<text bold color="placeholder" monospace size="184x12" textSize="11">DAEMON</text>
+											<text bold color="success" monospace pos="0,16" size="184x13" textSize="12">lethed conectado</text>
+											<text color="placeholder" monospace pos="0,34" size="184x12" textSize="11"></text>
+										</container>
+									</container>
+								</container>
+								<text color="disabled" monospace pos="0,67" size="204x12" textSize="11">dev</text>
+							</container>
 						</container>
 					</container>
 				</container>

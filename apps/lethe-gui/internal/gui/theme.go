@@ -24,6 +24,7 @@ var (
 	colBrick   = color.NRGBA{0xd8, 0x5c, 0x44, 0xff} // CRITICAL, panic button, a broken route
 	colPanicBg = color.NRGBA{0x5a, 0x1c, 0x16, 0xff} // the full-screen alert and the block notice
 	colDim     = color.NRGBA{0x6d, 0x77, 0x72, 0xff} // disabled, a route not known yet
+	colSidebar = color.NRGBA{0x19, 0x1c, 0x1d, 0xff} // the sidebar: the logo charcoal, a step darker
 )
 
 // lethe's theme: one dark composition, because the logo is dark and the panel is watched for
