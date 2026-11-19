@@ -75,5 +75,5 @@ nftables rodam só nos namespaces do `test/netlab`.
 
 ## Licença
 
-A definir pelo dono antes da primeira release. As licenças das dependências e dos dados
-embutidos estão em [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md).
+GPL-3.0-or-later ([`LICENSE`](LICENSE)). As licenças das dependências e dos dados embutidos
+estão em [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md).

@@ -12,7 +12,7 @@ section: net
 priority: optional
 maintainer: lethe maintainers
 description: Tray, panel and full-screen alerts for lethe.
-license: see /usr/share/doc/lethe/THIRD_PARTY.md
+license: GPL-3.0-or-later
 depends:
   - lethe (= ${VERSION}-1)
 overrides:
@@ -53,4 +53,7 @@ contents:
     file_info: { mode: 0644, owner: root, group: root }
   - src: apps/lethe-gui/internal/gui/lethe.svg
     dst: /usr/share/icons/hicolor/scalable/apps/lethe.svg
+    file_info: { mode: 0644, owner: root, group: root }
+  - src: LICENSE
+    dst: /usr/share/doc/lethe-gui/copyright
     file_info: { mode: 0644, owner: root, group: root }

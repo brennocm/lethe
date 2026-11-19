@@ -27,10 +27,10 @@ Nenhuma chave, senha ou endereço interno vai para este repositório, para issue
 
 ### Pendente com o dono
 
-1. Escolher e adicionar a **licença** do lethe (não há `LICENSE`). As dependências estão em `docs/THIRD_PARTY.md`: nenhuma obriga GPL (a libcap é dupla, BSD-3-Clause ou GPL-2.0, e o lethe usa a BSD).
+1. Licença: **GPL-3.0-or-later** (`LICENSE`, instalada pelos pacotes em `/usr/share/doc/<pacote>/copyright`). As dependências estão em `docs/THIRD_PARTY.md` e são todas compatíveis com ela.
 2. Fixar e embutir a **base geo** (seção 4.2).
 3. Criar as **chaves de assinatura** e o **repositório interno** (seções 4.3 e 4.6).
-4. Criar o **remote Git** institucional e fixar as actions do CI por SHA antes do primeiro push (seção 4.1).
+4. Criar o **remote Git** (seção 4.1). As actions do CI já estão fixadas por SHA.
 5. Rodar a **aceitação manual** (AC-07 e AC-15) em máquinas de teste.
 
 ### Limites conhecidos no lançamento
@@ -72,7 +72,7 @@ O CI **não** recebe as chaves de assinatura. Ele só prova o build; quem assina
 2. **Ação:**
    - crie o repositório vazio no Git institucional;
    - adicione o remote: `! git remote add origin <URL>`;
-   - em `.github/workflows/ci.yml`, troque `actions/checkout@v4` e `jdx/mise-action@v2` pelo SHA completo do commit de cada versão (o comentário no arquivo pede isso);
+   - as actions de `.github/workflows/ci.yml` estão fixadas pelo SHA completo (versão no comentário); atualize-as sempre por SHA;
    - faça o commit e o push: `! git push -u origin main`.
 3. **Esperado:** jobs `check`, `gui`, `release` e `e2e` verdes.
 4. **Se falhar:** o `e2e` precisa de `sudo` no runner e do `wireguard-tools`. O `gui` instala os headers com `scripts/gui-deps --yes`; se um nome de pacote mudou na distro do runner, o script diz qual módulo do `pkg-config` ainda falta.
@@ -135,7 +135,7 @@ O CI **não** recebe as chaves de assinatura. Ele só prova o build; quem assina
 
 ## 5. Checklist de liberação
 
-- [ ] Licença do lethe decidida e presente no repositório e no pacote.
+- [x] Licença do lethe (GPL-3.0-or-later) no repositório e nos pacotes.
 - [ ] `pins.json` preenchido e conferido por uma segunda fonte; `lethe version` mostra a data da base geo.
 - [ ] `check:all`, `e2e` e `release:repro` verdes no commit da tag.
 - [ ] Dois builds independentes com `SHA256SUMS` iguais (fora os SBOMs).
