@@ -297,7 +297,7 @@ func (u *UI) buildSidebar() fyne.CanvasObject {
 	u.navs = map[string]*navItem{}
 	for _, p := range Pages {
 		key := p.Key
-		n := newNavItem(p.Icon, u.t("nav_"+key), func() { u.go2(key) })
+		n := newNavItem(p.Icon(), u.t("nav_"+key), func() { u.go2(key) })
 		u.navs[key] = n
 		nav.Add(n)
 	}

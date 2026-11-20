@@ -20,14 +20,14 @@ import (
 // Pages in sidebar order: key (texts nav_<key>) and icon.
 var Pages = []struct {
 	Key  string
-	Icon fyne.Resource
+	Icon func() fyne.Resource // looked up when the panel is built: at init no app exists yet (Fyne logs an error per icon)
 }{
-	{"overview", theme.HomeIcon()},
-	{"leaks", theme.SearchIcon()},
-	{"events", theme.ListIcon()},
-	{"guard", theme.WarningIcon()},
-	{"checks", theme.GridIcon()},
-	{"session", theme.SettingsIcon()},
+	{"overview", theme.HomeIcon},
+	{"leaks", theme.SearchIcon},
+	{"events", theme.ListIcon},
+	{"guard", theme.WarningIcon},
+	{"checks", theme.GridIcon},
+	{"session", theme.SettingsIcon},
 }
 
 // statCard is a summary number with its state.
@@ -186,7 +186,7 @@ func (u *UI) buildOverview() fyne.CanvasObject {
 	u.heroCard = newCard(container.NewBorder(nil, nil, nil, container.New(fixed{w: 230}, right), left))
 
 	for i, a := range OverviewAreas {
-		u.areas[i] = newStatCard(a.Icon, u.t("area_"+a.Key), u.t("area_"+a.Key+"_note"))
+		u.areas[i] = newStatCard(a.Icon(), u.t("area_"+a.Key), u.t("area_"+a.Key+"_note"))
 	}
 	areas := container.NewGridWithColumns(4, u.areas[0].card.box, u.areas[1].card.box, u.areas[2].card.box, u.areas[3].card.box)
 
@@ -313,7 +313,7 @@ func (u *UI) buildLeaks() fyne.CanvasObject {
 		desc.Importance = widget.LowImportance
 		ids := lowLabel(strings.Join(v.Checks, " · "))
 		ids.TextStyle = fyne.TextStyle{Monospace: true}
-		c := newCard(container.NewVBox(container.NewBorder(nil, nil, iconTile(v.Icon), container.NewCenter(b.box)),
+		c := newCard(container.NewVBox(container.NewBorder(nil, nil, iconTile(v.Icon()), container.NewCenter(b.box)),
 			text(u.t("vec_"+v.Key), colText, 15, true, false), desc, ids))
 		u.vectors[v.Key] = &vecCard{badge: b, card: c}
 		vecs = append(vecs, c.box)

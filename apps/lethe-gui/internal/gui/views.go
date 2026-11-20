@@ -76,27 +76,27 @@ func hasPrefix(id string, prefixes []string) bool {
 // OverviewAreas are the four summary cards of the overview: key (texts area_<key>) and checks.
 var OverviewAreas = []struct {
 	Key    string
-	Icon   fyne.Resource
+	Icon   func() fyne.Resource
 	Checks []string
 }{
-	{"leak", theme.UploadIcon(), []string{"NET-001", "NET-002", "NET-003", "NET-004", "NET-012"}},
-	{"dns", theme.SearchIcon(), []string{"DNS-"}},
-	{"tun", theme.VisibilityOffIcon(), []string{"TUN-"}},
-	{"host", theme.ComputerIcon(), []string{"HOST-", "PER-"}},
+	{"leak", theme.UploadIcon, []string{"NET-001", "NET-002", "NET-003", "NET-004", "NET-012"}},
+	{"dns", theme.SearchIcon, []string{"DNS-"}},
+	{"tun", theme.VisibilityOffIcon, []string{"TUN-"}},
+	{"host", theme.ComputerIcon, []string{"HOST-", "PER-"}},
 }
 
 // Vectors are the ways an identity leaks, as the DNS & IP page lists them (texts vec_<key>).
 var Vectors = []struct {
 	Key    string
-	Icon   fyne.Resource
+	Icon   func() fyne.Resource
 	Checks []string
 }{
-	{"ipv4", theme.UploadIcon(), []string{"NET-001", "NET-004"}},
-	{"ipv6", theme.UploadIcon(), []string{"NET-003"}},
-	{"dns", theme.SearchIcon(), []string{"DNS-001", "DNS-002", "DNS-003", "DNS-004"}},
-	{"webrtc", theme.MediaVideoIcon(), []string{"NET-012", "PER-002"}},
-	{"lan", theme.ComputerIcon(), []string{"NET-009", "NET-014"}},
-	{"exit", theme.AccountIcon(), []string{"NET-011", "PER-001", "TUN-006"}},
+	{"ipv4", theme.UploadIcon, []string{"NET-001", "NET-004"}},
+	{"ipv6", theme.UploadIcon, []string{"NET-003"}},
+	{"dns", theme.SearchIcon, []string{"DNS-001", "DNS-002", "DNS-003", "DNS-004"}},
+	{"webrtc", theme.MediaVideoIcon, []string{"NET-012", "PER-002"}},
+	{"lan", theme.ComputerIcon, []string{"NET-009", "NET-014"}},
+	{"exit", theme.AccountIcon, []string{"NET-011", "PER-001", "TUN-006"}},
 }
 
 // Responses are the default actions of spec §10.4 for a guard mode, by severity.
