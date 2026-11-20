@@ -52,6 +52,27 @@ func SecureDir(d *os.File, uid, gid int, mode uint32) error {
 	return nil
 }
 
+// EnsureDir is SecureDir that changes only what differs: an owner, group or mode already in
+// place costs no chown/chmod, so a process without CAP_CHOWN can open a directory prepared
+// earlier.
+func EnsureDir(d *os.File, uid, gid int, mode uint32) error {
+	var st unix.Stat_t
+	if err := unix.Fstat(int(d.Fd()), &st); err != nil { // #nosec G115 -- fd
+		return &os.PathError{Op: "stat", Path: d.Name(), Err: err}
+	}
+	if uid >= 0 && st.Uid == uint32(uid) { // #nosec G115 -- uid >= 0
+		uid = -1
+	}
+	if gid >= 0 && st.Gid == uint32(gid) { // #nosec G115 -- gid >= 0
+		gid = -1
+	}
+	const bits = 0o7777
+	if uid < 0 && gid < 0 && st.Mode&bits == mode&bits {
+		return nil
+	}
+	return SecureDir(d, uid, gid, mode)
+}
+
 // FDPath names an open directory through /proc/self/fd: paths under it resolve to that inode no
 // matter what happens to the original path.
 func FDPath(d *os.File) string { return "/proc/self/fd/" + strconv.Itoa(int(d.Fd())) } // #nosec G115
@@ -80,8 +101,8 @@ func OpenDir(path string, perm uint32) (*os.File, error) {
 
 // WriteFileAt replaces name inside dir atomically, never following a symlink: a temporary file
 // is created with O_EXCL|O_NOFOLLOW (a planted .name.tmp -> /etc/shadow is removed, not
-// written through), owned by uid/gid when they are >= 0, synced and renamed over name. Root
-// writes into directories the operator owns (storage.dir/state) only through this.
+// written through), owned by uid/gid when they are >= 0, set to mode perm, synced and renamed
+// over name. Root writes into storage.dir/state only through this.
 func WriteFileAt(dir *os.File, name string, data []byte, perm uint32, uid, gid int) error {
 	if name == "" || name == "." || name == ".." || containsSlash(name) {
 		return fmt.Errorf("bad file name %q", name)
@@ -99,6 +120,9 @@ func WriteFileAt(dir *os.File, name string, data []byte, perm uint32, uid, gid i
 	_, err = f.Write(data)
 	if err == nil && (uid >= 0 || gid >= 0) {
 		err = unix.Fchown(fd, uid, gid)
+	}
+	if err == nil { // perm as given, whatever the umask (the service units run with 0077)
+		err = unix.Fchmod(fd, perm)
 	}
 	if err == nil {
 		err = f.Sync()

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 // TestSELF001_WriteFileAtNeverFollowsSymlinks: root writes storage.dir/state, which the operator
@@ -63,5 +65,42 @@ func TestSELF001_MkdirAtRefusesSymlinkedDir(t *testing.T) {
 	defer func() { _ = d.Close() }()
 	if _, err := MkdirAt(d, "state", 0o700); err == nil {
 		t.Fatal("a symlinked state directory was accepted")
+	}
+}
+
+// TestSELF004_EnsureDirChangesOnlyWhatDiffers: a directory already right needs no chown, so a
+// daemon without CAP_CHOWN can reopen storage.dir/state; a wrong mode is still fixed.
+func TestSELF004_EnsureDirChangesOnlyWhatDiffers(t *testing.T) {
+	parent, err := os.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = parent.Close() }()
+	d, err := MkdirAt(parent, "state", 0o700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = d.Close() }()
+	var st unix.Stat_t
+	if err := unix.Fstat(int(d.Fd()), &st); err != nil {
+		t.Fatal(err)
+	}
+	// same owner and group: no chown, only the mode changes
+	if err := EnsureDir(d, int(st.Uid), int(st.Gid), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Fstat(int(d.Fd()), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st.Mode&0o7777 != 0o750 {
+		t.Fatalf("mode %o", st.Mode&0o7777)
+	}
+	if err := EnsureDir(d, int(st.Uid), int(st.Gid), 0o750); err != nil {
+		t.Fatalf("already right: %v", err)
+	}
+	if os.Geteuid() != 0 { // a foreign owner needs CAP_CHOWN: the error is reported, not hidden
+		if err := EnsureDir(d, int(st.Uid)+1, -1, 0o750); err == nil {
+			t.Fatal("chown to another uid without CAP_CHOWN succeeded")
+		}
 	}
 }

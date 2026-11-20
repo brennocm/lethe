@@ -316,6 +316,14 @@ func (d *Daemon) openSession(prof *profile.Profile, base *baseline.Baseline, mod
 		wipe(key)
 		return nil, err
 	}
+	// storage.dir/state gets its owner while the daemon still holds CAP_CHOWN (see stateDir)
+	sd, err := d.stateDir(s)
+	if err != nil {
+		wipe(key)
+		_ = s.dirF.Close()
+		return nil, err
+	}
+	_ = sd.Close()
 	gid := -1
 	if isRoot() {
 		gid = d.cfg.Operator.GID

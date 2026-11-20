@@ -280,8 +280,8 @@ func selftestData(r SelftestResult) map[string]any {
 	return map[string]any{"passed": r.Passed, "critical": r.Critical, "guard": r.Guard, "full": r.Full, "cases": cases}
 }
 
-// writeSelftestFile records the result for SELF-004, owned by the operator (the preflight
-// without the daemon reads it with the operator's rights).
+// writeSelftestFile records the result for SELF-004, readable by the operator's group (the
+// preflight without the daemon reads it with the operator's rights).
 func (d *Daemon) writeSelftestFile(s *session, r SelftestResult) error {
 	raw, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
@@ -292,14 +292,16 @@ func (d *Daemon) writeSelftestFile(s *session, r SelftestResult) error {
 		return err
 	}
 	defer func() { _ = dir.Close() }()
-	uid, gid := d.stateOwner()
-	return platform.WriteFileAt(dir, "selftest.json", append(raw, '\n'), 0o600, uid, gid)
+	return platform.WriteFileAt(dir, "selftest.json", append(raw, '\n'), 0o640, -1, -1)
 }
 
-// stateDir opens storage.dir/state, which the operator owns and reads (SELF-004). The daemon is
-// root and the operator's processes may plant symlinks there, so the directory is created,
-// opened and chowned through descriptors that never follow one, and files are written only with
-// platform.WriteFileAt.
+// stateDir opens storage.dir/state, which the operator reads (SELF-004). The daemon is root and
+// the operator's processes may plant symlinks there, so the directory is created, opened and
+// changed through descriptors that never follow one, and files are written only with
+// platform.WriteFileAt. As root it is root:operator 02750: root writes as the owner (no
+// CAP_DAC_OVERRIDE needed) and the setgid bit hands each new file the operator's group, so no
+// chown happens after the capabilities are dropped (no CAP_CHOWN then). openSession calls it
+// once before the drop; later calls change nothing when the directory is already right.
 func (d *Daemon) stateDir(s *session) (*os.File, error) {
 	st, err := platform.OpenDir(s.prof.Storage.Dir, 0o700)
 	if err != nil {
@@ -310,21 +312,13 @@ func (d *Daemon) stateDir(s *session) (*os.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("storage: %w", err)
 	}
-	if uid, gid := d.stateOwner(); uid >= 0 {
-		if err := platform.SecureDir(dir, uid, gid, 0o700); err != nil {
+	if isRoot() && d.cfg.Operator.GID > 0 {
+		if err := platform.EnsureDir(dir, 0, d.cfg.Operator.GID, 0o2750); err != nil {
 			_ = dir.Close()
 			return nil, fmt.Errorf("storage: %w", err)
 		}
 	}
 	return dir, nil
-}
-
-// stateOwner is the operator when the daemon runs as root (-1, -1 otherwise: keep the owner).
-func (d *Daemon) stateOwner() (int, int) {
-	if os.Geteuid() == 0 && d.cfg.Operator.UID > 0 {
-		return d.cfg.Operator.UID, d.cfg.Operator.GID
-	}
-	return -1, -1
 }
 
 // stEgress is the egress interface the traffic cases use: the first one with a capture.
@@ -749,8 +743,7 @@ func (d *Daemon) replaceFile(s *session, content string) error {
 		return err
 	}
 	defer func() { _ = dir.Close() }()
-	uid, gid := d.stateOwner()
-	return platform.WriteFileAt(dir, selftestDNSName, []byte(content), 0o600, uid, gid)
+	return platform.WriteFileAt(dir, selftestDNSName, []byte(content), 0o640, -1, -1)
 }
 
 // stunBinding is a STUN Binding Request (RFC 5389): type 1, no attributes, magic cookie.
