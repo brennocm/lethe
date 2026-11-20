@@ -50,10 +50,7 @@ if [[ $gui == 1 ]]; then
   arch=$(go env GOARCH)
   export ARCH=$arch
   DIST=$out/linux_$arch
-  (cd apps/lethe-gui && CGO_ENABLED=1 go build -buildvcs=true -# nfpm does not expand variables in contents: the binary being packaged sits at dist/stage/
-stage() { rm -rf dist/stage && mkdir -p dist/stage && cp "$1" dist/stage/; }
-trap 'rm -rf dist/stage' EXIT
-ldflags="-s -w -buildid=" -o "../../$DIST/lethe-gui" .)
+  (cd apps/lethe-gui && CGO_ENABLED=1 go build -buildvcs=true -ldflags="$ldflags" -o "../../$DIST/lethe-gui" .)
   stage "$DIST/lethe-gui"
   for fmt in deb rpm; do
     nfpm package --config packaging/nfpm-gui.yaml --packager $fmt --target "$out/" >/dev/null
