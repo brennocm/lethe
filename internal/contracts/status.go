@@ -108,7 +108,7 @@ const (
 
 // String is the human form used on the terminal and in error messages.
 func (l Lockdown) String() string {
-	return fmt.Sprintf("%s\n  por quê: %s\n  como sair: %s", l.What, l.Why, l.Exit)
+	return fmt.Sprintf("%s\n  why: %s\n  how to get out: %s", l.What, l.Why, l.Exit)
 }
 
 // QueryParams filters events.query and events.subscribe.

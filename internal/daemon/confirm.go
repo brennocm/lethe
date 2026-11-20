@@ -61,11 +61,11 @@ func missingProof(now discovery.Snapshot, window time.Duration) string {
 	}
 	switch {
 	case now.Tor != nil && !wg:
-		return fmt.Sprintf("o tor não estabeleceu um circuito em %s; confira o bootstrap do tor e arme de novo", window)
+		return fmt.Sprintf("tor did not build a circuit in %s; check tor's bootstrap and arm again", window)
 	case wg:
-		return fmt.Sprintf("nenhum handshake WireGuard nem tráfego recebido pelo túnel em %s; abra uma página ou ative o PersistentKeepalive e arme de novo", window)
+		return fmt.Sprintf("no WireGuard handshake and no traffic received through the tunnel in %s; open a web page or enable PersistentKeepalive and arm again", window)
 	}
-	return fmt.Sprintf("nenhum tráfego recebido pelo túnel em %s; abra uma página ou ative o keepalive do cliente VPN e arme de novo", window)
+	return fmt.Sprintf("no traffic received through the tunnel in %s; open a web page or enable the VPN client's keepalive and arm again", window)
 }
 
 // confirmArm waits for the proof without holding d.mu (sensors and IPC keep working, the session

@@ -76,7 +76,7 @@ storage:
   journald: minimal              # minimal | none
 
 ui:
-  language: pt-BR                # pt-BR | en-US
+  language: en-US                # en-US | pt-BR
   fullscreen_alerts: true
   sound: true
   sound_repeat: 10s

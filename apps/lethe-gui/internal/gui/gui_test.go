@@ -621,7 +621,7 @@ func TestM10_FirstUseKeepsAnExistingBaseline(t *testing.T) {
 	test.Type(f.pass2, "new passphrase")
 	test.Tap(f.createBtn)
 	u.wg.Wait()
-	if lsetup.Exists(dir) || !strings.Contains(u.flash.Text, "não a abre") {
+	if lsetup.Exists(dir) || !strings.Contains(u.flash.Text, "does not open it") {
 		t.Fatalf("a passphrase that does not open the baseline: %q", u.flash.Text)
 	}
 	test.Type(f.pass1, "old passphrase")

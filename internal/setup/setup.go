@@ -57,7 +57,7 @@ func Paths(dir string) (prof, base, data string) {
 var (
 	countryRe = regexp.MustCompile(`^[A-Z]{2}$`)
 	// ErrBaselineExists: a baseline is already there and the passphrase given does not open it.
-	ErrBaselineExists = errors.New("já existe uma baseline e esta passphrase não a abre; use a passphrase dela, ou mova o arquivo para criar outra")
+	ErrBaselineExists = errors.New("a baseline already exists and this passphrase does not open it; use its passphrase, or move the file away to create another")
 	// ErrPassphrase is an empty passphrase or one that differs from its confirmation.
 	ErrPassphrase = errors.New("the passphrase is empty or the two entries differ")
 )
@@ -65,10 +65,10 @@ var (
 // Validate checks the answers; the messages name the field in the operator's words.
 func (a *Answers) Validate() error {
 	a.Country = strings.ToUpper(strings.TrimSpace(a.Country))
-	for name, v := range map[string]string{"identificador da operação": a.OpID, "persona": a.Persona, "fuso": a.Timezone,
-		"idioma": a.Locale, "teclado": a.Keyboard} {
+	for name, v := range map[string]string{"operation ID": a.OpID, "persona": a.Persona, "time zone": a.Timezone,
+		"locale": a.Locale, "keyboard": a.Keyboard} {
 		if strings.TrimSpace(v) == "" || strings.ContainsAny(v, "\n\r\"\\") || len(v) > 128 {
-			return fmt.Errorf("%s: vazio, longo demais ou com caracteres inválidos", name)
+			return fmt.Errorf("%s: empty, too long or with invalid characters", name)
 		}
 	}
 	ok := false
@@ -76,13 +76,13 @@ func (a *Answers) Validate() error {
 		ok = ok || a.Egress == e
 	}
 	if !ok {
-		return fmt.Errorf("tipo de saída %q desconhecido", a.Egress)
+		return fmt.Errorf("unknown egress type %q", a.Egress)
 	}
 	if !countryRe.MatchString(a.Country) {
-		return fmt.Errorf("país %q: use o código de duas letras (ISO 3166-1), ex.: NL", a.Country)
+		return fmt.Errorf("country %q: use the two-letter code (ISO 3166-1), e.g. NL", a.Country)
 	}
 	if _, err := time.LoadLocation(a.Timezone); err != nil {
-		return fmt.Errorf("fuso %q não existe neste sistema", a.Timezone)
+		return fmt.Errorf("time zone %q does not exist on this system", a.Timezone)
 	}
 	return nil
 }
@@ -120,7 +120,7 @@ func Create(a Answers, home string, pass []byte, now time.Time, version string) 
 			return "", ErrPassphrase
 		}
 		if n := strings.TrimSpace(a.Network.Name); n == "" || len(n) > 128 {
-			return "", errors.New("nome da rede: diga como você chama a rede real (ex.: casa)")
+			return "", errors.New("network name: say what you call the real network (e.g. home)")
 		}
 		b, err := baseline.New(now, version)
 		if err != nil {
@@ -307,7 +307,7 @@ func LiveDetect(ctx context.Context, askIP bool) Detected {
 }
 
 // ErrNetworkKnown: the baseline already has a network with this name or public IP.
-var ErrNetworkKnown = errors.New("a baseline já tem uma rede com esse nome ou esse IP público")
+var ErrNetworkKnown = errors.New("the baseline already has a network with this name or this public IP")
 
 // AddNetwork opens the baseline at path with pass, adds n and writes it back in place (atomic:
 // a new file, synced, renamed over the old one). It returns how many networks it now has. The
@@ -323,7 +323,7 @@ func AddNetwork(path string, pass []byte, n baseline.Network, work int) (int, er
 	}
 	n.Name = strings.TrimSpace(n.Name)
 	if n.Name == "" {
-		return 0, errors.New("nome da rede: diga como você chama esta rede (ex.: escritório)")
+		return 0, errors.New("network name: say what you call this network (e.g. office)")
 	}
 	for _, o := range b.Networks {
 		if strings.EqualFold(o.Name, n.Name) || (n.PublicIPv4 != "" && o.PublicIPv4 == n.PublicIPv4) || (n.PublicIPv6 != "" && o.PublicIPv6 == n.PublicIPv6) {

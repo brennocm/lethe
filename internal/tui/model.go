@@ -384,7 +384,7 @@ func (m *Model) doPanic() tea.Cmd {
 	lang := m.opt.Lang
 	return func() tea.Msg {
 		if err := m.be.Panic(); err != nil {
-			return flashMsg("pânico: " + err.Error())
+			return flashMsg("panic: " + err.Error())
 		}
 		return flashMsg(i18n.UI(lang, "panic_ok"))
 	}

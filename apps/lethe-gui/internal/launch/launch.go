@@ -20,7 +20,7 @@ import (
 func Setup(a fyne.App, args []string) (*gui.UI, error) {
 	fs := flag.NewFlagSet("lethe-gui", flag.ContinueOnError)
 	sock := fs.String("socket", "", "daemon socket (default: the portable daemon's, then the service's)")
-	lang := fs.String("lang", os.Getenv("LETHE_LANG"), "pt-BR or en-US")
+	lang := fs.String("lang", os.Getenv("LETHE_LANG"), "en-US (default) or pt-BR")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}

@@ -107,7 +107,7 @@ func TestNET011_BaselineCreateOnline(t *testing.T) {
 	onlineNetwork = func(context.Context, io.Writer, bool) (baseline.Network, error) {
 		return baseline.Network{}, ErrTunnelUp
 	}
-	if code, _, errs := runIn(t, "", nil, "baseline", "create", "--out", filepath.Join(t.TempDir(), "c.age")); code == ExitOK || !strings.Contains(errs, "túnel") {
+	if code, _, errs := runIn(t, "", nil, "baseline", "create", "--out", filepath.Join(t.TempDir(), "c.age")); code == ExitOK || !strings.Contains(errs, "tunnel") {
 		t.Fatalf("%d %s", code, errs)
 	}
 }

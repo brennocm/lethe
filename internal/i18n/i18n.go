@@ -18,10 +18,10 @@ import (
 var files embed.FS
 
 // Langs are the shipped languages; Default is used for anything else.
-var Langs = []string{"pt-BR", "en-US"}
+var Langs = []string{"en-US", "pt-BR"}
 
 // Default language.
-const Default = "pt-BR"
+const Default = "en-US"
 
 // Table is one language: section → key → text.
 type Table map[string]map[string]string
@@ -57,13 +57,13 @@ func Tables() (map[string]Table, error) {
 // Norm maps a ui.language value to a shipped language.
 func Norm(lang string) string {
 	switch strings.ToLower(lang) {
-	case "en", "en-us", "en_us":
-		return "en-US"
+	case "pt", "pt-br", "pt_br":
+		return "pt-BR"
 	}
 	return Default
 }
 
-// Text is section.key in lang, falling back to pt-BR and then to the key itself.
+// Text is section.key in lang, falling back to en-US and then to the key itself.
 func Text(lang, section, key string) string {
 	once.Do(load)
 	for _, l := range []string{Norm(lang), Default} {

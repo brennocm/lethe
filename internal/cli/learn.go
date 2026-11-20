@@ -74,17 +74,17 @@ func joinHostPort(host string, port int) string {
 // printCandidates shows the list the operator chooses from.
 func printCandidates(w io.Writer, cs []candidate) {
 	if len(cs) == 0 {
-		_, _ = fmt.Fprintln(w, "Nenhum destino saiu pela interface de saída nesses 10 s.")
-		_, _ = fmt.Fprintln(w, "Conecte (ou reconecte) a VPN e rode de novo, ou declare o endpoint em egress.endpoints.")
+		_, _ = fmt.Fprintln(w, "No destination left through the egress interface in these 10 s.")
+		_, _ = fmt.Fprintln(w, "Connect (or reconnect) the VPN and run again, or declare the endpoint in egress.endpoints.")
 		return
 	}
-	_, _ = fmt.Fprintln(w, "Destinos vistos saindo pela interface de saída:")
+	_, _ = fmt.Fprintln(w, "Destinations seen leaving through the egress interface:")
 	for i, c := range cs {
-		who := "processo desconhecido"
+		who := "unknown process"
 		if c.Exe != "" {
 			who = filepath.Base(c.Exe) + " (" + platform.TermSafe(c.Exe) + ")"
 			if discovery.IsVPNClient(c.Exe) {
-				who += "  ← cliente VPN"
+				who += "  ← VPN client"
 			}
 		}
 		_, _ = fmt.Fprintf(w, "  %d) %-28s %s  ×%d\n", i+1, c.Endpoint, who, c.Count)
@@ -93,7 +93,7 @@ func printCandidates(w io.Writer, cs []candidate) {
 
 // chooseCandidate reads the operator's choice: a number from the list, or empty for none.
 func chooseCandidate(r *bufio.Reader, w io.Writer, cs []candidate) (string, bool, error) {
-	_, _ = fmt.Fprint(w, "Qual destes é o endpoint do túnel? (número; Enter = nenhum): ")
+	_, _ = fmt.Fprint(w, "Which of these is the tunnel endpoint? (number; Enter = none): ")
 	line, err := r.ReadString('\n')
 	if err != nil && line == "" {
 		return "", false, nil
@@ -104,7 +104,7 @@ func chooseCandidate(r *bufio.Reader, w io.Writer, cs []candidate) (string, bool
 	}
 	n, err := strconv.Atoi(line)
 	if err != nil || n < 1 || n > len(cs) {
-		return "", false, fmt.Errorf("escolha inválida %q", line)
+		return "", false, fmt.Errorf("invalid choice %q", line)
 	}
 	return cs[n-1].Endpoint, true, nil
 }
@@ -122,12 +122,12 @@ func runLearn(in io.Reader, out io.Writer, src *passphraseSource) error {
 		return rpcErr(err)
 	}
 	if st.State != "ARMED" {
-		return fmt.Errorf("--learn observa uma sessão armada (estado atual: %s); arme com lethe run ou lethe arm", st.State)
+		return fmt.Errorf("--learn watches an armed session (current state: %s); arm with lethe run or lethe arm", st.State)
 	}
 	if err := c.Call("events.subscribe", daemon.QueryParams{}, nil, nil); err != nil {
 		return rpcErr(err)
 	}
-	_, _ = fmt.Fprintf(out, "Observando a interface de saída por %d s...\n", int(learnWindow/time.Second))
+	_, _ = fmt.Fprintf(out, "Watching the egress interface for %d s...\n", int(learnWindow/time.Second))
 	var evs []contracts.Event
 	deadline := time.Now().Add(learnWindow)
 	_ = c.SetDeadline(deadline)
@@ -164,6 +164,6 @@ func runLearn(in io.Reader, out io.Writer, src *passphraseSource) error {
 	if err := c2.Call("discovery.confirm_endpoint", params, proof, nil); err != nil {
 		return rpcErr(err)
 	}
-	_, _ = fmt.Fprintf(out, "Endpoint %s confirmado e liberado nesta sessão.\n", ep)
+	_, _ = fmt.Fprintf(out, "Endpoint %s confirmed and allowed in this session.\n", ep)
 	return nil
 }

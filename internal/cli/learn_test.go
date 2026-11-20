@@ -33,7 +33,7 @@ func TestDiscover_LearnGroupsDestinations(t *testing.T) {
 	}
 	var out bytes.Buffer
 	printCandidates(&out, cs)
-	if !strings.Contains(out.String(), "cliente VPN") || !strings.Contains(out.String(), "processo desconhecido") {
+	if !strings.Contains(out.String(), "VPN client") || !strings.Contains(out.String(), "unknown process") {
 		t.Fatal(out.String())
 	}
 	for in, want := range map[string]string{"1\n": "198.51.100.20:1194/udp", "\n": "", "": ""} {

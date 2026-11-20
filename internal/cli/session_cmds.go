@@ -112,7 +112,7 @@ func prove(c *ipc.Client, src *passphraseSource, method string, params any) (*ip
 	if len(st.AuthSalt) == 0 {
 		return nil, errors.New("no armed session")
 	}
-	pw, err := src.read("Passphrase da baseline: ", false)
+	pw, err := src.read("Baseline passphrase: ", false)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func askManual(in io.Reader, out io.Writer) ([]preflight.Answer, error) {
 	pr := &prompter{in: bufio.NewReader(in), out: out}
 	var ans []preflight.Answer
 	for _, it := range preflight.Manual {
-		a, err := pr.ask(fmt.Sprintf("[%s] %s? [s/N] ", it.ID, it.Text))
+		a, err := pr.ask(fmt.Sprintf("[%s] %s? [y/N] ", it.ID, it.Text))
 		if err != nil {
 			return nil, err
 		}
@@ -156,7 +156,7 @@ type armFlags struct {
 // confirming tells the operator why the arm takes a while (spec §10.6 item 2).
 func (f *armFlags) confirming(w io.Writer) {
 	if f.window > 0 {
-		_, _ = fmt.Fprintf(w, "Guarda estrito: aguardando até %s o túnel provar que passa tráfego (abra uma página para acelerar)...\n", f.window)
+		_, _ = fmt.Fprintf(w, "Strict guard: waiting up to %s for the tunnel to prove it carries traffic (open a web page to speed it up)...\n", f.window)
 	}
 }
 
@@ -167,7 +167,7 @@ func armFailed(w io.Writer, rep preflight.Report, err error) error {
 		printPreflight(w, rep)
 	}
 	if exitCode(err) == ExitArmUnconfirmed {
-		_, _ = fmt.Fprintln(w, "lethe: o bloqueio foi desfeito e a rede está como antes do arm; nada da operação começou")
+		_, _ = fmt.Fprintln(w, "lethe: the block was undone and the network is as it was before arm; nothing of the operation started")
 	}
 	return err
 }
@@ -210,15 +210,15 @@ func (f *armFlags) request(cmd *cobra.Command, op platform.Operator) (daemon.Arm
 			return req, err
 		}
 	}
-	if req.Passphrase, err = f.secret.source(cmd).read("Passphrase da baseline: ", false); err != nil {
+	if req.Passphrase, err = f.secret.source(cmd).read("Baseline passphrase: ", false); err != nil {
 		return req, err
 	}
 	return req, nil
 }
 
 func printArmed(w io.Writer, res daemon.ArmResult) {
-	_, _ = fmt.Fprintf(w, "ARMADO  sessão %s  guarda %s  preflight %s\n", res.Session, res.Guard, res.Preflight.Result)
-	_, _ = fmt.Fprintf(w, "Impressão digital da chave de sessão (anote FORA desta máquina):\n  %s\n", res.Fingerprint)
+	_, _ = fmt.Fprintf(w, "ARMED  session %s  guard %s  preflight %s\n", res.Session, res.Guard, res.Preflight.Result)
+	_, _ = fmt.Fprintf(w, "Session key fingerprint (write it down OFF this machine):\n  %s\n", res.Fingerprint)
 }
 
 func newRunCmd() *cobra.Command {
@@ -283,12 +283,12 @@ func newRunCmd() *cobra.Command {
 				}
 			}
 			if waitSignal {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Ctrl-C desarma. Em PÂNICO, use `lethe unpanic` antes.")
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Ctrl-C disarms. In PANIC, use `lethe unpanic` first.")
 				<-ctx.Done()
 			}
 			st := d.Status()
 			if st.State == "PANIC" {
-				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "lethe: sessão encerrada em PÂNICO: o bloqueio fica ativo de propósito.\n  como sair: sudo lethe cleanup (remove só as tabelas lethe*), ou reinicie a máquina")
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "lethe: session ended in PANIC: the block stays on purpose.\n  how to get out: sudo lethe cleanup (removes only the lethe* tables), or reboot the machine")
 			}
 			var dr daemon.DisarmResult
 			if st.State == "ARMED" {
@@ -498,7 +498,7 @@ func newDisarmCmd() *cobra.Command {
 			if err := json.Unmarshal(raw, &r); err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(w, "DESARMADO  sessão %s  (%s)\n", r.Session, r.Dir)
+			_, _ = fmt.Fprintf(w, "DISARMED  session %s  (%s)\n", r.Session, r.Dir)
 			if r.Critical > 0 {
 				return WithCode(ExitSessionCritical, fmt.Errorf("session ended with %d CRITICAL alert(s)", r.Critical))
 			}
@@ -509,7 +509,7 @@ func newDisarmCmd() *cobra.Command {
 func newUnpanicCmd() *cobra.Command {
 	return sensitiveCmd("unpanic", "Leave PANIC (all CRITICAL acknowledged, state re-check, passphrase)", "panic.release",
 		func(w io.Writer, _ json.RawMessage) error {
-			_, _ = fmt.Fprintln(w, "PÂNICO liberado: sessão ARMADA")
+			_, _ = fmt.Fprintln(w, "PANIC released: session ARMED")
 			return nil
 		})
 }
@@ -526,7 +526,7 @@ func newPanicCmd() *cobra.Command {
 			if err := c.Call("panic.engage", nil, nil, nil); err != nil {
 				return rpcErr(err)
 			}
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "PÂNICO: rede bloqueada")
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "PANIC: network blocked")
 			return nil
 		},
 	}
@@ -562,7 +562,7 @@ func newAckCmd() *cobra.Command {
 			if err := c.Call("alert.ack", params, proof, nil); err != nil {
 				return rpcErr(err)
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s reconhecido\n", args[0])
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s acknowledged\n", args[0])
 			return nil
 		},
 	}
@@ -630,17 +630,17 @@ func statusNoDaemon(w io.Writer, asJSON bool, cause error) error {
 	switch {
 	case !isRoot():
 		st.Degraded = append(st.Degraded, "leftover_tables_unchecked")
-		note = "sem root não dá para ver se sobraram tabelas lethe* bloqueando a rede; sudo lethe status verifica"
+		note = "without root lethe cannot see whether leftover lethe* tables are blocking the network; sudo lethe status checks"
 	default:
 		tables, err := leftoverTables()
 		if err != nil {
 			st.Degraded = append(st.Degraded, "leftover_tables_unchecked")
-			note = fmt.Sprintf("não deu para listar as tabelas nftables: %v", err)
+			note = fmt.Sprintf("could not list the nftables tables: %v", err)
 			break
 		}
 		st.Lockdown = daemon.LeftoverLockdown(tables, false)
 		if st.Lockdown == nil {
-			note = "nenhuma tabela lethe* encontrada: o lethe não está bloqueando a rede"
+			note = "no lethe* table found: lethe is not blocking the network"
 		}
 	}
 	if err := writeStatus(w, st, asJSON); err != nil {
@@ -654,28 +654,28 @@ func statusNoDaemon(w io.Writer, asJSON bool, cause error) error {
 
 func printStatus(w io.Writer, st daemon.Status) error {
 	if st.State == "NO_DAEMON" {
-		_, _ = fmt.Fprintln(w, "nenhum daemon do lethe rodando")
+		_, _ = fmt.Fprintln(w, "no lethe daemon running")
 		if st.Lockdown != nil {
-			_, _ = fmt.Fprintf(w, "BLOQUEIO: %s\n", st.Lockdown)
+			_, _ = fmt.Fprintf(w, "BLOCKED: %s\n", st.Lockdown)
 		}
 		return nil
 	}
-	_, _ = fmt.Fprintf(w, "estado %s  cor %s", st.State, st.Color)
+	_, _ = fmt.Fprintf(w, "state %s  color %s", st.State, st.Color)
 	if st.Session != "" {
-		_, _ = fmt.Fprintf(w, "  sessão %s  guarda %s  impressão %s", st.Session, st.Guard, st.Fingerprint)
+		_, _ = fmt.Fprintf(w, "  session %s  guard %s  fingerprint %s", st.Session, st.Guard, st.Fingerprint)
 	}
 	_, _ = fmt.Fprintln(w)
 	if st.Confirming {
-		_, _ = fmt.Fprintln(w, "arm em confirmação: o túnel ainda não provou que passa tráfego")
+		_, _ = fmt.Fprintln(w, "arm confirming: the tunnel has not yet proved it carries traffic")
 	}
 	if st.Lockdown != nil {
-		_, _ = fmt.Fprintf(w, "BLOQUEIO: %s\n", st.Lockdown)
+		_, _ = fmt.Fprintf(w, "BLOCKED: %s\n", st.Lockdown)
 	}
 	if len(st.Degraded) > 0 {
-		_, _ = fmt.Fprintf(w, "visibilidade degradada: %s\n", strings.Join(st.Degraded, ", "))
+		_, _ = fmt.Fprintf(w, "degraded visibility: %s\n", strings.Join(st.Degraded, ", "))
 	}
 	tw := tabwriter.NewWriter(w, 0, 2, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "ALERTA\tCHECK\tSEVERIDADE\tESTADO\tCONTAGEM\tÚLTIMO")
+	_, _ = fmt.Fprintln(tw, "ALERT\tCHECK\tSEVERITY\tSTATE\tCOUNT\tLAST")
 	for _, a := range st.Alerts {
 		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%s\n", a.ID, a.Check, a.Severity, a.State, a.Count, a.LastSeen.Format(time.RFC3339))
 	}
@@ -827,7 +827,7 @@ func printPreflight(w io.Writer, r preflight.Report) {
 	for _, m := range r.Manual {
 		st := "OK"
 		if !m.OK {
-			st = "NÃO"
+			st = "NO"
 		}
 		_, _ = fmt.Fprintf(w, "%-8s %s\n", m.ID, st)
 	}
@@ -835,7 +835,7 @@ func printPreflight(w io.Writer, r preflight.Report) {
 		_, _ = fmt.Fprintf(w, "WARN     %s\n", x)
 	}
 	if r.ManualSkipped {
-		_, _ = fmt.Fprintln(w, "WARN     checklist manual não respondido (--no-manual)")
+		_, _ = fmt.Fprintln(w, "WARN     manual checklist not answered (--no-manual)")
 	}
 	_, _ = fmt.Fprintf(w, "preflight: %s\n", r.Result)
 }
@@ -869,11 +869,11 @@ func guiPath(op platform.Operator, off bool, w io.Writer) string {
 	}
 	p := filepath.Join(filepath.Dir(exe), "lethe-gui")
 	if _, err := os.Stat(p); err != nil {
-		_, _ = fmt.Fprintln(w, "lethe: sem lethe-gui ao lado do binário: alertas pelas notificações e pelo terminal (ou use --tui)")
+		_, _ = fmt.Fprintln(w, "lethe: no lethe-gui next to the binary: alerts through notifications and the terminal (or use --tui)")
 		return ""
 	}
 	if err := agent.CheckGUIBinary(p, op.UID); err != nil {
-		_, _ = fmt.Fprintf(w, "lethe: GUI não aberta: %v\n", err)
+		_, _ = fmt.Fprintf(w, "lethe: GUI not opened: %v\n", err)
 		return ""
 	}
 	return p

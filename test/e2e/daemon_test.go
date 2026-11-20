@@ -485,7 +485,7 @@ func TestE2E_M7_RunCLI(t *testing.T) {
 	if err := hardened(cmd.Process.Pid); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "Impressão digital") {
+	if !strings.Contains(out.String(), "Session key fingerprint") {
 		t.Fatalf("fingerprint not shown:\n%s", out.String())
 	}
 	_ = cmd.Process.Signal(os.Interrupt)

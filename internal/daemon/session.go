@@ -129,7 +129,7 @@ func (d *Daemon) armLocked(req ArmRequest) (ArmResult, preflight.Report, error) 
 	}
 	if left := d.leftoverLocked(); len(left) > 0 {
 		// a session over a block it does not own would say "protection off" with the network dead
-		return ArmResult{}, rep, errState(fmt.Errorf("a rede está bloqueada por tabelas que sobraram de uma sessão anterior (%s): libere a rede primeiro (Liberar a rede no painel, ou sudo lethe cleanup)", strings.Join(left, ", ")))
+		return ArmResult{}, rep, errState(fmt.Errorf("the network is blocked by tables left over from a previous session (%s): release the network first (Release the network in the panel, or sudo lethe cleanup)", strings.Join(left, ", ")))
 	}
 	prof, warns, err := profile.Parse(req.Profile, d.cfg.Operator.Home)
 	if err != nil {
@@ -731,7 +731,7 @@ func (d *Daemon) Unpanic() (map[string]any, error) {
 func (d *Daemon) restoreLinksLocked() []any {
 	up, err := response.LinkStore{Dir: d.cfg.LinkDir}.Restore(response.NetlinkLinkUp)
 	if err != nil {
-		_, _ = fmt.Fprintf(d.cfg.Out, "lethe: interfaces derrubadas pelo pânico não voltaram: %v\n  como sair: sudo lethe cleanup (tenta de novo), ou religue-as no gerenciador de rede\n", err)
+		_, _ = fmt.Fprintf(d.cfg.Out, "lethe: interfaces taken down by the panic did not come back: %v\n  how to get out: sudo lethe cleanup (tries again), or bring them up in the network manager\n", err)
 	}
 	out := make([]any, 0, len(up))
 	for _, l := range up {
@@ -808,7 +808,7 @@ func (d *Daemon) authFailures() {
 	if s.guardMode == engine.GuardOff {
 		locked = ipc.FailWindow
 		s.auth.LockFor(locked)
-		_, _ = fmt.Fprintf(d.cfg.Out, "lethe: 5 passphrases erradas: ações sensíveis travadas por %s (a rede não foi bloqueada)\n", locked)
+		_, _ = fmt.Fprintf(d.cfg.Out, "lethe: 5 wrong passphrases: sensitive actions locked for %s (the network was not blocked)\n", locked)
 	}
 	d.findingLocked(checks.SELF006{}.Finding(ipc.FailLimit, ipc.FailWindow.Seconds(), locked.Seconds()))
 }

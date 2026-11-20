@@ -74,7 +74,7 @@ func newSetupCmd() *cobra.Command {
 			w := &wizard{
 				pr:  &prompter{in: bufio.NewReader(cmd.InOrStdin()), out: cmd.OutOrStdout()},
 				out: cmd.OutOrStdout(), dir: dir, home: op.Home, env: liveSetupEnv(),
-				pass: func() ([]byte, error) { return sec.source(cmd).read("Passphrase da baseline (nova): ", true) },
+				pass: func() ([]byte, error) { return sec.source(cmd).read("Baseline passphrase (new): ", true) },
 				work: sec.workFactor,
 			}
 			return w.run()
@@ -110,13 +110,13 @@ func (w *wizard) askDefault(q, def string) (string, error) {
 		v = def
 	}
 	if strings.ContainsAny(v, "\n\r\"\\") || len(v) > 128 {
-		return "", fmt.Errorf("resposta inválida para %q", q)
+		return "", fmt.Errorf("invalid answer to %q", q)
 	}
 	return v, nil
 }
 
 func (w *wizard) yes(q string) (bool, error) {
-	v, err := w.pr.ask(q + " [s/N] ")
+	v, err := w.pr.ask(q + " [y/N] ")
 	if err != nil {
 		return false, err
 	}
@@ -134,70 +134,70 @@ func (w *wizard) paths() (prof, base, data string) {
 func (w *wizard) run() error {
 	profPath, basePath, dataDir := w.paths()
 	if _, err := os.Stat(profPath); err == nil {
-		w.say("Perfil já existe em %s.\n", profPath)
+		w.say("Profile already exists at %s.\n", profPath)
 		return w.offerStrict(profPath, dataDir)
 	}
 	if err := os.MkdirAll(w.dir, 0o700); err != nil {
 		return err
 	}
-	w.say("lethe setup: perfil e baseline em %s. Enter aceita o valor entre colchetes.\n\n", w.dir)
+	w.say("lethe setup: profile and baseline in %s. Enter accepts the value in brackets.\n\n", w.dir)
 
 	snap := w.env.discover(nil)
 	kind := setup.SuggestEgress(snap)
-	w.say("Descoberta: %s.\n", describeSnap(snap))
+	w.say("Discovered: %s.\n", describeSnap(snap))
 	facts := w.env.host()
 
-	opID, err := w.askDefault("Identificador da operação", "OP-0000-000")
+	opID, err := w.askDefault("Operation ID", "OP-0000-000")
 	if err != nil {
 		return err
 	}
-	persona, err := w.askDefault("Nome da persona", "persona")
+	persona, err := w.askDefault("Persona name", "persona")
 	if err != nil {
 		return err
 	}
-	egress, err := w.askDefault("Tipo de saída (wireguard, openvpn, tor, vpn+tor, auto)", kind)
+	egress, err := w.askDefault("Egress type (wireguard, openvpn, tor, vpn+tor, auto)", kind)
 	if err != nil {
 		return err
 	}
 	if !map[string]bool{"wireguard": true, "openvpn": true, "tor": true, "vpn+tor": true, "auto": true}[egress] {
-		return fmt.Errorf("tipo de saída %q desconhecido", egress)
+		return fmt.Errorf("unknown egress type %q", egress)
 	}
-	country, err := w.askDefault("País esperado do IP de saída (duas letras, ex.: NL)", "NL")
+	country, err := w.askDefault("Expected country of the exit IP (two letters, e.g. NL)", "NL")
 	if err != nil {
 		return err
 	}
 	country = strings.ToUpper(country)
 	if !regexp.MustCompile(`^[A-Z]{2}$`).MatchString(country) {
-		return fmt.Errorf("país %q: use o código de duas letras (ISO 3166-1)", country)
+		return fmt.Errorf("country %q: use the two-letter code (ISO 3166-1)", country)
 	}
-	w.say("A persona deve parecer de lá: fuso, idioma e teclado que o alvo esperaria ver.\n")
-	tz, err := w.askDefault("Fuso horário da persona", "UTC")
+	w.say("The persona should look like it is from there: the time zone, locale and keyboard the target would expect.\n")
+	tz, err := w.askDefault("Persona time zone", "UTC")
 	if err != nil {
 		return err
 	}
 	if _, err := time.LoadLocation(tz); err != nil {
-		w.say("aviso: o fuso %q não existe neste sistema; confira antes de armar.\n", tz)
+		w.say("warning: time zone %q does not exist on this system; check it before arming.\n", tz)
 	}
-	loc, err := w.askDefault("Idioma (locale) da persona", "en_US.UTF-8")
+	loc, err := w.askDefault("Persona locale", "en_US.UTF-8")
 	if err != nil {
 		return err
 	}
-	kb, err := w.askDefault("Layout de teclado da persona", "us")
+	kb, err := w.askDefault("Persona keyboard layout", "us")
 	if err != nil {
 		return err
 	}
 	if facts.Timezone != "" && facts.Timezone != tz {
-		w.say("Nota: o sistema está em %s; o HOST-005 vai avisar até você ajustar o fuso.\n", facts.Timezone)
+		w.say("Note: the system is on %s; HOST-005 will warn until you change the time zone.\n", facts.Timezone)
 	}
 
 	ans := setup.Answers{Dir: w.dir, OpID: opID, Persona: persona, Egress: egress, Country: country,
 		Timezone: tz, Locale: loc, Keyboard: kb, WorkLimit: w.work}
 	var pw []byte
 	if _, err := os.Stat(basePath); err == nil {
-		w.say("Usando a baseline que já existe em %s.\n", basePath)
+		w.say("Using the existing baseline at %s.\n", basePath)
 	} else {
-		w.say("\nBaseline: os dados reais desta máquina e das suas redes, cifrados. Responda SEM o túnel ligado,\n" +
-			"numa rede conhecida. Os valores nunca aparecem nos logs, só o nome do campo que casou.\n")
+		w.say("\nBaseline: the real data of this machine and your networks, encrypted. Answer WITHOUT the tunnel up,\n" +
+			"on a known network. The values never appear in logs, only the name of the field that matched.\n")
 		// gateway and resolvers as read from this machine; Enter keeps them
 		if ans.Network, err = askNetworkWith(w.pr, setup.Detect(context.Background(), snap, nil).Network); err != nil {
 			return err
@@ -211,9 +211,9 @@ func (w *wizard) run() error {
 		return err
 	}
 	if _, err := os.Stat(basePath); err == nil {
-		w.say("Baseline gravada em %s. Guarde a passphrase: sem ela não há arm nem relatório.\n", basePath)
+		w.say("Baseline written to %s. Keep the passphrase: without it there is no arm and no report.\n", basePath)
 	}
-	w.say("\nPerfil gravado em %s com o guarda em off (só observa; nada é bloqueado).\n", profPath)
+	w.say("\nProfile written to %s with the guard off (observe only; nothing is blocked).\n", profPath)
 	return w.offerStrict(profPath, dataDir)
 }
 
@@ -225,11 +225,11 @@ func (w *wizard) selftestOK(dataDir string) (bool, string) {
 	}
 	ok, why := contracts.SelftestApproval(raw, w.env.now())
 	return ok, map[string]string{
-		contracts.SelftestNone:       "nenhum selftest rodou nesta máquina",
-		contracts.SelftestUnreadable: "o registro do selftest está ilegível",
-		contracts.SelftestFailed:     "o último selftest teve falhas",
-		contracts.SelftestPartial:    "o último selftest não rodou todos os casos",
-		contracts.SelftestStale:      "o último selftest tem mais de 24 h",
+		contracts.SelftestNone:       "no selftest has run on this machine",
+		contracts.SelftestUnreadable: "the selftest record is unreadable",
+		contracts.SelftestFailed:     "the last selftest had failures",
+		contracts.SelftestPartial:    "the last selftest did not run every case",
+		contracts.SelftestStale:      "the last selftest is more than 24 h old",
 	}[why]
 }
 
@@ -241,26 +241,26 @@ func (w *wizard) offerStrict(profPath, dataDir string) error {
 		return err
 	}
 	if regexp.MustCompile(`(?m)^  mode: strict\b`).Match(raw) {
-		w.say("O guarda já está em strict.\n")
+		w.say("The guard is already strict.\n")
 		return nil
 	}
 	if p, _, err := profile.Parse(raw, w.home); err == nil && p.Storage.Dir != "" {
 		dataDir = p.Storage.Dir
 	}
 	if ok, why := w.selftestOK(dataDir); !ok {
-		w.say("\nO strict (recomendado) só é oferecido depois de um selftest aprovado: %s.\n"+
-			"Próximos passos:\n"+
-			"  1. sudo lethe run -p %s       (guarda off: só observa)\n"+
-			"  2. lethe selftest              (em outro terminal)\n"+
-			"  3. lethe setup                 (de novo: oferece o strict)\n", why, profPath)
+		w.say("\nStrict (recommended) is offered only after an approved selftest: %s.\n"+
+			"Next steps:\n"+
+			"  1. sudo lethe run -p %s       (guard off: observe only)\n"+
+			"  2. lethe selftest              (in another terminal)\n"+
+			"  3. lethe setup                 (again: offers strict)\n", why, profPath)
 		return nil
 	}
-	w.say("\nO selftest desta máquina passou. O strict só deixa sair o túnel: é o que impede o vazamento,\n" +
-		"não só o detecta. Se o túnel cair, a rede para até ele voltar (ou até `lethe disarm`).\n")
-	ok, err := w.yes("Passar o perfil para strict?")
+	w.say("\nThis machine's selftest passed. Strict lets only the tunnel out: it prevents the leak,\n" +
+		"not just detects it. If the tunnel goes down, the network stops until it comes back (or until `lethe disarm`).\n")
+	ok, err := w.yes("Switch the profile to strict?")
 	if err != nil || !ok {
 		if err == nil {
-			w.say("O perfil continua em off.\n")
+			w.say("The profile stays off.\n")
 		}
 		return err
 	}
@@ -275,11 +275,11 @@ func (w *wizard) offerStrict(profPath, dataDir string) error {
 	if err := setup.ReplaceFile(profPath, []byte(text)); err != nil {
 		return err
 	}
-	w.say("Perfil em strict. Preflight com o strict (o que vai ser permitido):\n")
+	w.say("Profile is now strict. Preflight under strict (what will be allowed):\n")
 	rep := w.env.preflight(p, w.env.discover(p))
 	printPreflight(w.out, rep)
 	if rep.Result == "FAIL" {
-		w.say("O preflight falharia: resolva os itens FAIL acima antes de armar (o `lethe arm` recusa).\n")
+		w.say("The preflight would fail: fix the FAIL items above before arming (`lethe arm` refuses).\n")
 	}
 	return nil
 }
@@ -287,16 +287,16 @@ func (w *wizard) offerStrict(profPath, dataDir string) error {
 func describeSnap(s discovery.Snapshot) string {
 	var parts []string
 	if len(s.CaptureIfaces) > 0 {
-		parts = append(parts, "saída física "+strings.Join(s.CaptureIfaces, ", "))
+		parts = append(parts, "physical egress "+strings.Join(s.CaptureIfaces, ", "))
 	}
 	for _, t := range s.Tunnels {
-		parts = append(parts, fmt.Sprintf("túnel %s (%s)", t.Iface, t.Kind))
+		parts = append(parts, fmt.Sprintf("tunnel %s (%s)", t.Iface, t.Kind))
 	}
 	if len(s.Tunnels) == 0 {
-		parts = append(parts, "nenhum túnel ligado agora")
+		parts = append(parts, "no tunnel up now")
 	}
 	if len(parts) == 0 {
-		return "nada encontrado"
+		return "nothing found"
 	}
 	return strings.Join(parts, "; ")
 }

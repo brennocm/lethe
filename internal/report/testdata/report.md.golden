@@ -1,58 +1,58 @@
-# Relatório da sessão 5f0c9e2a-7b1d-4c3e-9a8f-2d6b1e0c4a77
+# Session report 5f0c9e2a-7b1d-4c3e-9a8f-2d6b1e0c4a77
 
-| Campo | Valor |
+| Field | Value |
 |---|---|
-| Operação | OP-2026-117 |
+| Operation | OP-2026-117 |
 | Persona | falcao |
-| Operador | agente-07 |
-| Modo do guarda | strict |
-| Hash do perfil | aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa |
-| Hash da baseline | bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb |
-| Início | 2026-11-15 14:00:00Z |
-| Fim | 2026-11-15 14:19:03Z |
-| Duração | 19m3s |
-| Tempo em VERDE | 78.8% |
+| Operator | agente-07 |
+| Guard mode | strict |
+| Profile hash | aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa |
+| Baseline hash | bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb |
+| Start | 2026-11-15 14:00:00Z |
+| End | 2026-11-15 14:19:03Z |
+| Duration | 19m3s |
+| Time in GREEN | 78.8% |
 
-## Avisos
+## Warnings
 
-Nenhum.
+None.
 
-## Linha do tempo
+## Timeline
 
-| Cor | De | Até |
+| Color | From | To |
 |---|---|---|
 | GREEN | 2026-11-15 14:00:01Z | 2026-11-15 14:10:01Z |
 | RED | 2026-11-15 14:10:01Z | 2026-11-15 14:11:03Z |
 | YELLOW | 2026-11-15 14:11:03Z | 2026-11-15 14:14:03Z |
 | GREEN | 2026-11-15 14:14:03Z | 2026-11-15 14:19:03Z |
 
-## Alertas (2)
+## Alerts (2)
 
-| ID | Check | Severidade | Primeiro | Ocorrências | Reconhecido | Motivo | Resolvido | Detalhe |
+| ID | Check | Severity | First | Count | Acknowledged | Reason | Resolved | Detail |
 |---|---|---|---|---|---|---|---|---|
-| A-0001 | DNS-001 | CRITICAL | 2026-11-15 14:10:01Z | 2 | sim | dig manual de teste | sim | dport=53 dst=192.0.2.53 iface=eth0 proc=/usr/bin/dig qname=\[cifrado\] |
-| A-0002 | NET-006 | WARNING | 2026-11-15 14:11:03Z | 1 | não | — | não | iface=usb0 |
+| A-0001 | DNS-001 | CRITICAL | 2026-11-15 14:10:01Z | 2 | yes | dig manual de teste | yes | dport=53 dst=192.0.2.53 iface=eth0 proc=/usr/bin/dig qname=\[cifrado\] |
+| A-0002 | NET-006 | WARNING | 2026-11-15 14:11:03Z | 1 | no | — | no | iface=usb0 |
 
-## Respostas executadas (1)
+## Responses executed (1)
 
-| Quando | Ação | Resultado | Latência (ms) | Alerta |
+| When | Action | Result | Latency (ms) | Alert |
 |---|---|---|---|---|
 | 2026-11-15 14:10:01Z | block\_all | ok | 42 | A-0001 |
 
 ## Preflight
 
-Resultado: **PASS**
+Result: **PASS**
 - no\_personal\_accounts: confirmado
 
-## Integridade
+## Integrity
 
-| Campo | Valor |
+| Field | Value |
 |---|---|
-| Eventos | 17 |
-| Segmentos | 2 |
-| Checkpoints assinados | 4 |
-| Encerrada corretamente | sim |
-| Hash final | `<FINAL_HASH>` |
-| Chave pública | `<PUBKEY>` |
-| Impressão digital | `<FINGERPRINT>` |
-| Âncora conferida | sim |
+| Events | 17 |
+| Segments | 2 |
+| Signed checkpoints | 4 |
+| Ended cleanly | yes |
+| Final hash | `<FINAL_HASH>` |
+| Public key | `<PUBKEY>` |
+| Fingerprint | `<FINGERPRINT>` |
+| Anchor verified | yes |

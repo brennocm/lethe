@@ -232,10 +232,10 @@ func notificationFor(ev contracts.Event, lang string) (Notification, bool) {
 		Sound:    sound,
 	}
 	if n.Critical {
-		if lang == "en-US" {
-			n.Body += "\nCheck the terminal or `lethe status` for what to do."
-		} else {
+		if lang == "pt-BR" {
 			n.Body += "\nVeja no terminal ou em `lethe status` o que fazer."
+		} else {
+			n.Body += "\nCheck the terminal or `lethe status` for what to do."
 		}
 	}
 	return n, true

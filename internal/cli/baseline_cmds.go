@@ -77,7 +77,7 @@ func newBaselineCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pw, err := sec.source(cmd).read("Passphrase da baseline: ", true)
+			pw, err := sec.source(cmd).read("Baseline passphrase: ", true)
 			if err != nil {
 				return WithCode(ExitAuth, err)
 			}
@@ -168,7 +168,7 @@ func newBaselineShowCmd() *cobra.Command {
 			}
 			wipeBytes(pw)
 			b.LogIdentity = "[oculta]"
-			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "ATENÇÃO: os valores abaixo identificam você. Não copie para fora desta máquina.")
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARNING: the values below identify you. Do not copy them off this machine.")
 			enc := json.NewEncoder(cmd.OutOrStdout())
 			enc.SetIndent("", "  ")
 			return enc.Encode(b)
@@ -183,7 +183,7 @@ func openBaseline(cmd *cobra.Command, path string, sec *secretFlags) ([]byte, *b
 	if err != nil {
 		return nil, nil, err
 	}
-	pw, err := sec.source(cmd).read("Passphrase da baseline: ", false)
+	pw, err := sec.source(cmd).read("Baseline passphrase: ", false)
 	if err != nil {
 		return nil, nil, WithCode(ExitAuth, err)
 	}
@@ -220,15 +220,15 @@ func askNetworkWith(pr *prompter, def baseline.Network) (baseline.Network, error
 	if def.ASN != 0 {
 		asnDef = strconv.FormatUint(uint64(def.ASN), 10)
 	}
-	n.Name = q("Nome da rede (ex.: casa): ", def.Name)
-	n.PublicIPv4 = q("IP público IPv4 (vazio se não souber): ", def.PublicIPv4)
-	n.PublicIPv6 = q("IP público IPv6 (vazio se não houver): ", def.PublicIPv6)
-	asn := q("ASN do provedor (só o número, vazio se não souber): ", asnDef)
-	n.Provider = q("Nome do provedor: ", def.Provider)
-	n.Resolvers = splitList(q("Resolvedores DNS do provedor (separados por vírgula): ", strings.Join(def.Resolvers, ",")))
-	n.GatewayIP = q("IP do gateway (roteador): ", def.GatewayIP)
-	n.GatewayMAC = q("MAC do gateway: ", def.GatewayMAC)
-	n.SSIDs = splitList(q("SSIDs desta rede (separados por vírgula): ", strings.Join(def.SSIDs, ",")))
+	n.Name = q("Network name (e.g. home): ", def.Name)
+	n.PublicIPv4 = q("Public IPv4 (empty if unknown): ", def.PublicIPv4)
+	n.PublicIPv6 = q("Public IPv6 (empty if none): ", def.PublicIPv6)
+	asn := q("Provider ASN (number only, empty if unknown): ", asnDef)
+	n.Provider = q("Provider name: ", def.Provider)
+	n.Resolvers = splitList(q("Provider DNS resolvers (comma-separated): ", strings.Join(def.Resolvers, ",")))
+	n.GatewayIP = q("Gateway IP (router): ", def.GatewayIP)
+	n.GatewayMAC = q("Gateway MAC: ", def.GatewayMAC)
+	n.SSIDs = splitList(q("SSIDs of this network (comma-separated): ", strings.Join(def.SSIDs, ",")))
 	if err != nil {
 		return n, err
 	}

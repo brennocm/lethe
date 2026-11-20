@@ -27,11 +27,11 @@ type Item struct {
 
 // Manual is the human checklist of spec §9.8, in order. Each answer goes to the journal.
 var Manual = []Item{
-	{"MAN-1", "Nenhuma conta pessoal logada no navegador ou nos apps desta sessão"},
-	{"MAN-2", "O username da persona não é reutilizado de nenhuma outra identidade"},
-	{"MAN-3", "O celular pessoal não está na mesma rede, ou está em modo avião"},
-	{"MAN-4", "Os arquivos recebidos de alvos serão abertos só em VM offline"},
-	{"MAN-5", "O horário da operação não segue o padrão do expediente pessoal"},
+	{"MAN-1", "No personal account is logged in to the browser or the apps of this session"},
+	{"MAN-2", "The persona's username is not reused from any other identity"},
+	{"MAN-3", "The personal phone is not on the same network, or is in airplane mode"},
+	{"MAN-4", "Files received from targets will be opened only in an offline VM"},
+	{"MAN-5", "The operation's hours do not follow the pattern of your personal working hours"},
 }
 
 // Answer is the operator's reply to one manual item.

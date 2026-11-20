@@ -37,8 +37,8 @@ func newSelftestCmd() *cobra.Command {
 			out := cmd.OutOrStdout()
 			c, err := dialDaemon()
 			if err != nil {
-				return WithCode(ExitDaemonDown, errors.New("o selftest roda dentro de uma sessão armada e não há daemon: "+
-					"em outro terminal rode `sudo lethe run -p PERFIL --guard off` e depois `lethe selftest`"))
+				return WithCode(ExitDaemonDown, errors.New("the selftest runs inside an armed session and there is no daemon: "+
+					"in another terminal run `sudo lethe run -p PROFILE --guard off`, then `lethe selftest`"))
 			}
 			defer func() { _ = c.Close() }()
 			var st daemon.Status
@@ -46,7 +46,7 @@ func newSelftestCmd() *cobra.Command {
 				return rpcErr(err)
 			}
 			if st.State != "ARMED" {
-				return fmt.Errorf("o selftest precisa da sessão ARMADA (estado atual: %s); arme com `lethe arm` ou `lethe run`", st.State)
+				return fmt.Errorf("the selftest needs an ARMED session (current state: %s); arm with `lethe arm` or `lethe run`", st.State)
 			}
 			req := daemon.SelftestRequest{Cases: cases}
 			wantResp := len(cases) == 0
@@ -65,7 +65,7 @@ func newSelftestCmd() *cobra.Command {
 				}
 			}
 			if !asJSON {
-				_, _ = fmt.Fprintf(out, "selftest em andamento (guarda %s); leva cerca de 1 minuto…\n", st.Guard)
+				_, _ = fmt.Fprintf(out, "selftest running (guard %s); it takes about 1 minute…\n", st.Guard)
 			}
 			sig := make(chan os.Signal, 1)
 			signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
@@ -86,7 +86,7 @@ func newSelftestCmd() *cobra.Command {
 				printSelftest(out, res)
 			}
 			if !res.Passed {
-				return WithCode(ExitGeneric, errors.New("selftest com falha"))
+				return WithCode(ExitGeneric, errors.New("selftest failed"))
 			}
 			return nil
 		},
@@ -100,14 +100,14 @@ func newSelftestCmd() *cobra.Command {
 
 // confirmResp asks before RESP-001 cuts the network.
 func confirmResp(in io.Reader, w io.Writer) bool {
-	_, _ = fmt.Fprint(w, "RESP-001 aplica o pânico de verdade: a rede para por cerca de 1 s e volta sozinha.\n"+
-		"Rodar o RESP-001 agora? Pede a passphrase. [s/N] ")
+	_, _ = fmt.Fprint(w, "RESP-001 applies a real panic: the network stops for about 1 s and comes back by itself.\n"+
+		"Run RESP-001 now? It asks for the passphrase. [y/N] ")
 	line, _ := bufio.NewReader(in).ReadString('\n')
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "s", "sim", "y", "yes":
 		return true
 	}
-	_, _ = fmt.Fprintln(w, "RESP-001 pulado.")
+	_, _ = fmt.Fprintln(w, "RESP-001 skipped.")
 	return false
 }
 
@@ -125,13 +125,13 @@ func printSelftest(w io.Writer, r daemon.SelftestResult) {
 	}
 	switch {
 	case r.Critical:
-		_, _ = fmt.Fprintln(w, "selftest: FALHA CRÍTICA. Um vazamento pode passar sem alerta ou o pânico pode não bloquear; não opere com o estrito até resolver.")
+		_, _ = fmt.Fprintln(w, "selftest: CRITICAL FAILURE. A leak may pass without an alert or the panic may not block; do not operate with strict until it is fixed.")
 	case !r.Passed:
-		_, _ = fmt.Fprintln(w, "selftest: com falhas (o preflight vai avisar). Veja os motivos acima.")
+		_, _ = fmt.Fprintln(w, "selftest: failed (the preflight will warn). See the reasons above.")
 	case r.Guard != "strict":
-		_, _ = fmt.Fprintln(w, "selftest aprovado. Para operar, passe o perfil para `guard.mode: strict` (recomendado) e rode o selftest de novo.")
+		_, _ = fmt.Fprintln(w, "selftest passed. To operate, switch the profile to `guard.mode: strict` (recommended) and run the selftest again.")
 	default:
-		_, _ = fmt.Fprintln(w, "selftest aprovado.")
+		_, _ = fmt.Fprintln(w, "selftest passed.")
 	}
 }
 

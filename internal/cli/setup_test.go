@@ -72,7 +72,7 @@ func TestM10_SetupOffThenStrictAfterSelftest(t *testing.T) {
 	if err != nil || len(b.Networks) != 1 || b.Networks[0].SSIDs[0] != "CasaSentinela" {
 		t.Fatalf("baseline %v", err)
 	}
-	if !strings.Contains(out.String(), "nenhum selftest rodou") || !strings.Contains(out.String(), "America/Sao_Paulo") {
+	if !strings.Contains(out.String(), "no selftest has run") || !strings.Contains(out.String(), "America/Sao_Paulo") {
 		t.Fatalf("output:\n%s", out)
 	}
 	if strings.Contains(string(mustRead(t, profPath)), "CasaSentinela") {

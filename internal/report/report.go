@@ -225,20 +225,20 @@ func WriteJSON(w io.Writer, r Report) error {
 	return enc.Encode(r)
 }
 
-// WriteMarkdown renders the report as Markdown (pt-BR).
+// WriteMarkdown renders the report as Markdown (en-US).
 func WriteMarkdown(w io.Writer, r Report) error {
 	var b strings.Builder
 	f := func(format string, a ...any) { fmt.Fprintf(&b, format, a...) }
 	ts := func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04:05Z") }
-	f("# Relatório da sessão %s\n\n", md(r.Session))
-	f("| Campo | Valor |\n|---|---|\n")
-	f("| Operação | %s |\n| Persona | %s |\n| Operador | %s |\n", dash(r.Operation), dash(r.Persona), dash(r.Operator))
-	f("| Modo do guarda | %s |\n| Hash do perfil | %s |\n| Hash da baseline | %s |\n", dash(r.GuardMode), dash(r.ProfileHash), dash(r.BaselineHash))
-	f("| Início | %s |\n| Fim | %s |\n| Duração | %s |\n| Tempo em VERDE | %.1f%% |\n\n", ts(r.Start), ts(r.End), time.Duration(r.DurationSec*float64(time.Second)).Round(time.Second), r.GreenPercent)
+	f("# Session report %s\n\n", md(r.Session))
+	f("| Field | Value |\n|---|---|\n")
+	f("| Operation | %s |\n| Persona | %s |\n| Operator | %s |\n", dash(r.Operation), dash(r.Persona), dash(r.Operator))
+	f("| Guard mode | %s |\n| Profile hash | %s |\n| Baseline hash | %s |\n", dash(r.GuardMode), dash(r.ProfileHash), dash(r.BaselineHash))
+	f("| Start | %s |\n| End | %s |\n| Duration | %s |\n| Time in GREEN | %.1f%% |\n\n", ts(r.Start), ts(r.End), time.Duration(r.DurationSec*float64(time.Second)).Round(time.Second), r.GreenPercent)
 
-	f("## Avisos\n\n")
+	f("## Warnings\n\n")
 	if len(r.Warnings) == 0 {
-		f("Nenhum.\n\n")
+		f("None.\n\n")
 	}
 	for _, w := range r.Warnings {
 		f("- %s\n", md(w))
@@ -247,34 +247,34 @@ func WriteMarkdown(w io.Writer, r Report) error {
 		f("\n")
 	}
 
-	f("## Linha do tempo\n\n| Cor | De | Até |\n|---|---|---|\n")
+	f("## Timeline\n\n| Color | From | To |\n|---|---|---|\n")
 	for _, iv := range r.Timeline {
 		f("| %s | %s | %s |\n", md(iv.Color), ts(iv.From), ts(iv.To))
 	}
-	f("\n## Alertas (%d)\n\n", len(r.Alerts))
+	f("\n## Alerts (%d)\n\n", len(r.Alerts))
 	if len(r.Alerts) > 0 {
-		f("| ID | Check | Severidade | Primeiro | Ocorrências | Reconhecido | Motivo | Resolvido | Detalhe |\n|---|---|---|---|---|---|---|---|---|\n")
+		f("| ID | Check | Severity | First | Count | Acknowledged | Reason | Resolved | Detail |\n|---|---|---|---|---|---|---|---|---|\n")
 		for _, a := range r.Alerts {
 			f("| %s | %s | %s | %s | %d | %s | %s | %s | %s |\n", md(a.ID), md(a.Check), md(a.Severity), ts(a.First), a.Count,
 				yes(a.Acknowledged), dash(a.AckReason), yes(a.Resolved), detailString(a.Detail))
 		}
 	}
-	f("\n## Respostas executadas (%d)\n\n", len(r.Responses))
+	f("\n## Responses executed (%d)\n\n", len(r.Responses))
 	if len(r.Responses) > 0 {
-		f("| Quando | Ação | Resultado | Latência (ms) | Alerta |\n|---|---|---|---|---|\n")
+		f("| When | Action | Result | Latency (ms) | Alert |\n|---|---|---|---|---|\n")
 		for _, x := range r.Responses {
 			res := "ok"
 			if !x.OK {
-				res = "erro: " + md(x.Error)
+				res = "error: " + md(x.Error)
 			}
 			f("| %s | %s | %s | %.0f | %s |\n", ts(x.TS), md(x.Action), res, x.LatencyMS, dash(x.AlertID))
 		}
 	}
 	f("\n## Preflight\n\n")
 	if r.Preflight == nil {
-		f("Não registrado.\n")
+		f("Not recorded.\n")
 	} else {
-		f("Resultado: **%s**\n", md(r.Preflight.Result))
+		f("Result: **%s**\n", md(r.Preflight.Result))
 		keys := make([]string, 0, len(r.Preflight.ManualItems))
 		for k := range r.Preflight.ManualItems {
 			keys = append(keys, k)
@@ -285,13 +285,13 @@ func WriteMarkdown(w io.Writer, r Report) error {
 		}
 	}
 	for _, reason := range r.Forced {
-		f("\n> **Armado com --force.** Motivo: %s\n", md(reason))
+		f("\n> **Armed with --force.** Reason: %s\n", md(reason))
 	}
-	f("\n## Integridade\n\n")
-	f("| Campo | Valor |\n|---|---|\n")
-	f("| Eventos | %d |\n| Segmentos | %d |\n| Checkpoints assinados | %d |\n", r.Integrity.Events, r.Integrity.Segments, r.Integrity.Checkpoints)
-	f("| Encerrada corretamente | %s |\n| Hash final | `%s` |\n", yes(r.Integrity.Ended), r.Integrity.FinalHash)
-	f("| Chave pública | `%s` |\n| Impressão digital | `%s` |\n| Âncora conferida | %s |\n", r.PublicKey, r.Integrity.Fingerprint, yes(r.Integrity.Anchored))
+	f("\n## Integrity\n\n")
+	f("| Field | Value |\n|---|---|\n")
+	f("| Events | %d |\n| Segments | %d |\n| Signed checkpoints | %d |\n", r.Integrity.Events, r.Integrity.Segments, r.Integrity.Checkpoints)
+	f("| Ended cleanly | %s |\n| Final hash | `%s` |\n", yes(r.Integrity.Ended), r.Integrity.FinalHash)
+	f("| Public key | `%s` |\n| Fingerprint | `%s` |\n| Anchor verified | %s |\n", r.PublicKey, r.Integrity.Fingerprint, yes(r.Integrity.Anchored))
 	_, err := io.WriteString(w, b.String())
 	return err
 }
@@ -332,9 +332,9 @@ func md(s string) string {
 
 func yes(b bool) string {
 	if b {
-		return "sim"
+		return "yes"
 	}
-	return "não"
+	return "no"
 }
 
 func detailString(d map[string]string) string {

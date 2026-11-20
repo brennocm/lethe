@@ -36,13 +36,13 @@ func newCleanupCmd() *cobra.Command {
 			// the links a panic set down (link_down), also after a crash
 			up, lerr := response.LinkStore{}.Restore(response.NetlinkLinkUp)
 			for _, l := range up {
-				_, _ = fmt.Fprintf(out, "interface %s religada (o pânico a tinha derrubado)\n", l)
+				_, _ = fmt.Fprintf(out, "interface %s brought back up (the panic had taken it down)\n", l)
 			}
 			if lerr != nil {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "lethe: interfaces que não voltaram: %v; religue-as no gerenciador de rede\n", lerr)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "lethe: interfaces that did not come back: %v; bring them up in the network manager\n", lerr)
 			}
 			if len(removed) == 0 {
-				_, _ = fmt.Fprintln(out, "no lethe tables present: nada a remover; o lethe não está bloqueando a rede")
+				_, _ = fmt.Fprintln(out, "no lethe tables present: nothing to remove; lethe is not blocking the network")
 				return nil
 			}
 			for _, r := range removed {
@@ -55,7 +55,7 @@ func newCleanupCmd() *cobra.Command {
 			if len(left) > 0 {
 				return fmt.Errorf("lethe tables still present after cleanup: %v; reboot the machine to clear them", left)
 			}
-			_, _ = fmt.Fprintln(out, "a rede voltou ao estado de antes do lethe: nenhuma tabela lethe* restou e as outras tabelas não foram tocadas")
+			_, _ = fmt.Fprintln(out, "the network is back to how it was before lethe: no lethe* table is left and the other tables were not touched")
 			return nil
 		},
 	}

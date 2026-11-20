@@ -861,7 +861,7 @@ storage:
   journald: minimal              # minimal | none
 
 ui:
-  language: pt-BR                # pt-BR | en-US
+  language: en-US                # en-US | pt-BR
   fullscreen_alerts: true
   sound: true
   sound_repeat: 10s
@@ -975,7 +975,7 @@ UTC com microssegundos mais `CLOCK_MONOTONIC`. Saltos de relógio são registrad
 | `lethe version [--json]` | Versão, commit, hash do binário, data da base geo |
 | `lethe daemon` / `lethe agent` | Internos (o `run` e as unidades systemd os chamam) |
 
-Toda saída com `--json` segue schemas em `internal/contracts/`. A saída humana vai em pt-BR ou en-US conforme `ui.language` ou `LANG`.
+Toda saída com `--json` segue schemas em `internal/contracts/`. A saída humana da CLI, do daemon e do relatório vai em en-US; TUI, GUI e notificações seguem `ui.language` (en-US por padrão, pt-BR opcional).
 
 ### 15.2 Códigos de saída
 
@@ -1043,7 +1043,7 @@ Mesmas informações (estado, grade, eventos), com os atalhos `p` (pânico), `a`
 
 ### 16.6 Idioma
 
-pt-BR por padrão; en-US disponível. Todo texto de alerta tem uma versão curta (título) e uma longa (o que fazer), em `internal/i18n/*.toml`, com teste que falha se alguma chave faltar em algum idioma.
+en-US por padrão; pt-BR disponível (`ui.language`, `--lang` na GUI, `LETHE_LANG`). Todo texto de alerta tem uma versão curta (título) e uma longa (o que fazer), em `internal/i18n/*.toml`, com teste que falha se alguma chave faltar em algum idioma.
 
 ---
 

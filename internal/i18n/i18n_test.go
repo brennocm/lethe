@@ -60,7 +60,7 @@ func TestI18N_Parse(t *testing.T) {
 			t.Errorf("accepted %q", bad)
 		}
 	}
-	if Text("fr", "NET-001", "title") != Text("pt-BR", "NET-001", "title") || UI("en", "state") != "State" || CheckText("en-US", "X-999").Title != "X-999" {
+	if Text("fr", "NET-001", "title") != Text("en-US", "NET-001", "title") || Norm("pt_BR") != "pt-BR" || Norm("") != "en-US" || UI("en", "state") != "State" || CheckText("en-US", "X-999").Title != "X-999" {
 		t.Fatal("fallbacks")
 	}
 }

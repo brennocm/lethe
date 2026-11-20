@@ -75,7 +75,7 @@ func TestVerifyCmd_WrongAnchorAndMissingIdentity(t *testing.T) {
 func TestReportCmd_Formats(t *testing.T) {
 	dir, idFile, _ := writeSession(t)
 	code, out, errs := run("report", dir, "--identity", idFile)
-	if code != ExitOK || !strings.Contains(out, "# Relatório da sessão") {
+	if code != ExitOK || !strings.Contains(out, "# Session report") {
 		t.Fatalf("md: %d %s %s", code, out, errs)
 	}
 	code, out, _ = run("report", dir, "--identity", idFile, "--format", "json")

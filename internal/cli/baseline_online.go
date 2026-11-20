@@ -22,7 +22,7 @@ import (
 var onlineNetwork = liveOnlineNetwork
 
 // ErrTunnelUp: the baseline needs the real connection.
-var ErrTunnelUp = errors.New("o túnel está ligado: a baseline precisa do IP real. Desligue a VPN/Tor e rode de novo (ou use --manual; --allow-tunnel aceita o túnel)")
+var ErrTunnelUp = errors.New("the tunnel is up: the baseline needs the real IP. Turn off the VPN/Tor and run again (or use --manual; --allow-tunnel accepts the tunnel)")
 
 func liveOnlineNetwork(ctx context.Context, w io.Writer, allowTunnel bool) (baseline.Network, error) {
 	snap := discovery.Discover(discovery.NetlinkKernel{}, discovery.Options{Now: time.Now()})
@@ -56,7 +56,7 @@ func detectNetwork(ctx context.Context, w io.Writer, snap discovery.Snapshot, al
 			if !allowTunnel {
 				return n, ErrTunnelUp
 			}
-			_, _ = fmt.Fprintln(w, "aviso: --allow-tunnel: o IP público coletado será o da saída do túnel, não o da rede real. Confira antes de confirmar.")
+			_, _ = fmt.Fprintln(w, "warning: --allow-tunnel: the public IP collected will be the tunnel's exit, not the real network's. Check before confirming.")
 			break
 		}
 	}
@@ -73,14 +73,14 @@ func detectNetwork(ctx context.Context, w io.Writer, snap discovery.Snapshot, al
 			n.Resolvers = append(n.Resolvers, l.Servers...)
 		}
 	}
-	_, _ = fmt.Fprintln(w, "Consultando o IP público desta conexão (dois serviços, que precisam concordar)…")
+	_, _ = fmt.Fprintln(w, "Querying this connection's public IP (two services, which must agree)…")
 	res := query(ctx, templateEndpoints())
 	switch {
 	case res.Skipped != "":
-		_, _ = fmt.Fprintf(w, "aviso: não consultei o IP público (%s); responda à mão.\n", res.Skipped)
+		_, _ = fmt.Fprintf(w, "warning: the public IP was not queried (%s); answer by hand.\n", res.Skipped)
 		return n, nil
 	case !res.Agreed:
-		_, _ = fmt.Fprintln(w, "aviso: os serviços não concordaram sobre o IP público; responda à mão.")
+		_, _ = fmt.Fprintln(w, "warning: the services did not agree on the public IP; answer by hand.")
 		return n, nil
 	}
 	if res.IP.Is4() {
@@ -89,7 +89,7 @@ func detectNetwork(ctx context.Context, w io.Writer, snap discovery.Snapshot, al
 		n.PublicIPv6 = res.IP.String()
 	}
 	if db == nil {
-		_, _ = fmt.Fprintln(w, "aviso: este binário não tem a base geo; informe o ASN à mão se souber.")
+		_, _ = fmt.Fprintln(w, "warning: this binary has no geo database; enter the ASN by hand if you know it.")
 		return n, nil
 	}
 	if info, ok := db.Lookup(res.IP); ok {

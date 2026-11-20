@@ -253,7 +253,7 @@ func (p *Profile) applyDefaults() {
 		p.Storage.Journald = "minimal"
 	}
 	if p.UI.Language == "" {
-		p.UI.Language = "pt-BR"
+		p.UI.Language = "en-US"
 	}
 	if p.UI.FullscreenAlerts == nil {
 		t := true

@@ -207,9 +207,9 @@ func TestM81_LockdownExplainsPanicAndStrictWithoutTunnel(t *testing.T) {
 	f.d.refreshLocked()
 	f.d.mu.Unlock()
 	st := f.d.Status()
-	if st.Lockdown == nil || !strings.Contains(st.Lockdown.What, "sem túnel") || !strings.Contains(st.Lockdown.Exit, "lethe disarm") {
+	if st.Lockdown == nil || !strings.Contains(st.Lockdown.What, "without a tunnel") || !strings.Contains(st.Lockdown.Exit, "lethe disarm") {
 		// strict + TUN-001 CRITICAL engages the panic: that lockdown names unpanic instead
-		if st.Lockdown == nil || !strings.Contains(st.Lockdown.What, "pânico") || !strings.Contains(st.Lockdown.Why, "TUN-001") ||
+		if st.Lockdown == nil || !strings.Contains(st.Lockdown.What, "panic") || !strings.Contains(st.Lockdown.Why, "TUN-001") ||
 			!strings.Contains(st.Lockdown.Exit, "lethe ack") || !strings.Contains(st.Lockdown.Exit, "lethe unpanic") {
 			t.Fatalf("lockdown %+v", st.Lockdown)
 		}
@@ -217,7 +217,7 @@ func TestM81_LockdownExplainsPanicAndStrictWithoutTunnel(t *testing.T) {
 	if err := contracts.Validate("status", st); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(f.out.String(), "como sair") {
+	if !strings.Contains(f.out.String(), "how to get out") {
 		t.Fatalf("the terminal must show the way out: %q", f.out.String())
 	}
 }
@@ -260,10 +260,10 @@ func TestM81_RestartedDaemonReportsLeftovers(t *testing.T) {
 	f.nft.tables["inet other"] = &nftables.Table{Family: nftables.TableFamilyINet, Name: "other"}
 	f.nft.mu.Unlock()
 	l := f.d.Status().Lockdown
-	if l == nil || strings.Join(l.Tables, ",") != "inet lethe" || l.Ways[0] != "cleanup" || !strings.Contains(l.Why, "este daemon não tem sessão") {
+	if l == nil || strings.Join(l.Tables, ",") != "inet lethe" || l.Ways[0] != "cleanup" || !strings.Contains(l.Why, "this daemon has no session") {
 		t.Fatalf("%+v", l)
 	}
-	if _, _, err := f.d.Arm(f.armReq("off")); err == nil || !strings.Contains(err.Error(), "libere a rede primeiro") {
+	if _, _, err := f.d.Arm(f.armReq("off")); err == nil || !strings.Contains(err.Error(), "release the network first") {
 		t.Fatalf("arm over a leftover block: %v", err)
 	}
 }
