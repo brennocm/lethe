@@ -552,13 +552,13 @@ func TestM13_StartServiceThatNeverAnswers(t *testing.T) {
 	u.poll()
 	test.Tap(u.svcBtn)
 	u.wg.Wait()
-	if !u.svcBtn.Disabled() || u.svcBtn.Text != "Iniciando…" || !strings.Contains(u.flash.Text, "Esperando") {
-		t.Fatalf("while waiting: disabled=%v %q %q", u.svcBtn.Disabled(), u.svcBtn.Text, u.flash.Text)
+	if u.svcBtn.Visible() || !u.svcBusy.Visible() || u.svcStatus.Text != "Iniciando…" || !strings.Contains(u.flash.Text, "Esperando") {
+		t.Fatalf("while waiting: button=%v busy=%v %q %q", u.svcBtn.Visible(), u.svcBusy.Visible(), u.svcStatus.Text, u.flash.Text)
 	}
 	now = now.Add(startWait + time.Second)
 	u.poll()
-	if u.svcBtn.Disabled() || u.svcBtn.Text != "Iniciar o lethe" || !strings.Contains(u.flash.Text, "journalctl -u lethed@") {
-		t.Fatalf("after the wait: disabled=%v %q %q", u.svcBtn.Disabled(), u.svcBtn.Text, u.flash.Text)
+	if !u.svcBtn.Visible() || u.svcBusy.Visible() || u.svcBtn.Text != "Iniciar o lethe" || !strings.Contains(u.flash.Text, "journalctl -u lethed@") {
+		t.Fatalf("after the wait: button=%v busy=%v %q", u.svcBtn.Visible(), u.svcBusy.Visible(), u.flash.Text)
 	}
 }
 

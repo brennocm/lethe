@@ -18,7 +18,7 @@ The panel becomes a sidebar of six pages beside a top bar (spec §16.2):
 - **Checks:** the grid by category.
 - **Session:** the session (ID, start, protection, fingerprint, acknowledge, selftest, end, reports), or the start form, or the first use.
 
-The top bar keeps Panic apart from every other action and always says where the web sees the operator. The block notice sits under it on every page. A change of situation (no profile, no session, a session, the daemon down) brings the page that fits; otherwise the operator's page stays.
+The top bar keeps Panic apart from every other action and always says where the web sees the operator. The block notice sits under it on every page. The panel opens on the Overview, and a change of situation (no profile, no session, a session, the daemon down) brings it back; otherwise the operator's page stays. Without a session the Overview's start button leads to the Session page (changed 2026-11-20: opening on Session hid the state of the machine).
 
 The theme does not change: the logo's colors and the platform font (ADR 0015). The study's palette (graphite, teal, brass, crimson) and its three bundled fonts were not adopted.
 

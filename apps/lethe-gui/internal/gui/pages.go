@@ -181,7 +181,7 @@ func (u *UI) buildOverview() fyne.CanvasObject {
 	checkBtn := widget.NewButtonWithIcon(u.t("check_now_btn"), theme.ViewRefreshIcon(), u.checkNow)
 	checkBtn.Importance = widget.HighImportance
 	u.routeActs = container.NewVBox(checkBtn, widget.NewButtonWithIcon(u.t("dns_btn"), theme.SearchIcon(), u.askDNS))
-	right := container.NewVBox(u.routeActs, u.startCTA, u.svcBtn, u.cleanOff)
+	right := container.NewVBox(u.routeActs, u.startCTA, u.svcBtn, u.svcBusy, u.cleanOff)
 	left := container.NewVBox(u.verdict, container.NewBorder(nil, nil, container.NewCenter(u.guardBadge.box), nil, u.header), u.fpLine)
 	u.heroCard = newCard(container.NewBorder(nil, nil, nil, container.New(fixed{w: 230}, right), left))
 

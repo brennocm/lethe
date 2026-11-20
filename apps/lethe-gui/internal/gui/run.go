@@ -7,7 +7,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/theme"
 
 	"lethe/internal/contracts"
 )
@@ -64,9 +63,11 @@ func (u *UI) stream(ctx context.Context) {
 // startService asks systemd to start lethe for this operator (polkit asks an administrator's
 // password); the next poll finds the daemon.
 func (u *UI) startService() {
-	u.svcBtn.Disable()
-	u.svcBtn.SetText(u.t("service_btn_password"))
-	u.svcBtn.SetIcon(theme.ViewRefreshIcon())
+	u.svcRunning = true
+	u.svcBtn.Hide()
+	u.svcStatus.SetText(u.t("service_btn_password"))
+	u.svcBusy.Show()
+	u.svcBar.Start()
 	u.setFlash(u.t("service_starting"))
 	u.wg.Add(1)
 	go func() {
@@ -87,7 +88,7 @@ func (u *UI) startService() {
 		}
 		fyne.Do(func() {
 			u.svcWait = u.opt.Now().Add(startWait)
-			u.svcBtn.SetText(u.t("service_btn_waiting"))
+			u.svcStatus.SetText(u.t("service_btn_waiting"))
 			u.setFlash(u.t("service_started"))
 		})
 		u.poll()
@@ -118,9 +119,11 @@ func (u *UI) followStart() {
 // resetStart puts the start button back as it was.
 func (u *UI) resetStart() {
 	u.svcWait = time.Time{}
-	u.svcBtn.SetText(u.t("service_btn"))
-	u.svcBtn.SetIcon(theme.MediaPlayIcon())
-	u.svcBtn.Enable()
+	u.svcRunning = false
+	u.svcBar.Stop()
+	u.svcBusy.Hide()
+	show(u.svcBtn, u.offline != nil && u.opt.StartService != nil)
+	u.relayout()
 }
 
 // askCleanup confirms, then releases a block no session owns: lethe cleanup removes only the

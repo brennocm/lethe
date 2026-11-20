@@ -1009,7 +1009,7 @@ O painel é uma barra lateral de páginas ao lado de uma barra de topo (ADR 0016
 - **Barra lateral:** a logo, uma pílula com o estado (protegido, com avisos, vazamento, rede bloqueada, sem sessão, desligado) e a interface do túnel, as páginas, e no pé a linha do daemon (conectado ou fora do ar, sensores ativos) e a versão.
 - **Barra de topo:** o nome da página, onde a web vê o operador (o mesmo da rota, colorido pelo estado), o tempo de sessão e o botão **Pânico**, sempre visível durante a sessão e separado dos outros.
 - **Bloqueio:** quando a rede está bloqueada, o quadro com o quê, por quê e como sair (§10.6 item 5), com os botões "Reconhecer", "Sair do pânico", "Encerrar sessão" (§10.6 item 10) e "Liberar a rede", logo abaixo da barra de topo em todas as páginas.
-- Uma mudança de situação (sem perfil, sem sessão, sessão, daemon fora do ar) leva à página que serve a ela; fora isso, a página escolhida pelo operador fica.
+- O painel abre na **Visão geral**, e uma mudança de situação (sem perfil, sem sessão, sessão, daemon fora do ar) volta a ela; fora isso, a página escolhida pelo operador fica. Sem sessão, a Visão geral leva à página Sessão pelo botão de início.
 
 Páginas:
 

@@ -87,8 +87,12 @@ type UI struct {
 	route      *routeView
 	routeNote  *widget.Label
 	routeActs  *fyne.Container
-	svcBtn     *widget.Button // start the service (offline)
-	svcWait    time.Time      // after a start: until when the panel waits for the daemon to answer
+	svcBtn     *widget.Button  // start the service (offline)
+	svcWait    time.Time       // after a start: until when the panel waits for the daemon to answer
+	svcBusy    *fyne.Container // in place of svcBtn while a start runs: a spinner and what it waits for
+	svcBar     *widget.ProgressBarInfinite
+	svcStatus  *widget.Label
+	svcRunning bool           // a start is in progress (svcBusy shown, svcBtn hidden)
 	cleanBtn   *widget.Button // release a leftover block (block notice)
 	cleanOff   *widget.Button // the same, offline: a crash in portable mode leaves no daemon to ask
 	block      *fyne.Container
@@ -209,6 +213,12 @@ func (u *UI) Build() {
 	u.svcBtn = widget.NewButtonWithIcon(u.t("service_btn"), theme.MediaPlayIcon(), u.startService)
 	u.svcBtn.Importance = widget.HighImportance
 	u.svcBtn.Hide()
+	u.svcBar = widget.NewProgressBarInfinite()
+	u.svcBar.Stop()
+	u.svcStatus = wrapped("")
+	u.svcStatus.TextStyle = fyne.TextStyle{Bold: true}
+	u.svcBusy = container.NewVBox(u.svcBar, u.svcStatus)
+	u.svcBusy.Hide()
 	u.cleanBtn = widget.NewButton(u.t("cleanup_btn"), u.askCleanup)
 	u.cleanBtn.Importance = widget.HighImportance
 	u.cleanBtn.Hide()
@@ -677,7 +687,7 @@ func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 		}
 	}
 	u.followStart()
-	show(u.svcBtn, u.offline != nil && u.opt.StartService != nil)
+	show(u.svcBtn, u.offline != nil && u.opt.StartService != nil && !u.svcRunning)
 	show(u.cleanOff, u.offline != nil && u.opt.Cleanup != nil)
 	u.routeNote.SetText(note)
 	show(u.routeActs, session && st.State != "PANIC") // in panic nothing leaves: no check to run
@@ -721,7 +731,7 @@ func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 	}
 	if mode != u.mode {
 		u.mode = mode
-		u.go2(map[string]string{"session": "overview", "offline": "overview", "first": "session", "idle": "session"}[mode])
+		u.go2("overview")
 	} else {
 		u.relayout()
 	}

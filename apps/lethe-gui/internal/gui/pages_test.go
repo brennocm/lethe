@@ -12,13 +12,14 @@ import (
 )
 
 // The panel is a sidebar of pages (ADR 0016): a change of situation brings the page that fits
-// it (no session: Session; a session: Overview), and the operator's choice stays until then.
+// it (the panel always opens on the Overview), and the operator's choice stays until then.
 func TestM13_PanelPagesFollowTheSituation(t *testing.T) {
 	u, _, _ := setup(t, contracts.Status{State: "READY", Color: "GRAY"})
 	u.Apply(contracts.Status{State: "READY", Color: "GRAY"}, nil)
-	if u.page != "session" || !u.pages["session"].Visible() || u.pages["overview"].Visible() || u.panicBtn.Visible() {
-		t.Fatalf("no session: the session page, no panic button (%q)", u.page)
+	if u.page != "overview" || !u.pages["overview"].Visible() || u.pages["session"].Visible() || u.panicBtn.Visible() {
+		t.Fatalf("no session: the overview, no panic button (%q)", u.page)
 	}
+	test.Tap(u.navs["session"])
 	u.Apply(armed(), nil)
 	if u.page != "overview" || !u.panicBtn.Visible() || !u.navs["overview"].active || u.navs["session"].active {
 		t.Fatalf("a session started: the overview (%q)", u.page)
