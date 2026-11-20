@@ -16,15 +16,59 @@ Everything is done from the panel (`lethe-gui`). The terminal is only needed to 
 
 ## Install
 
-From the release files:
+There are no published release files yet, so for now you build the packages from this
+repository (about five minutes, once). Run everything below as your **normal user**, not as
+root: `sudo` is asked for only where it is needed.
+
+**1. Install [mise](https://mise.jdx.dev)**, the tool that fetches the pinned Go toolchain and
+runs the build. It is not in the distro repositories:
 
 ```sh
-sudo apt install ./lethe_*.deb ./lethe-gui_*.deb     # Debian, Ubuntu
-sudo dnf install ./lethe-*.rpm ./lethe-gui-*.rpm     # Fedora
+curl https://mise.run | sh            # installs ~/.local/bin/mise (does not change your shell)
+echo $SHELL                           # which shell you use: .../bash or .../zsh
 ```
 
-The `lethe-gui` package pulls in the graphics libraries it needs. Check the binary with
-`lethe version` against the release notes.
+Then activate it in that shell (the installer only prints this line, it does not run it):
+
+```sh
+echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc && exec bash   # bash
+echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc && exec zsh      # zsh (Kali's default)
+mise doctor                                                                  # check
+```
+
+**2. Build the packages** (needs `git` and `curl`; the GUI step installs a C compiler and the
+OpenGL/X11/Wayland headers if they are missing, after asking once):
+
+```sh
+git clone https://github.com/brennocm/lethe.git && cd lethe
+mise trust                         # allow this repository's .mise.toml
+mise install                       # Go, linters and nfpm at the pinned versions
+mise run release -- 0.1.0 --gui    # writes dist/0.1.0/ with the .deb and .rpm files
+```
+
+**3. Install them:**
+
+```sh
+sudo apt install ./dist/0.1.0/lethe_*_amd64.deb ./dist/0.1.0/lethe-gui_*_amd64.deb   # Debian, Ubuntu, Kali
+sudo dnf install ./dist/0.1.0/lethe-[0-9]*.x86_64.rpm ./dist/0.1.0/lethe-gui-*.x86_64.rpm # Fedora
+lethe version
+```
+
+The `lethe-gui` package pulls in the graphics libraries it needs. On an arm64 machine use the
+`arm64` / `aarch64` files.
+
+Once release files are published, only step 3 is needed (with the downloaded files).
+
+**Troubleshooting**
+
+| Message | Fix |
+|---|---|
+| `mise: command not found` right after installing it | The installer does not touch your shell: run the `echo ... activate` line and `exec $SHELL` (or call `~/.local/bin/mise` directly). |
+| `mise: command not found` | Step 1 was skipped, or it was run as root (it went to `/root/.local/bin`): `exit`, repeat it as your user, and remove the root copy with `sudo rm -rf /root/.local/bin/mise /root/.local/share/mise`. |
+| `apt install mise`: *Unable to locate package* | Expected: mise is not packaged by the distro; use step 1. |
+| `Config files in ... are not trusted` | Run `mise trust` inside the repository. |
+| `release: the tree has uncommitted changes` | You edited files; `git stash`, or add `--allow-dirty`. |
+| Anything under `sudo su` / as root | Leave the root shell (`exit`) and run as your user. |
 
 ## Use
 
@@ -69,7 +113,7 @@ The operator guides, the spec and the ADRs are written in Portuguese.
 ## Develop
 
 ```sh
-mise install          # pinned toolchain (Go, linters, nfpm)
+mise trust && mise install   # pinned toolchain (Go, linters, nfpm); install mise first, see Install
 mise run gui          # build the GUI and open it (installs the OpenGL/X11/Wayland headers if missing)
 mise run check        # definition of done: format, lint, boundaries, vet, tests
 mise run e2e          # tests in network namespaces (user namespaces or sudo -E)
