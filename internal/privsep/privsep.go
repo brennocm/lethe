@@ -20,6 +20,14 @@ import (
 // Keep is the capability set the daemon runs with after start-up (spec §19.3).
 var Keep = []cap.Value{cap.NET_RAW, cap.NET_ADMIN, cap.KILL, cap.SYS_PTRACE, cap.DAC_READ_SEARCH, cap.IPC_LOCK}
 
+// Startup are the capabilities the daemon needs only until Harden (the first arm), on top of
+// Keep: handing the socket and the operator's state and session directories to the operator
+// (CAP_CHOWN), creating them inside storage.dir, which the operator owns with mode 0700
+// (CAP_DAC_OVERRIDE), and keeping their setgid bit, which the kernel clears for a group root is
+// not in (CAP_FSETID). Portable mode starts with every capability; the service units bound the
+// daemon to Keep plus these, and Harden drops them (spec §19.3, ADR 0019).
+var Startup = []cap.Value{cap.CHOWN, cap.DAC_OVERRIDE, cap.FSETID}
+
 // KeepMask is Keep as the bit mask /proc/<pid>/status prints.
 func KeepMask() uint64 {
 	var m uint64

@@ -34,7 +34,8 @@ func unitDirectives(t *testing.T, path string) map[string]string {
 }
 
 // TestM14_ServiceUnitMatchesSpec: lethed.service carries every directive of spec §19.3, and its
-// bounding set is exactly the capabilities Harden keeps.
+// bounding set is exactly the capabilities Harden keeps plus the start-up ones it drops (without
+// those the service died on its first chown: ADR 0019).
 func TestM14_ServiceUnitMatchesSpec(t *testing.T) {
 	d := unitDirectives(t, "../../packaging/systemd/lethed.service")
 	want := map[string]string{
@@ -49,14 +50,14 @@ func TestM14_ServiceUnitMatchesSpec(t *testing.T) {
 		}
 	}
 	var keep []string
-	for _, v := range Keep {
+	for _, v := range append(slices.Clone(Keep), Startup...) {
 		keep = append(keep, strings.ToUpper(v.String()))
 	}
 	got := strings.Fields(d["CapabilityBoundingSet"])
 	slices.Sort(keep)
 	slices.Sort(got)
 	if !slices.Equal(keep, got) {
-		t.Errorf("CapabilityBoundingSet %v, Harden keeps %v", got, keep)
+		t.Errorf("CapabilityBoundingSet %v, want Keep and Startup %v", got, keep)
 	}
 	if _, ok := d["ReadWritePaths"]; ok {
 		t.Error("ReadWritePaths belongs to the operator's drop-in (storage.dir), not to the packaged unit")

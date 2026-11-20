@@ -1153,7 +1153,7 @@ Depois de inicializar como root (abrir sockets, ler a baseline, fazer fork do ag
 
 **Em Go, as capabilities são por thread do sistema.** O descarte DEVE usar `kernel.org/pub/linux/libs/security/libcap/cap` (aplica em todas as threads via `psx`), nunca `syscall` direto.
 
-No modo serviço, a unidade tem: `CapabilityBoundingSet=` (a lista acima), `AmbientCapabilities=` (vazio), `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ReadWritePaths=` (com o `storage.dir`, que DEVE ser declarado num drop-in, senão `ProtectSystem` o deixa só leitura), `ProtectHome=read-only`, `PrivateTmp=yes`, `MemoryDenyWriteExecute=yes`, `RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_PACKET AF_INET AF_INET6`, `LockPersonality=yes`, `RestrictNamespaces=yes`.
+No modo serviço, a unidade tem: `CapabilityBoundingSet=` (a lista acima mais `CAP_CHOWN`, `CAP_DAC_OVERRIDE` e `CAP_FSETID`, só para a inicialização: entregar o socket e os diretórios de estado e de sessão ao operador, criá-los dentro do `storage.dir`, que é do operador com modo 0700, e manter o bit setgid; o descarte acima os remove no primeiro arm, ADR 0019), `AmbientCapabilities=` (vazio), `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ReadWritePaths=` (com o `storage.dir`, que DEVE ser declarado num drop-in, senão `ProtectSystem` o deixa só leitura), `ProtectHome=read-only`, `PrivateTmp=yes`, `MemoryDenyWriteExecute=yes`, `RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_PACKET AF_INET AF_INET6`, `LockPersonality=yes`, `RestrictNamespaces=yes`.
 
 ### 19.4 Memória
 

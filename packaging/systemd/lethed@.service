@@ -29,7 +29,9 @@ RuntimeDirectoryMode=0700
 RuntimeDirectoryPreserve=yes
 UMask=0077
 
-CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_KILL CAP_SYS_PTRACE CAP_DAC_READ_SEARCH CAP_IPC_LOCK
+# The six the daemon keeps, plus CAP_CHOWN CAP_DAC_OVERRIDE CAP_FSETID for start-up only (the
+# socket and the operator's directories); the daemon drops those three at the first arm.
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_KILL CAP_SYS_PTRACE CAP_DAC_READ_SEARCH CAP_IPC_LOCK CAP_CHOWN CAP_DAC_OVERRIDE CAP_FSETID
 AmbientCapabilities=
 NoNewPrivileges=yes
 ProtectSystem=strict
