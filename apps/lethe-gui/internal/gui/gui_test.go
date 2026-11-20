@@ -536,6 +536,32 @@ func TestM13_StartServiceFromThePanel(t *testing.T) {
 	}
 }
 
+// A start systemd accepts but whose daemon never answers (it dies while starting and the unit
+// keeps restarting it) must not leave the panel saying "connects in a moment": the button shows
+// it is waiting and, after startWait, the panel says the start failed and where the reason is.
+func TestM13_StartServiceThatNeverAnswers(t *testing.T) {
+	home := t.TempDir()
+	be := &offBackend{} // never comes up
+	now := t0
+	a := &trayApp{App: test.NewTempApp(t)}
+	det := func(context.Context, bool) lsetup.Detected { return lsetup.Detected{} }
+	u := New(a, be, Options{Lang: "pt-BR", Now: func() time.Time { return now }, Home: home, Detect: det,
+		StartService: func(context.Context) error { return nil }})
+	u.Build()
+	u.wg.Wait()
+	u.poll()
+	test.Tap(u.svcBtn)
+	u.wg.Wait()
+	if !u.svcBtn.Disabled() || u.svcBtn.Text != "Iniciando…" || !strings.Contains(u.flash.Text, "Esperando") {
+		t.Fatalf("while waiting: disabled=%v %q %q", u.svcBtn.Disabled(), u.svcBtn.Text, u.flash.Text)
+	}
+	now = now.Add(startWait + time.Second)
+	u.poll()
+	if u.svcBtn.Disabled() || u.svcBtn.Text != "Iniciar o lethe" || !strings.Contains(u.flash.Text, "journalctl -u lethed@") {
+		t.Fatalf("after the wait: disabled=%v %q %q", u.svcBtn.Disabled(), u.svcBtn.Text, u.flash.Text)
+	}
+}
+
 // A block no session owns (a daemon restarted after a crash) shows Release the network; it asks
 // for confirmation and then runs the cleanup unit. Offline, the same button is there, because a
 // crash in portable mode leaves no daemon to report the block (spec §10.6 item 7, ADR 0015).

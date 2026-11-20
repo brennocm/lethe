@@ -7,6 +7,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 
 	"lethe/internal/contracts"
 )
@@ -64,6 +65,8 @@ func (u *UI) stream(ctx context.Context) {
 // password); the next poll finds the daemon.
 func (u *UI) startService() {
 	u.svcBtn.Disable()
+	u.svcBtn.SetText(u.t("service_btn_password"))
+	u.svcBtn.SetIcon(theme.ViewRefreshIcon())
 	u.setFlash(u.t("service_starting"))
 	u.wg.Add(1)
 	go func() {
@@ -77,12 +80,47 @@ func (u *UI) startService() {
 			_ = os.MkdirAll(u.firstDir(), 0o700)
 		}
 		err := u.opt.StartService(ctx)
-		fyne.Do(u.svcBtn.Enable)
-		u.say(u.t("service_btn"), err, u.t("service_started"))
-		if err == nil {
-			u.poll()
+		if err != nil {
+			fyne.Do(u.resetStart)
+			u.say(u.t("service_btn"), err, "")
+			return
 		}
+		fyne.Do(func() {
+			u.svcWait = u.opt.Now().Add(startWait)
+			u.svcBtn.SetText(u.t("service_btn_waiting"))
+			u.setFlash(u.t("service_started"))
+		})
+		u.poll()
 	}()
+}
+
+// startWait is how long the panel waits, after systemd started the unit, for the daemon to
+// answer before it says the start failed (the unit restarts a daemon that dies, so systemd's
+// answer alone does not mean lethe is up).
+const startWait = 15 * time.Second
+
+// followStart ends the wait after a start: the daemon answered, or it did not within startWait
+// and the panel says where the reason is. Called by Apply on every poll.
+func (u *UI) followStart() {
+	if u.svcWait.IsZero() {
+		return
+	}
+	switch {
+	case u.offline == nil:
+		u.resetStart()
+		u.setFlash("")
+	case u.opt.Now().After(u.svcWait):
+		u.resetStart()
+		u.setFlash(u.t("service_no_answer"))
+	}
+}
+
+// resetStart puts the start button back as it was.
+func (u *UI) resetStart() {
+	u.svcWait = time.Time{}
+	u.svcBtn.SetText(u.t("service_btn"))
+	u.svcBtn.SetIcon(theme.MediaPlayIcon())
+	u.svcBtn.Enable()
 }
 
 // askCleanup confirms, then releases a block no session owns: lethe cleanup removes only the

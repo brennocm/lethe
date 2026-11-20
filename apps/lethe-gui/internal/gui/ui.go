@@ -88,6 +88,7 @@ type UI struct {
 	routeNote  *widget.Label
 	routeActs  *fyne.Container
 	svcBtn     *widget.Button // start the service (offline)
+	svcWait    time.Time      // after a start: until when the panel waits for the daemon to answer
 	cleanBtn   *widget.Button // release a leftover block (block notice)
 	cleanOff   *widget.Button // the same, offline: a crash in portable mode leaves no daemon to ask
 	block      *fyne.Container
@@ -675,6 +676,7 @@ func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 			note += " " + u.t("offline_cleanup")
 		}
 	}
+	u.followStart()
 	show(u.svcBtn, u.offline != nil && u.opt.StartService != nil)
 	show(u.cleanOff, u.offline != nil && u.opt.Cleanup != nil)
 	u.routeNote.SetText(note)
