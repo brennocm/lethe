@@ -40,7 +40,7 @@ Distribuição: binário estático + deb/rpm — ver `docs/adr/0002-distribuicao
 
 ## Comandos
 
-- `./install.sh` — instalação do operador: mise, build dos pacotes, apt/dnf/zypper, e o `lethed@<usuário>` com o journal impresso se não responder
+- `./install.sh` — instalação do operador: banner, sudo uma vez, um passo por linha (log em `~/.cache/lethe/install.log`), mise, build dos pacotes, apt/dnf/zypper, `lethed@<usuário>` habilitado com o journal impresso se não responder, e abre o painel
 - `mise install` — toolchain fixada
 - `mise run check` — **definição de pronto** (fmt, lint, depguard, vet, unit tests, e `check:gui` do módulo da GUI sem cgo)
 - `mise run gui` — compila a GUI (com os headers, se faltarem) e abre

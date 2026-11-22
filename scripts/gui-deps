@@ -30,7 +30,7 @@ else
 fi
 
 if [[ ${#missing[@]} -eq 0 ]]; then
-  echo "gui-deps: tudo pronto para compilar a GUI"
+  echo "gui-deps: everything the GUI build needs is installed"
   exit 0
 fi
 
@@ -67,24 +67,24 @@ case "$family" in
     refresh=() ;;
 esac
 
-echo "gui-deps: faltam para compilar a GUI: ${missing[*]}"
+echo "gui-deps: missing for the GUI build: ${missing[*]}"
 if [[ -z $family ]]; then
-  echo "gui-deps: distribuição não reconhecida; instale um compilador C, pkg-config e os headers de OpenGL, X11, Wayland e xkbcommon" >&2
+  echo "gui-deps: unknown distribution; install a C compiler, pkg-config and the OpenGL, X11, Wayland and xkbcommon headers" >&2
   exit 1
 fi
-echo "gui-deps: comando: sudo ${install[*]}"
+echo "gui-deps: command: sudo ${install[*]}"
 if [[ $mode == check ]]; then
   exit 1
 fi
 if [[ $mode == ask ]]; then
   if [[ ! -t 0 ]]; then
-    echo "gui-deps: sem terminal para confirmar; rode scripts/gui-deps --yes" >&2
+    echo "gui-deps: no terminal to confirm; run scripts/gui-deps --yes" >&2
     exit 1
   fi
-  read -r -p "Instalar agora? [S/n] " answer
+  read -r -p "Install now? [Y/n] " answer
   case "${answer,,}" in
-    "" | s | sim | y | yes) ;;
-    *) echo "gui-deps: nada instalado"; exit 1 ;;
+    "" | y | yes) ;;
+    *) echo "gui-deps: nothing installed"; exit 1 ;;
   esac
 fi
 
