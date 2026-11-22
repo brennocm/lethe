@@ -270,40 +270,56 @@ section "4/4  Service"
 unit=lethed@$user.service
 state() { /usr/bin/lethe status --json 2>/dev/null | grep -o '"state":"[A-Z_]*"' | head -1 | cut -d'"' -f4 || true; }
 running=0
-if [[ $start == ask ]]; then
-  if ask "Start lethe now and at every boot ($unit)?" Y; then start=yes; else start=no; fi
-fi
-if [[ $start == yes ]]; then
+# the daemon answers on its socket, or the unit fails
+wait_daemon() {
+  local u=$1 s
+  for _ in $(seq 30); do
+    s=$(state)
+    [[ -n $s && $s != NO_DAEMON ]] && return 0
+    systemctl is-failed --quiet "$u" && break
+    sleep 0.5
+  done
+  sudo -n journalctl -u "$u" -n 40 --no-pager
+  return 1
+}
+# A service that already runs keeps the old binary in memory until it restarts: the package on
+# disk alone changes nothing, and the panel would talk to the old daemon. Restart it whatever the
+# start answer was (it is already started), but only when no session is open: a restart
+# mid-session ends it and, with the strict guard, leaves the network blocked. An unknown state
+# counts as a session; no answer at all means the daemon is stuck, and the restart fixes it.
+active=''
+for u in "$unit" lethed.service; do
+  if systemctl is-active --quiet "$u"; then active=$u; break; fi
+done
+if [[ -n $active ]]; then
   step "Reload systemd" sudo -n systemctl daemon-reload
-  step "Enable $unit at boot" sudo -n systemctl enable "$unit"
-  if systemctl is-active --quiet "$unit"; then
-    # restart only when no session is open (a restart mid-session ends it and, with the strict
-    # guard, leaves the network blocked); an unknown state counts as a session. No answer at all
-    # means the daemon is stuck: the restart is what fixes it.
-    case $(state) in
-      READY|NO_BASELINE|NO_DAEMON|'') step "Restart $unit on the new version" sudo -n systemctl restart "$unit" ;;
-      *) note "a session is open: the service keeps the old version until you end it and run: sudo systemctl restart $unit" ;;
-    esac
-  else
-    sudo -n systemctl reset-failed "$unit" >>"$log" 2>&1 || true
-    step "Start $unit" sudo -n systemctl start "$unit"
+  case $(state) in
+    READY|NO_BASELINE|NO_DAEMON|'')
+      step "Restart $active on the new version" sudo -n systemctl restart "$active"
+      step "Wait for the daemon to answer" wait_daemon "$active" ;;
+    *) note "a session is open: $active keeps the old version until you end it and run: sudo systemctl restart $active" ;;
+  esac
+  # started from the panel, it runs but does not come back after a reboot
+  if [[ $active == "$unit" && $start != no ]] && ! systemctl is-enabled --quiet "$unit"; then
+    if [[ $start == yes ]] || ask "Also start lethe at every boot?" Y; then
+      step "Enable $unit at boot" sudo -n systemctl enable "$unit"
+    fi
   fi
-  # the daemon answers on its socket, or the unit fails
-  wait_daemon() {
-    local s
-    for _ in $(seq 30); do
-      s=$(state)
-      [[ -n $s && $s != NO_DAEMON ]] && return 0
-      systemctl is-failed --quiet "$unit" && break
-      sleep 0.5
-    done
-    sudo -n journalctl -u "$unit" -n 40 --no-pager
-    return 1
-  }
-  step "Wait for the daemon to answer" wait_daemon
   running=1
 else
-  info "not started: later, Start lethe in the panel, or sudo systemctl enable --now $unit"
+  if [[ $start == ask ]]; then
+    if ask "Start lethe now and at every boot ($unit)?" Y; then start=yes; else start=no; fi
+  fi
+  if [[ $start == yes ]]; then
+    step "Reload systemd" sudo -n systemctl daemon-reload
+    step "Enable $unit at boot" sudo -n systemctl enable "$unit"
+    sudo -n systemctl reset-failed "$unit" >>"$log" 2>&1 || true
+    step "Start $unit" sudo -n systemctl start "$unit"
+    step "Wait for the daemon to answer" wait_daemon "$unit"
+    running=1
+  else
+    info "not started: later, Start lethe in the panel, or sudo systemctl enable --now $unit"
+  fi
 fi
 
 # ---- done ----------------------------------------------------------------------------------
