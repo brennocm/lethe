@@ -107,7 +107,9 @@ func (u *UI) buildFirstUse() {
 	}
 	form.Add(container.NewHBox(f.createBtn))
 	u.firstForm = f
-	f.box = container.NewStack(container.NewVScroll(container.NewHBox(container.New(&maxWidth{w: 720}, form))))
+	// no scroll of its own: the Session page scrolls, and a scroll inside its VBox gets the
+	// minimum height (one line), which showed the title alone
+	f.box = container.NewHBox(container.New(&maxWidth{w: 720}, newCard(form).box))
 }
 
 // detect fills what the machine knows (local reading; askIP also asks the public IP, never with

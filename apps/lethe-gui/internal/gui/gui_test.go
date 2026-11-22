@@ -447,6 +447,9 @@ func TestM10_FirstUseFromThePanel(t *testing.T) {
 	if !f.box.Visible() || u.start.Visible() {
 		t.Fatal("no profile: the first-use form, even with the daemon off")
 	}
+	if h, need := f.box.MinSize().Height, f.createBtn.MinSize().Height*8; h < need {
+		t.Fatalf("the form shows whole inside the scrolling page, not in a one-line box: height %v < %v", h, need)
+	}
 	if len(asked) != 1 || asked[0] || f.gateway.Text != "192.0.2.1" || f.netIP.Text != "" || f.egress.Selected != "wireguard" {
 		t.Fatalf("local detection only at start: %v %q %q %q", asked, f.gateway.Text, f.netIP.Text, f.egress.Selected)
 	}
