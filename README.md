@@ -17,8 +17,8 @@ Everything is done from the panel (`lethe-gui`). The terminal is only needed to 
 ## Install
 
 There are no published release files yet, so for now you build the packages from this
-repository (about five minutes the first time). Run everything as your **normal user**, not as
-root: `sudo` is asked for once, by the installer.
+repository (about five minutes the first time). Run it as your normal user; the installer asks
+for `sudo` once.
 
 ```sh
 git clone https://github.com/brennocm/lethe.git && cd lethe
@@ -32,7 +32,7 @@ dnf (Fedora) or zypper (openSUSE), on amd64 or arm64. It:
    configuration is left alone);
 2. fetches the pinned Go toolchain and builds the `.deb`/`.rpm` packages into `dist/<version>/`,
    asking once to install a C compiler and the OpenGL/X11/Wayland headers the GUI build needs;
-3. installs `lethe` and `lethe-gui` (a rebuild of the same version is reinstalled, not skipped);
+3. installs `lethe` and `lethe-gui`, reinstalling over an earlier build of the same version;
 4. asks whether to start lethe for your user (`lethed@<user>.service`, also at every boot) and
    waits for it to answer. If it does not, it prints the service's log. A service that was
    already running is restarted on the new version, unless a session is open;
@@ -84,32 +84,34 @@ install is needed.
 
 ## Use
 
-1. **Open lethe** from the applications menu, or run `lethe-gui`.
-2. **First use** (once): with the VPN **off**, on your real network, the panel asks for the
-   operation's identity, discovers the public IP and the network's DNS servers when you ask it
-   to, and asks for a passphrase typed twice. It creates `~/lethe/profile.yaml` and
-   `~/lethe/baseline.age`. There is no key to manage: the passphrase is the only secret. Keep it
-   **off** the machine.
-3. **Start lethe**: the panel starts the service and the system asks for the administrator
-   password.
-4. **Turn on the VPN** (or Tor) and click **Start session**. Begin with *Observe only*; *Strict*
-   protection is offered after an approved **Selftest** on this machine.
-5. During the session, the **Overview** answers "am I covered?" and the route shows where the web
-   sees you. The other pages detail the IP and DNS, the events, the guard and the checks. A
-   critical leak opens a full-screen red alert that only closes with a reason and the
-   passphrase. **Panic** blocks the network at once.
-6. **End session** asks for the passphrase, removes the rules and closes the log. The session
-   report is under **Reports**, on the **Session** page.
+To check a VPN right away, open the panel (`lethe-gui`, or lethe in the applications menu), turn
+the VPN on and run Test for DNS leaks on the DNS and IP page. That quick test needs no setup and
+saves nothing.
 
-Other real networks (home, office, café): use **Register the current network**, with the VPN off,
-so their IP and DNS servers also count as a leak.
+For a full session:
+
+1. Open the panel and, the first time, with the VPN off and on your real network, fill in the
+   setup on the Session page. Find my IP and the detected DNS servers describe your real network;
+   the passphrase you choose is the only secret, so keep it somewhere off the machine. This
+   writes `~/lethe/profile.yaml` and `~/lethe/baseline.age`.
+2. Click Start lethe if the service is not running. The system asks for the administrator
+   password.
+3. Turn the VPN (or Tor) on and click Start session. Begin in Observe only; Strict is offered once
+   a Selftest passes on this machine.
+4. While the session runs, the Overview shows whether you are covered, and the route shows where
+   the web sees you. A critical leak opens a full-screen red alert that closes only with a reason
+   and the passphrase. Panic blocks the network at once.
+5. End session asks for the passphrase, removes the rules and closes the log. Reports are on the
+   Session page.
+
+If you also work from other real networks, such as an office, connect to each one with the VPN
+off and use Register the current network, so its IP and DNS servers count as a leak too.
 
 ## If the network is blocked
 
-A block is always on purpose and always has a way out. The panel says what is blocked, why, and
-how to leave: **Leave panic**, **End session** or, after a crash, **Release the network** (asks
-for the administrator password). Without the panel: `sudo lethe cleanup`. Rebooting the machine
-also releases it. Details in [`docs/runbooks/crash-recovery.md`](docs/runbooks/crash-recovery.md).
+lethe blocks the network only on purpose, and the panel shows what is blocked, why, and how to
+get out: Leave panic, End session or, after a crash, Release the network (asks for the
+administrator password). Without the panel, run `sudo lethe cleanup`, or reboot. Details in [`docs/runbooks/crash-recovery.md`](docs/runbooks/crash-recovery.md).
 
 ## Documentation
 
@@ -133,9 +135,8 @@ mise run build        # static binary in bin/lethe
 mise run release -- VERSION --gui   # deb/rpm packages, SBOM and SHA256SUMS (unsigned)
 ```
 
-Never arm strict protection, or engage panic, on a machine whose network you need, unless that
-is the point: it is exactly what they are for. Tests that apply nftables run only inside the
-`test/netlab` namespaces.
+Strict protection and panic cut the network, so don't use them on a machine whose network you
+need while developing. Tests that apply nftables run only inside the `test/netlab` namespaces.
 
 ## License
 
