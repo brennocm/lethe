@@ -114,6 +114,16 @@ type UI struct {
 	leakActs                                *fyne.Container
 	leakNote                                *widget.Label
 	checkBtn                                *widget.Button
+	quickBtn                                *widget.Button // Check my connection (Overview, no session)
+	quickCard                               *fyne.Container
+	quickOut                                *widget.Label
+	muted                                   map[string]bool // warnings hidden on screen this session (MuteKey)
+	mutedSess                               string
+	mutedNote                               *fyne.Container
+	mutedLbl                                *widget.Label
+	progRows                                *fyne.Container // events page: who tried to get out
+	layerBadges                             []*badge        // session page: the layers of cover
+	dropBtn                                 *widget.Button
 	quickExit                               *contracts.DNSLeakServer // the exit a test without a session saw
 	quickAt                                 time.Time
 	idBadge, dnsBadge                       *badge
@@ -152,6 +162,7 @@ type UI struct {
 	start                        *fyne.Container // the session start form (no session)
 	firstForm                    *firstUse       // the first-use form (no profile yet)
 	actions                      *fyne.Container
+	layersCard                   fyne.CanvasObject
 	profile                      *widget.Entry
 	guardSel                     *widget.RadioGroup
 	guardNote                    *widget.Label
@@ -523,7 +534,10 @@ func (u *UI) askDNS() {
 		if !yes {
 			return
 		}
-		u.go2("leaks") // the result fills the DNS & IP page
+		if u.page != "overview" || u.st.Session != "" {
+			u.go2("leaks") // the result fills the DNS & IP page; the Overview's quick card shows it too
+		}
+		u.quickOut.SetText(u.t("dns_running"))
 		u.dnsOut.SetText(u.t("dns_running"))
 		u.dnsOut.Importance = widget.MediumImportance
 		u.dnsOut.Show()
@@ -543,12 +557,16 @@ func (u *UI) showDNS(r contracts.DNSLeakResult, err error) {
 	if err != nil {
 		u.dnsOut.Importance = widget.WarningImportance
 		u.dnsOut.SetText(fmt.Sprintf(u.t("dns_skipped"), err.Error()))
+		u.quickOut.Importance = widget.WarningImportance
+		u.quickOut.SetText(u.dnsOut.Text)
 		u.showDNSRows(contracts.DNSLeakResult{})
 		return
 	}
 	s, imp := DNSText(r, u.lang)
 	u.dnsOut.Importance = imp
 	u.dnsOut.SetText(s)
+	u.quickOut.Importance = imp
+	u.quickOut.SetText(s)
 	u.showDNSRows(r)
 	if r.Quick && r.Exit != nil { // no session: the identity card shows what this test saw
 		e := *r.Exit
@@ -593,7 +611,20 @@ func DNSText(r contracts.DNSLeakResult, lang string) (string, widget.Importance)
 		}
 		return who
 	}
+	for _, f := range r.Findings { // a quick test also reports the routes: IPv6 and the effective route
+		line := i18n.CheckText(lang, f.Check).Title
+		if f.Iface != "" {
+			line += " (" + clean(f.Iface) + ")"
+		}
+		s += "\n" + fmt.Sprintf(t("quick_finding"), line, f.Check)
+		if f.Severity == string(contracts.SeverityCritical) {
+			imp = widget.DangerImportance
+		}
+	}
 	if r.Quick {
+		if len(r.Findings) == 0 && r.Verdict != "skipped" {
+			s += "\n" + t("quick_routes_ok")
+		}
 		s += "\n" + t("dns_quick_note")
 	}
 	if r.Exit != nil {
@@ -679,6 +710,9 @@ func FingerprintLine(st contracts.Status, lang string) string {
 func (u *UI) Apply(st contracts.Status, evs []contracts.Event) {
 	u.st = st
 	u.evs = MergeEvents(u.evs, evs, maxEvents)
+	if st.Session != u.mutedSess { // hiding a warning lasts one session
+		u.mutedSess, u.muted = st.Session, nil
+	}
 	session := st.Session != "" && u.offline == nil
 	v, col := Verdict(st, u.offline != nil, u.lang)
 	u.verdict.Text, u.verdict.Color = v, col
@@ -823,7 +857,14 @@ func (u *UI) applyShell(st contracts.Status, session bool) {
 }
 
 func (u *UI) refreshTimeline() {
-	u.shown = FilterEvents(u.evs, u.filter)
+	var hidden int
+	u.shown, hidden = Unmuted(FilterEvents(u.evs, u.filter), u.muted)
+	if u.mutedNote != nil {
+		show(u.mutedNote, hidden > 0)
+		if s := fmt.Sprintf(u.t("muted_note"), hidden); u.mutedLbl.Text != s {
+			u.mutedLbl.SetText(s)
+		}
+	}
 	if u.timeline != nil {
 		u.timeline.Refresh()
 	}
@@ -1180,4 +1221,56 @@ func wrap(s string, width int) []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+// mute hides the warnings like ev (same check, same program) on screen until the session ends.
+// They are still journaled, counted and alerted; a critical alert is never hidden.
+func (u *UI) mute(ev contracts.Event) {
+	k := MuteKey(ev)
+	if k == "" {
+		return
+	}
+	if u.muted == nil {
+		u.muted = map[string]bool{}
+	}
+	u.muted[k] = true
+	u.refreshTimeline()
+	u.showDetail(contracts.Event{})
+}
+
+// askDrop guides a VPN drop test (the VPNalyzer finding: kill switches leak). The operator drops
+// the VPN by hand; lethe only reads its own events between the start and Done.
+func (u *UI) askDrop() {
+	note := u.t("drop_note_" + guardOf(u.st))
+	body := wrapped(u.t("drop_intro") + "\n\n" + note)
+	dialog.NewCustomConfirm(u.t("drop_btn"), u.t("drop_start"), u.t("cancel"), body, func(yes bool) {
+		if !yes {
+			return
+		}
+		var seq uint64
+		for _, ev := range u.evs {
+			if ev.Seq > seq {
+				seq = ev.Seq
+			}
+		}
+		steps := wrapped(u.t("drop_steps"))
+		d := dialog.NewCustom(u.t("drop_btn"), u.t("drop_done"), steps, u.panel)
+		d.SetOnClosed(func() { u.showDrop(DropOf(u.evs, seq)) })
+		d.Show()
+	}, u.panel).Show()
+}
+
+func (u *UI) showDrop(r DropReport) {
+	key := r.Verdict()
+	msg := u.t(key)
+	if r.Outside > 0 || r.Blocked > 0 {
+		msg += "\n\n" + fmt.Sprintf(u.t("drop_counts"), r.Outside, r.Blocked)
+	}
+	if len(r.Procs) > 0 {
+		msg += "\n" + u.t("drop_procs") + " " + strings.Join(r.Procs, ", ")
+	}
+	l := wrapped(msg)
+	l.Importance = map[string]widget.Importance{"drop_leak": widget.DangerImportance, "drop_blocked": widget.WarningImportance,
+		"drop_ok": widget.SuccessImportance, "drop_unseen": widget.WarningImportance}[key]
+	dialog.NewCustom(u.t("drop_btn"), u.t("close"), l, u.panel).Show()
 }

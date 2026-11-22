@@ -85,15 +85,15 @@ install is needed.
 ## Use
 
 To check a VPN right away, open the panel (`lethe-gui`, or lethe in the applications menu), turn
-the VPN on and run Test for DNS leaks on the DNS and IP page. That quick test needs no setup and
-saves nothing.
+the VPN on and click Check my connection on the Overview. It shows the exit IP, the DNS servers
+that answered and whether the routes go through the tunnel. It needs no setup and saves nothing.
 
 For a full session:
 
-1. Open the panel and, the first time, with the VPN off and on your real network, fill in the
-   setup on the Session page. Find my IP and the detected DNS servers describe your real network;
-   the passphrase you choose is the only secret, so keep it somewhere off the machine. This
-   writes `~/lethe/profile.yaml` and `~/lethe/baseline.age`.
+1. The first time, fill in the setup on the Session page. It has three steps: your real network
+   (with the VPN off; it won't go on while a tunnel is up), the persona, and a passphrase. The
+   passphrase is the only secret, so keep it somewhere off the machine. This writes
+   `~/lethe/profile.yaml` and `~/lethe/baseline.age`.
 2. Click Start lethe if the service is not running. The system asks for the administrator
    password.
 3. Turn the VPN (or Tor) on and click Start session. Begin in Observe only; Strict is offered once
@@ -101,7 +101,10 @@ For a full session:
 4. While the session runs, the Overview shows whether you are covered, and the route shows where
    the web sees you. A critical leak opens a full-screen red alert that closes only with a reason
    and the passphrase. Panic blocks the network at once.
-5. End session asks for the passphrase, removes the rules and closes the log. Reports are on the
+5. To find out whether your VPN's own kill switch holds, use Test a VPN drop on the Session page:
+   you disconnect the VPN for a few seconds and lethe reports what tried to leave. The Events
+   page groups alerts by program, and a repeated warning can be hidden on screen for the session.
+6. End session asks for the passphrase, removes the rules and closes the log. Reports are on the
    Session page.
 
 If you also work from other real networks, such as an office, connect to each one with the VPN

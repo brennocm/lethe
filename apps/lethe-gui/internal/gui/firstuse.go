@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
@@ -33,6 +34,14 @@ type firstUse struct {
 	pass1, pass2                *SecretEntry
 	egressLabels, egressByLabel map[string]string
 	baseExists                  bool // a baseline is already there: kept, opened with its passphrase
+	// the form goes in steps, in the order the operator does them: the real network with the
+	// VPN off, then the persona, then the passphrase
+	step       int
+	steps      []*fyne.Container
+	stepNames  []*canvas.Text
+	back, next *widget.Button
+	tunnelUp   bool // the last detection saw a tunnel carrying the default route
+	tunnelNote *widget.Label
 }
 
 // needsFirstUse: the operator's home is known and its default profile is missing.
@@ -87,10 +96,10 @@ func (u *UI) buildFirstUse() {
 	field := func(key string, o fyne.CanvasObject) fyne.CanvasObject {
 		return container.NewVBox(pad(text(u.t(key), colText2, 12, false, false), 0, 2), o)
 	}
-	section := func(key string) fyne.CanvasObject {
-		return container.NewVBox(widget.NewSeparator(), pad(caption(u.t(key)), 6, 2))
-	}
-	network := container.NewVBox(section("real_net"),
+	f.tunnelNote = wrapped(u.t("first_tunnel_up"))
+	f.tunnelNote.Importance = widget.DangerImportance
+	f.tunnelNote.Hide()
+	network := container.NewVBox(pad(text(u.t("first_net_hint"), colText2, 13, false, false), 0, 4), f.tunnelNote,
 		container.NewGridWithColumns(2, field("net_name", f.netName), field("net_gateway", f.gateway)),
 		field("net_ip", container.NewBorder(nil, nil, nil, f.detectBtn, f.netIP)), f.detectNote,
 		field("net_resolvers", f.resolvers))
@@ -99,24 +108,76 @@ func (u *UI) buildFirstUse() {
 	if _, err := os.Stat(base); err == nil {
 		// the baseline is kept: its own passphrase, and no network questions (they would be lost)
 		f.baseExists = true
-		network = container.NewVBox(section("real_net"), wrapped(fmt.Sprintf(u.t("first_base_exists"), base)))
+		network = container.NewVBox(wrapped(fmt.Sprintf(u.t("first_base_exists"), base)))
 		passes = container.NewGridWithColumns(2, field("passphrase", f.pass1), field("new_pass2", f.pass2))
 	}
-	form := container.NewVBox(title, intro, section("sec_persona"),
+	persona := container.NewVBox(
 		container.NewGridWithColumns(2, field("op_id", f.opID), field("persona", f.persona)),
 		container.NewGridWithColumns(2, field("egress_type", f.egress), field("expect_country", f.country)),
-		container.NewGridWithColumns(3, field("persona_tz", f.tz), field("persona_locale", f.locale), field("persona_kb", f.kb)),
-		network, section("sec_pass"), passes)
+		container.NewGridWithColumns(3, field("persona_tz", f.tz), field("persona_locale", f.locale), field("persona_kb", f.kb)))
+	pass := container.NewVBox(passes)
 	if u.opt.X11 {
 		x := wrapped(u.t("x11_warning"))
 		x.Importance = widget.LowImportance
-		form.Add(x)
+		pass.Add(x)
 	}
-	form.Add(container.NewHBox(f.createBtn))
+	after := wrapped(u.t("first_after"))
+	after.Importance = widget.LowImportance
+	pass.Add(after)
+	f.steps = []*fyne.Container{network, persona, pass}
+	row := container.NewHBox()
+	for i, k := range []string{"real_net", "sec_persona", "sec_pass"} {
+		n := text(fmt.Sprintf("%d  %s", i+1, strings.ToUpper(u.t(k))), colDim, 12, true, false)
+		f.stepNames = append(f.stepNames, n)
+		if i > 0 {
+			row.Add(text("›", colDim, 12, false, false))
+		}
+		row.Add(n)
+	}
+	f.back = widget.NewButton(u.t("step_back"), func() { u.firstStep(f.step - 1) })
+	f.next = widget.NewButton(u.t("step_next"), func() { u.firstStep(f.step + 1) })
+	f.next.Importance = widget.HighImportance
+	form := container.NewVBox(title, intro, widget.NewSeparator(), pad(row, 0, 4), network, persona, pass,
+		container.NewHBox(f.back, f.next, f.createBtn))
 	u.firstForm = f
+	u.firstStep(0)
 	// no scroll of its own: the Session page scrolls, and a scroll inside its VBox gets the
 	// minimum height (one line), which showed the title alone
 	f.box = container.NewHBox(container.New(&maxWidth{w: 720}, newCard(form).box))
+}
+
+// firstStep shows step i of the first-use form. The network step does not go on while a tunnel
+// carries the default route: what it would record is the tunnel, not the real network.
+func (u *UI) firstStep(i int) {
+	f := u.firstForm
+	if i < 0 || i >= len(f.steps) {
+		return
+	}
+	f.step = i
+	for k, c := range f.steps {
+		show(c, k == i)
+		col := colDim
+		switch {
+		case k == i:
+			col = colGold
+		case k < i:
+			col = colSage
+		}
+		if f.stepNames[k].Color != col {
+			f.stepNames[k].Color = col
+			f.stepNames[k].Refresh()
+		}
+	}
+	block := i == 0 && f.tunnelUp && !f.baseExists
+	show(f.tunnelNote, block)
+	show(f.back, i > 0)
+	show(f.next, i < len(f.steps)-1)
+	show(f.createBtn, i == len(f.steps)-1)
+	if block {
+		f.next.Disable()
+	} else {
+		f.next.Enable()
+	}
 }
 
 // detect fills what the machine knows (local reading; askIP also asks the public IP, never with
@@ -138,6 +199,8 @@ func (u *UI) detect(askIP bool) {
 		d := run(ctx, askIP)
 		fyne.Do(func() {
 			f.detectBtn.Enable()
+			f.tunnelUp = d.TunnelUp
+			u.firstStep(f.step)
 			keep := func(e *widget.Entry, v string) {
 				if strings.TrimSpace(e.Text) == "" && v != "" {
 					e.SetText(v)

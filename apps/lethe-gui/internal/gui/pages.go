@@ -83,6 +83,7 @@ type eventCells struct{ cells []*widget.Label }
 var (
 	eventCols  = []float32{1.45, 2.6, 1.5, 1, 1.7, 0.9, 1.3}
 	recentCols = []float32{1.3, 3, 1.8, 1.4}
+	progCols   = []float32{2.4, 1, 1, 1.2}
 )
 
 func newEventCells(n int) *eventCells {
@@ -181,7 +182,9 @@ func (u *UI) buildOverview() fyne.CanvasObject {
 	checkBtn := widget.NewButtonWithIcon(u.t("check_now_btn"), theme.ViewRefreshIcon(), u.checkNow)
 	checkBtn.Importance = widget.HighImportance
 	u.routeActs = container.NewVBox(checkBtn, widget.NewButtonWithIcon(u.t("dns_btn"), theme.SearchIcon(), u.askDNS))
-	right := container.NewVBox(u.routeActs, u.startCTA, u.svcBtn, u.svcBusy, u.cleanOff)
+	u.quickBtn = widget.NewButtonWithIcon(u.t("quick_btn"), theme.SearchIcon(), u.askDNS)
+	u.quickBtn.Importance = widget.HighImportance
+	right := container.NewVBox(u.routeActs, u.quickBtn, u.startCTA, u.svcBtn, u.svcBusy, u.cleanOff)
 	left := container.NewVBox(u.verdict, container.NewBorder(nil, nil, container.NewCenter(u.guardBadge.box), nil, u.header), u.fpLine)
 	u.heroCard = newCard(container.NewBorder(nil, nil, nil, container.New(fixed{w: 230}, right), left))
 
@@ -212,9 +215,20 @@ func (u *UI) buildOverview() fyne.CanvasObject {
 	more.Importance = widget.LowImportance
 	recentCard := cardOf(container.NewBorder(nil, nil, caption(u.t("recent_title")), more), rows, u.recentNone)
 
+	// no session yet: one click checks the connection (spec §9.9 quick test); what lethe cannot
+	// see from here, the browser, is pointed to with an address to open there
+	u.quickOut = wrapped(u.t("quick_none"))
+	web := widget.NewLabel(u.t("quick_browser"))
+	web.Wrapping = fyne.TextWrapWord
+	web.Importance = widget.LowImportance
+	urls := widget.NewLabel("https://browserleaks.com/webrtc   https://coveryourtracks.eff.org")
+	urls.Selectable = true
+	urls.TextStyle = fyne.TextStyle{Monospace: true}
+	u.quickCard = container.NewVBox(cardOf(caption(u.t("quick_title")), u.quickOut, widget.NewSeparator(), web, urls))
+
 	u.work = container.NewVBox(areas)
 	u.recentBox = container.NewVBox(recentCard)
-	return page(u.heroCard.box, u.work, routeCard, u.recentBox)
+	return page(u.heroCard.box, u.quickCard, u.work, routeCard, u.recentBox)
 }
 
 func (u *UI) applyOverview(st contracts.Status, session bool) {
@@ -229,6 +243,9 @@ func (u *UI) applyOverview(st contracts.Status, session bool) {
 	_, col := Verdict(st, u.offline != nil, u.lang)
 	u.heroCard.setTone(map[bool]tone{true: toneBad, false: toneMuted}[col == colBrick])
 	show(u.startCTA, !session && u.offline == nil)
+	quick := !session && u.offline == nil && st.State != "PANIC"
+	show(u.quickBtn, quick)
+	show(u.quickCard, quick)
 	show(u.work, session)
 	show(u.recentBox, session)
 	for i, a := range OverviewAreas {
@@ -495,10 +512,20 @@ func (u *UI) buildEvents() fyne.CanvasObject {
 	table := cardOf(filters, header([]string{u.t("col_time"), u.t("col_event"), u.t("col_proc"), u.t("col_proto"), u.t("col_dst"), u.t("col_iface"), u.t("col_status")}, eventCols),
 		container.New(fixed{h: 330}, u.timeline), note)
 
+	u.mutedLbl = widget.NewLabel("")
+	u.mutedLbl.Importance = widget.LowImportance
+	unmute := widget.NewButton(u.t("muted_show"), func() { u.muted = nil; u.refreshTimeline() })
+	unmute.Importance = widget.LowImportance
+	u.mutedNote = container.NewHBox(u.mutedLbl, unmute)
+	u.mutedNote.Hide()
+	u.progRows = container.NewVBox()
+	progCard := cardOf(caption(u.t("prog_title")), lowLabel(u.t("prog_note")),
+		header([]string{u.t("col_proc"), u.t("prog_outside"), u.t("prog_blocked"), u.t("prog_last")}, progCols), u.progRows)
+
 	u.detail = container.NewVBox()
 	u.detailCard = newCard(container.NewVBox(caption(u.t("ev_detail")), u.detail))
 	u.showDetail(contracts.Event{})
-	return page(stats, table, u.detailCard.box)
+	return page(stats, table, u.mutedNote, progCard, u.detailCard.box)
 }
 
 func (u *UI) applyEvents(st contracts.Status) {
@@ -509,6 +536,22 @@ func (u *UI) applyEvents(st contracts.Status) {
 	u.evStats[1].set(fmt.Sprint(blocked), u.t("ev_times"), map[bool]tone{true: toneWarn, false: toneOK}[blocked > 0], "")
 	u.evStats[2].set(fmt.Sprint(open), "", toneOf(OpenWorst(st)), "")
 	u.evStats[3].set(fmt.Sprint(len(u.evs)), "", toneMuted, "")
+	u.progRows.RemoveAll()
+	progs := ByProgram(u.evs)
+	if len(progs) == 0 {
+		u.progRows.Add(lowLabel(u.t("prog_none")))
+	}
+	for i, p := range progs {
+		if i == 8 {
+			break
+		}
+		c := newEventCells(len(progCols))
+		c.cells[0].SetText(p.Proc)
+		setCell(c.cells[1], fmt.Sprint(p.Outside), importanceOf(map[bool]tone{true: toneBad, false: toneMuted}[p.Outside > 0]))
+		setCell(c.cells[2], fmt.Sprint(p.Blocked), importanceOf(map[bool]tone{true: toneWarn, false: toneMuted}[p.Blocked > 0]))
+		c.cells[3].SetText(p.Last.Local().Format("15:04:05"))
+		u.progRows.Add(container.New(cols{w: progCols}, c.objects()...))
+	}
 	opts := append([]string{u.t("filter_iface_all")}, Ifaces(u.evs)...)
 	if strings.Join(opts, "\x00") != strings.Join(u.ifaceSel.Options, "\x00") {
 		u.ifaceSel.Options = opts
@@ -564,6 +607,11 @@ func (u *UI) showDetail(ev contracts.Event) {
 		if acts := ActionsTaken(u.evs, ev.AlertID, u.lang); len(acts) > 0 {
 			u.detail.Add(wrapped(u.t("actions_done") + ": " + strings.Join(acts, " ")))
 		}
+	}
+	if MuteKey(ev) != "" {
+		hide := widget.NewButtonWithIcon(u.t("mute_btn"), theme.VisibilityOffIcon(), func() { u.mute(ev) })
+		hide.Importance = widget.LowImportance
+		u.detail.Add(container.NewHBox(hide))
 	}
 	u.detail.Refresh()
 	u.relayout()
@@ -736,9 +784,23 @@ func (u *UI) buildSession() fyne.CanvasObject {
 	field := func(key string, v fyne.CanvasObject) fyne.CanvasObject {
 		return container.NewVBox(caption(u.t(key)), v)
 	}
+	u.dropBtn = widget.NewButtonWithIcon(u.t("drop_btn"), theme.MediaFastForwardIcon(), u.askDrop)
+	layers := container.NewVBox()
+	u.layerBadges = nil
+	for _, l := range Layers {
+		b := newBadge()
+		u.layerBadges = append(u.layerBadges, b)
+		name := text(u.t(l.Key), colText, 13, true, false)
+		layers.Add(container.NewBorder(nil, nil, nil, b.box, container.NewVBox(name, lowLabel(u.t(l.Key+"_note")))))
+	}
+	urls := widget.NewLabel("https://browserleaks.com/webrtc   https://coveryourtracks.eff.org")
+	urls.Selectable = true
+	urls.TextStyle = fyne.TextStyle{Monospace: true}
+	u.layersCard = cardOf(caption(u.t("layers_title")), lowLabel(u.t("layers_intro")), layers, urls)
 	u.actions = container.NewHBox(
 		widget.NewButtonWithIcon(u.t("ack_btn"), theme.ConfirmIcon(), func() { u.askAck(u.panel) }),
 		widget.NewButtonWithIcon(u.t("selftest_btn"), theme.MediaPlayIcon(), u.askSelftest),
+		u.dropBtn,
 		widget.NewButtonWithIcon(u.t("end_btn"), theme.LogoutIcon(), u.askEnd),
 		layout.NewSpacer(),
 		widget.NewButtonWithIcon(u.t("reports_btn"), theme.DocumentIcon(), u.showReports))
@@ -746,7 +808,28 @@ func (u *UI) buildSession() fyne.CanvasObject {
 		container.NewGridWithColumns(2, field("session_id", u.sessID), field("session_guard", u.sessGuard)), field("session_started", u.sessStart),
 		field("session_fp", u.sessFP), lowLabel(u.t("session_fp_note")), u.actions))
 	u.sessOffline = cardOf(caption(u.t("session_label")), text(u.t("verdict_offline"), colText, 22, true, false), lowLabel(u.t("session_offline")))
-	return page(u.sessInfo, u.sessOffline, u.firstForm.box, u.start)
+	return page(u.sessInfo, u.sessOffline, u.firstForm.box, u.start, u.layersCard)
+}
+
+// applyLayers marks each layer of cover: lethe's by its open alerts during a session (before it,
+// "in session"), the operator's always "you".
+func (u *UI) applyLayers(st contracts.Status, session bool) {
+	for i, l := range Layers {
+		b := u.layerBadges[i]
+		switch {
+		case l.Checks == nil:
+			b.set(u.t("layer_you"), toneGold)
+		case !session:
+			b.set(u.t("layer_in_session"), toneMuted)
+		default:
+			a := AreaOf(st, l.Checks...)
+			t := toneOf(a.Worst)
+			if a.Open == 0 {
+				t = toneOK
+			}
+			b.set(map[tone]string{toneOK: u.t("badge_ok"), toneWarn: u.t("badge_warn"), toneBad: u.t("badge_crit")}[t], t)
+		}
+	}
 }
 
 func (u *UI) applySession(st contracts.Status, session, needsFirst bool) {
@@ -755,6 +838,8 @@ func (u *UI) applySession(st contracts.Status, session, needsFirst bool) {
 	show(u.firstForm.box, first)
 	show(u.start, !session && !first && u.offline == nil)
 	show(u.sessOffline, !session && !first && u.offline != nil)
+	show(u.layersCard, !first)
+	u.applyLayers(st, session)
 	if !session {
 		return
 	}

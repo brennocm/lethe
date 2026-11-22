@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
@@ -310,4 +311,173 @@ func SensorsUp(st contracts.Status) (up, total int) {
 		}
 	}
 	return up, total
+}
+
+// procName is the program an event names (base of exe, else comm), cleaned; "" when none.
+func procName(ev contracts.Event) string {
+	p, ok := ev.Data["proc"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	name, _ := p["exe"].(string)
+	if name == "" {
+		name, _ = p["comm"].(string)
+	}
+	if name == "" {
+		return ""
+	}
+	return clean(filepath.Base(name))
+}
+
+// ProgramRow is one program on the events page's "who tried to get out" list.
+type ProgramRow struct {
+	Proc             string
+	Outside, Blocked int // traffic that left outside the tunnel; attempts the guard dropped
+	Worst            string
+	Last             time.Time
+}
+
+// outsideChecks left the machine outside the tunnel; NET-002 is the guard's drop.
+var outsideChecks = []string{"NET-001", "NET-010", "NET-012", "DNS-001"}
+
+// ByProgram groups the network alerts by the program that sent them, most outside traffic first.
+func ByProgram(evs []contracts.Event) []ProgramRow {
+	idx := map[string]int{}
+	var out []ProgramRow
+	for _, ev := range evs {
+		if ev.Type != contracts.EvCheckAlert || ev.Selftest {
+			continue
+		}
+		out2 := hasPrefix(ev.Check, outsideChecks)
+		if !out2 && ev.Check != "NET-002" {
+			continue
+		}
+		name := procName(ev)
+		if name == "" {
+			name = "?"
+		}
+		i, ok := idx[name]
+		if !ok {
+			i = len(out)
+			idx[name] = i
+			out = append(out, ProgramRow{Proc: name})
+		}
+		r := &out[i]
+		if out2 {
+			r.Outside++
+		} else {
+			r.Blocked++
+		}
+		if r.Worst != "CRITICAL" && ev.Severity != "" {
+			if ev.Severity == contracts.SeverityCritical || r.Worst == "" || r.Worst == "INFO" {
+				r.Worst = string(ev.Severity)
+			}
+		}
+		if ev.TS.After(r.Last) {
+			r.Last = ev.TS
+		}
+	}
+	sort.SliceStable(out, func(a, b int) bool {
+		if out[a].Outside != out[b].Outside {
+			return out[a].Outside > out[b].Outside
+		}
+		return out[a].Blocked > out[b].Blocked
+	})
+	return out
+}
+
+// MuteKey names a repeated warning the operator hid from the screen for this session: its check
+// and program. Critical alerts never get one: they always show.
+func MuteKey(ev contracts.Event) string {
+	if ev.Type != contracts.EvCheckAlert || ev.Severity != contracts.SeverityWarning || ev.Check == "" {
+		return ""
+	}
+	return ev.Check + "|" + procName(ev)
+}
+
+// Unmuted drops the events whose MuteKey is in muted, and says how many it dropped.
+func Unmuted(evs []contracts.Event, muted map[string]bool) ([]contracts.Event, int) {
+	if len(muted) == 0 {
+		return evs, 0
+	}
+	out := make([]contracts.Event, 0, len(evs))
+	for _, ev := range evs {
+		if k := MuteKey(ev); k != "" && muted[k] {
+			continue
+		}
+		out = append(out, ev)
+	}
+	return out, len(evs) - len(out)
+}
+
+// DropReport is what a guided VPN drop test saw between its start and its end.
+type DropReport struct {
+	TunnelDown bool // TUN-001 fired: lethe saw the tunnel go
+	Outside    int  // alerts of traffic that left outside the tunnel
+	Blocked    int  // attempts the guard dropped
+	Procs      []string
+}
+
+// DropVerdict keys: drop_leak (something got out), drop_blocked (only the guard stopped it: the
+// VPN's own kill switch did not), drop_ok (nothing tried, tunnel seen going down) and
+// drop_unseen (lethe never saw the tunnel go down).
+func (r DropReport) Verdict() string {
+	switch {
+	case r.Outside > 0:
+		return "drop_leak"
+	case r.Blocked > 0:
+		return "drop_blocked"
+	case r.TunnelDown:
+		return "drop_ok"
+	}
+	return "drop_unseen"
+}
+
+// DropOf reads the events after seq (the last one before the test began).
+func DropOf(evs []contracts.Event, seq uint64) DropReport {
+	var r DropReport
+	seen := map[string]bool{}
+	for _, ev := range evs {
+		if ev.Seq <= seq || ev.Selftest {
+			continue
+		}
+		if ev.Check == "TUN-001" && ev.Type == contracts.EvCheckAlert {
+			r.TunnelDown = true
+		}
+		if ev.Type != contracts.EvCheckAlert {
+			continue
+		}
+		switch {
+		case hasPrefix(ev.Check, outsideChecks): // a route through eth0 alone (NET-004) is not traffic
+			r.Outside++
+		case ev.Check == "NET-002":
+			r.Blocked++
+		default:
+			continue
+		}
+		if p := procName(ev); p != "" && !seen[p] {
+			seen[p] = true
+			r.Procs = append(r.Procs, p)
+		}
+	}
+	return r
+}
+
+// Layer is one layer of an operation's cover (spec §16.2): what lethe checks, by check prefix,
+// and what only the operator can (Checks empty).
+type Layer struct {
+	Key    string
+	Checks []string
+}
+
+// Layers: network and DNS, the tunnel, the machine, the persona and the browser are lethe's;
+// the isolation of the machine and the accounts are the operator's.
+var Layers = []Layer{
+	{"layer_net", []string{"NET-", "DNS-"}},
+	{"layer_tun", []string{"TUN-"}},
+	{"layer_host", []string{"HOST-"}},
+	{"layer_persona", []string{"PER-001", "HOST-005"}},
+	{"layer_browser", []string{"PER-002", "PER-003", "NET-012"}},
+	{"layer_vm", nil},
+	{"layer_accounts", nil},
 }
