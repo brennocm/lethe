@@ -232,3 +232,33 @@ func overlayText(w fyne.Window) string {
 	}
 	return b.String()
 }
+
+// With the VPN off the quick test skips DNS but still reports the routes, which is when they
+// matter; and one test runs at a time, every button that starts one disabled meanwhile.
+func TestNET004_QuickCheckWithoutTunnelAndOneAtATime(t *testing.T) {
+	r := contracts.DNSLeakResult{Verdict: "skipped", Quick: true, NoTunnel: true, Detail: "no tunnel",
+		Findings: []contracts.QuickFinding{{Check: "NET-004", Severity: "CRITICAL", Iface: "eth0", Reason: "route_ipv4"}}}
+	s, imp := DNSText(r, "en-US")
+	if !strings.Contains(s, "No tunnel is up") || !strings.Contains(s, "(eth0), seen by NET-004") || imp != widget.DangerImportance {
+		t.Fatalf("%q %v", s, imp)
+	}
+	u, f, _ := setup(t, contracts.Status{State: "READY", Color: "GRAY"})
+	u.Apply(contracts.Status{State: "READY", Color: "GRAY"}, nil)
+	u.setDNSBusy(true)
+	for _, b := range u.dnsBtns {
+		if !b.Disabled() {
+			t.Fatal("a running test disables the buttons")
+		}
+	}
+	u.askDNS()
+	if len(u.panel.Canvas().Overlays().List()) != 0 {
+		t.Fatal("no second dialog while a test runs")
+	}
+	u.setDNSBusy(false)
+	test.Tap(u.quickBtn)
+	test.Tap(overlayButton(t, u.panel, u.t("dns_run")))
+	u.wg.Wait()
+	if u.dnsBusy || len(u.dnsBtns) != 3 || u.dnsBtns[0].Disabled() || !strings.Contains(strings.Join(f.calls, ","), "dns") {
+		t.Fatalf("after the answer: busy %v, %d buttons, %v", u.dnsBusy, len(u.dnsBtns), f.calls)
+	}
+}

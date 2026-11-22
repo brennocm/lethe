@@ -117,7 +117,9 @@ type UI struct {
 	quickBtn                                *widget.Button // Check my connection (Overview, no session)
 	quickCard                               *fyne.Container
 	quickOut                                *widget.Label
-	muted                                   map[string]bool // warnings hidden on screen this session (MuteKey)
+	dnsBusy                                 bool             // a DNS test is running
+	dnsBtns                                 []*widget.Button // every button that starts one
+	muted                                   map[string]bool  // warnings hidden on screen this session (MuteKey)
 	mutedSess                               string
 	mutedNote                               *fyne.Container
 	mutedLbl                                *widget.Label
@@ -254,6 +256,7 @@ func (u *UI) Build() {
 	u.block = container.NewVBox(u.blockCard.box)
 	u.block.Hide()
 
+	u.dnsBtns = nil // the pages below register theirs
 	u.buildStart()
 	u.buildFirstUse()
 	u.pages = map[string]fyne.CanvasObject{
@@ -527,6 +530,9 @@ func (u *UI) checkNow() {
 
 // askDNS explains what the DNS test reveals before running it.
 func (u *UI) askDNS() {
+	if u.dnsBusy {
+		return // one test at a time: a second click would only get "busy" over the first's answer
+	}
 	ask := u.t("dns_ask")
 	if u.st.Session == "" {
 		ask += "\n\n" + u.t("dns_ask_quick")
@@ -538,9 +544,14 @@ func (u *UI) askDNS() {
 		if u.page != "overview" || u.st.Session != "" {
 			u.go2("leaks") // the result fills the DNS & IP page; the Overview's quick card shows it too
 		}
+		if u.dnsBusy {
+			return
+		}
+		u.setDNSBusy(true)
+		u.quickOut.Importance = widget.MediumImportance
 		u.quickOut.SetText(u.t("dns_running"))
-		u.dnsOut.SetText(u.t("dns_running"))
 		u.dnsOut.Importance = widget.MediumImportance
+		u.dnsOut.SetText(u.t("dns_running"))
 		u.dnsOut.Show()
 		u.wg.Add(1)
 		go func() {
@@ -553,7 +564,20 @@ func (u *UI) askDNS() {
 	}, u.panel).Show()
 }
 
+// setDNSBusy disables every button that starts a DNS test while one runs.
+func (u *UI) setDNSBusy(on bool) {
+	u.dnsBusy = on
+	for _, b := range u.dnsBtns {
+		if on {
+			b.Disable()
+		} else {
+			b.Enable()
+		}
+	}
+}
+
 func (u *UI) showDNS(r contracts.DNSLeakResult, err error) {
+	u.setDNSBusy(false)
 	u.dnsOut.Show()
 	if err != nil {
 		u.dnsOut.Importance = widget.WarningImportance
@@ -591,6 +615,15 @@ func DNSText(r contracts.DNSLeakResult, lang string) (string, widget.Importance)
 		s, imp = t("dns_leak"), widget.DangerImportance
 		if r.Quick {
 			s = t("dns_leak_quick")
+		}
+	case "skipped":
+		if !r.Quick {
+			return fmt.Sprintf(t("dns_skipped"), r.Detail), widget.WarningImportance
+		}
+		// a quick test still read the routes: with the VPN off they are what matters
+		s, imp = fmt.Sprintf(t("dns_skipped"), r.Detail), widget.WarningImportance
+		if r.NoTunnel {
+			s = t("quick_no_tunnel")
 		}
 	default:
 		return fmt.Sprintf(t("dns_skipped"), r.Detail), widget.WarningImportance

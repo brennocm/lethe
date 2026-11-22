@@ -181,9 +181,11 @@ func (u *UI) buildOverview() fyne.CanvasObject {
 	u.startCTA.Hide()
 	checkBtn := widget.NewButtonWithIcon(u.t("check_now_btn"), theme.ViewRefreshIcon(), u.checkNow)
 	checkBtn.Importance = widget.HighImportance
-	u.routeActs = container.NewVBox(checkBtn, widget.NewButtonWithIcon(u.t("dns_btn"), theme.SearchIcon(), u.askDNS))
+	ovDNS := widget.NewButtonWithIcon(u.t("dns_btn"), theme.SearchIcon(), u.askDNS)
+	u.routeActs = container.NewVBox(checkBtn, ovDNS)
 	u.quickBtn = widget.NewButtonWithIcon(u.t("quick_btn"), theme.SearchIcon(), u.askDNS)
 	u.quickBtn.Importance = widget.HighImportance
+	u.dnsBtns = append(u.dnsBtns, ovDNS, u.quickBtn)
 	right := container.NewVBox(u.routeActs, u.quickBtn, u.startCTA, u.svcBtn, u.svcBusy, u.cleanOff)
 	left := container.NewVBox(u.verdict, container.NewBorder(nil, nil, container.NewCenter(u.guardBadge.box), nil, u.header), u.fpLine)
 	u.heroCard = newCard(container.NewBorder(nil, nil, nil, container.New(fixed{w: 230}, right), left))
@@ -221,9 +223,7 @@ func (u *UI) buildOverview() fyne.CanvasObject {
 	web := widget.NewLabel(u.t("quick_browser"))
 	web.Wrapping = fyne.TextWrapWord
 	web.Importance = widget.LowImportance
-	urls := widget.NewLabel("https://browserleaks.com/webrtc   https://coveryourtracks.eff.org")
-	urls.Selectable = true
-	urls.TextStyle = fyne.TextStyle{Monospace: true}
+	urls := browserChecks()
 	u.quickCard = container.NewVBox(cardOf(caption(u.t("quick_title")), u.quickOut, widget.NewSeparator(), web, urls))
 
 	u.work = container.NewVBox(areas)
@@ -283,6 +283,15 @@ func (u *UI) applyOverview(st contracts.Status, session bool) {
 	show(u.recentNone, n == 0)
 }
 
+// browserChecks are the pages that test what lethe cannot see from outside the browser (WebRTC,
+// the fingerprint), as text to copy into it: the panel opens nothing on the web by itself.
+func browserChecks() *widget.Label {
+	l := widget.NewLabel("https://browserleaks.com/webrtc   https://coveryourtracks.eff.org")
+	l.Selectable = true
+	l.TextStyle = fyne.TextStyle{Monospace: true}
+	return l
+}
+
 // ---- DNS & IP ----
 
 // vecCard is one way an identity leaks.
@@ -293,6 +302,7 @@ type vecCard struct {
 
 func (u *UI) buildLeaks() fyne.CanvasObject {
 	dnsBtn := widget.NewButtonWithIcon(u.t("dns_btn"), theme.SearchIcon(), u.askDNS)
+	u.dnsBtns = append(u.dnsBtns, dnsBtn)
 	dnsBtn.Importance = widget.HighImportance
 	u.checkBtn = widget.NewButtonWithIcon(u.t("check_now_btn"), theme.ViewRefreshIcon(), u.checkNow)
 	u.leakActs = container.NewHBox(dnsBtn, u.checkBtn)
@@ -803,9 +813,7 @@ func (u *UI) buildSession() fyne.CanvasObject {
 		name := text(u.t(l.Key), colText, 13, true, false)
 		layers.Add(container.NewBorder(nil, nil, nil, b.box, container.NewVBox(name, lowLabel(u.t(l.Key+"_note")))))
 	}
-	urls := widget.NewLabel("https://browserleaks.com/webrtc   https://coveryourtracks.eff.org")
-	urls.Selectable = true
-	urls.TextStyle = fyne.TextStyle{Monospace: true}
+	urls := browserChecks()
 	u.layersCard = cardOf(caption(u.t("layers_title")), lowLabel(u.t("layers_intro")), layers, urls)
 	u.actions = container.NewHBox(
 		widget.NewButtonWithIcon(u.t("ack_btn"), theme.ConfirmIcon(), func() { u.askAck(u.panel) }),
