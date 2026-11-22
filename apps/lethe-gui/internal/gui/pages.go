@@ -226,9 +226,17 @@ func (u *UI) buildOverview() fyne.CanvasObject {
 	urls := browserChecks()
 	u.quickCard = container.NewVBox(cardOf(caption(u.t("quick_title")), u.quickOut, widget.NewSeparator(), web, urls))
 
+	u.staleBtn = widget.NewButtonWithIcon(u.t("stale_btn"), theme.ViewRefreshIcon(), u.askRestart)
+	u.staleBtn.Importance = widget.HighImportance
+	u.staleNote = wrapped("")
+	u.staleNote.Importance = widget.LowImportance
+	u.staleCard = newCard(container.NewVBox(text(u.t("stale_title"), colText, 16, true, false), wrapped(u.t("stale_body")),
+		container.NewHBox(u.staleBtn), u.staleNote))
+	u.staleCard.setTone(toneWarn)
+
 	u.work = container.NewVBox(areas)
 	u.recentBox = container.NewVBox(recentCard)
-	return page(u.heroCard.box, u.quickCard, u.work, routeCard, u.recentBox)
+	return page(u.staleCard.box, u.heroCard.box, u.quickCard, u.work, routeCard, u.recentBox)
 }
 
 func (u *UI) applyOverview(st contracts.Status, session bool) {
@@ -242,6 +250,23 @@ func (u *UI) applyOverview(st contracts.Status, session bool) {
 	}
 	_, col := Verdict(st, u.offline != nil, u.lang)
 	u.heroCard.setTone(map[bool]tone{true: toneBad, false: toneMuted}[col == colBrick])
+	stale := StaleDaemon(st, u.opt.Build, u.offline != nil)
+	show(u.staleCard.box, stale)
+	if stale {
+		canRestart := !session && u.opt.RestartService != nil
+		show(u.staleBtn, canRestart)
+		note := ""
+		switch {
+		case session:
+			note = u.t("stale_session")
+		case !canRestart:
+			note = u.t("stale_cmd")
+		}
+		if u.staleNote.Text != note {
+			u.staleNote.SetText(note)
+		}
+		show(u.staleNote, note != "")
+	}
 	show(u.startCTA, !session && u.offline == nil)
 	quick := !session && u.offline == nil && st.State != "PANIC"
 	show(u.quickBtn, quick)

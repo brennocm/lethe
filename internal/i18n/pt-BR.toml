@@ -405,6 +405,13 @@ layer_vm = "Máquina isolada"
 layer_vm_note = "Uma VM ou um sistema como Whonix ou Tails usado só na operação. O lethe não consegue saber."
 layer_accounts = "Contas e hábitos"
 layer_accounts_note = "Só contas da persona, nunca um login pessoal, nada que leve até você."
+stale_title = "O serviço do lethe está rodando uma build antiga"
+stale_body = "O pacote em disco foi atualizado, mas o serviço continua na build com que iniciou. O que este painel oferece, como Verificar minha conexão sem sessão, pode falhar até ele reiniciar."
+stale_btn = "Reiniciar o lethe"
+stale_ask = "Reiniciar o serviço do lethe para carregar a build instalada? Não há sessão aberta, então nada se perde. O sistema vai pedir a senha de administrador."
+stale_done = "lethe reiniciado na build instalada."
+stale_session = "Há uma sessão aberta. Encerre antes: reiniciar o serviço no meio da sessão a encerraria."
+stale_cmd = "Reinicie num terminal: sudo systemctl restart lethed@$USER"
 
 [actions]
 alert_tray = "Alerta na bandeja."

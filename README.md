@@ -77,6 +77,7 @@ install is needed.
 | `lethe: unknown command "gui"` | The panel is its own program: `lethe-gui` (or lethe in the applications menu). |
 | `the clone has uncommitted changes` (or `release: the tree has uncommitted changes`) | You edited files: `git stash`, or `./install.sh --allow-dirty`. |
 | `The service did not answer within 15 s`, or in the panel *lethe did not answer* | The log printed below it (or `sudo journalctl -u lethed@$USER -n 40 --no-pager`) says why; report it with that log. Stop the retries with `sudo systemctl disable --now lethed@$USER`. |
+| `ipc error -32003: no armed session` on Check my connection, or the panel says the service runs an older build | The service still runs the build it started with. Click Restart lethe in the panel, or run `sudo systemctl restart lethed@$USER` (with no session open). `./install.sh` now does this itself. |
 | `ipc: chown /run/lethe` or `ipc: chmod /run/lethe: operation not permitted` | Packages built before this fix: `git pull && ./install.sh`. |
 | `N: Download is performed unsandboxed as root` | Harmless apt note when installing from a private home by hand; `install.sh` avoids it. |
 | `mise: command not found` after a manual install | mise does not touch your shell: run the `activate` line, or call `~/.local/bin/mise`. `install.sh` does not need this. |

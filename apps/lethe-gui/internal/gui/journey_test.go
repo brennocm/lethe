@@ -262,3 +262,36 @@ func TestNET004_QuickCheckWithoutTunnelAndOneAtATime(t *testing.T) {
 		t.Fatalf("after the answer: busy %v, %d buttons, %v", u.dnsBusy, len(u.dnsBtns), f.calls)
 	}
 }
+
+// A daemon on another build than the panel (the package updated, the service not restarted; an
+// older daemon reports no build at all) is said plainly, with a restart only when no session is
+// open.
+func TestM13_PanelWarnsOfAnOlderDaemon(t *testing.T) {
+	u, _, _ := setup(t, contracts.Status{State: "READY", Color: "GRAY"})
+	u.opt.Build = "abc123"
+	restarted := 0
+	u.opt.RestartService = func(context.Context) error { restarted++; return nil }
+	u.Apply(contracts.Status{State: "READY", Color: "GRAY"}, nil) // no build: an older daemon
+	if !u.staleCard.box.Visible() || !u.staleBtn.Visible() || u.staleNote.Visible() {
+		t.Fatal("no session: the warning and the restart")
+	}
+	test.Tap(u.staleBtn)
+	test.Tap(overlayButton(t, u.panel, u.t("stale_btn")))
+	u.wg.Wait()
+	if restarted != 1 || u.flash.Text != u.t("stale_done") {
+		t.Fatalf("%d %q", restarted, u.flash.Text)
+	}
+	st := armed()
+	u.Apply(st, nil)
+	if !u.staleCard.box.Visible() || u.staleBtn.Visible() || u.staleNote.Text != u.t("stale_session") {
+		t.Fatal("in a session: no restart, the reason")
+	}
+	st.Build = "abc123"
+	u.Apply(st, nil)
+	if u.staleCard.box.Visible() {
+		t.Fatal("the same build: nothing to say")
+	}
+	if StaleDaemon(contracts.Status{}, "", false) || StaleDaemon(contracts.Status{}, "x", true) {
+		t.Fatal("no build of its own, or no daemon: no warning")
+	}
+}

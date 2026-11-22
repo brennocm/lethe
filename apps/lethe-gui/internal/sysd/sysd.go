@@ -31,7 +31,18 @@ func Start(ctx context.Context, user string) error {
 	if err != nil {
 		return err
 	}
-	return startUnit(ctx, unit)
+	return unitJob(ctx, "StartUnit", unit)
+}
+
+// Restart restarts the user's unit if it is running (TryRestartUnit: a stopped one stays
+// stopped, and lethed.service in service mode is never replaced by lethed@<user>), so a daemon
+// left on an older build loads the installed one. The panel offers it only with no session.
+func Restart(ctx context.Context, user string) error {
+	unit, err := Unit(user)
+	if err != nil {
+		return err
+	}
+	return unitJob(ctx, "TryRestartUnit", unit)
 }
 
 // TrayHost reports whether the desktop shows tray icons (a StatusNotifierWatcher on the session
@@ -52,12 +63,13 @@ const CleanupUnit = "lethe-cleanup.service"
 // Cleanup starts lethe-cleanup.service (lethe cleanup as root, polkit asking the password) and
 // waits for the oneshot to finish, so the panel can say whether the network came back.
 func Cleanup(ctx context.Context) error {
-	return startUnit(ctx, CleanupUnit)
+	return unitJob(ctx, "StartUnit", CleanupUnit)
 }
 
-// startUnit starts unit and waits for systemd to finish the job: StartUnit returns when the job
-// is queued, so success is read from the JobRemoved signal ("done"), not from the call.
-func startUnit(ctx context.Context, unit string) error {
+// unitJob runs a Manager method (StartUnit, TryRestartUnit) on unit and waits for systemd to
+// finish the job: the call returns when the job is queued, so success is read from the
+// JobRemoved signal ("done"), not from the call.
+func unitJob(ctx context.Context, method, unit string) error {
 	conn, err := dbus.ConnectSystemBus(dbus.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("system bus: %w", err)
@@ -73,7 +85,7 @@ func startUnit(ctx context.Context, unit string) error {
 		return err
 	}
 	var job dbus.ObjectPath
-	call := mgr.CallWithContext(ctx, "org.freedesktop.systemd1.Manager.StartUnit", dbus.FlagAllowInteractiveAuthorization, unit, "replace")
+	call := mgr.CallWithContext(ctx, "org.freedesktop.systemd1.Manager."+method, dbus.FlagAllowInteractiveAuthorization, unit, "replace")
 	if err := call.Store(&job); err != nil {
 		var de dbus.Error
 		if errors.As(err, &de) && de.Name == "org.freedesktop.systemd1.NoSuchUnit" {

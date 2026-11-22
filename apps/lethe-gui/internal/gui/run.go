@@ -151,3 +151,34 @@ func (u *UI) askCleanup() {
 		}()
 	}, u.panel).Show()
 }
+
+// StaleDaemon: the daemon answers but runs another build than this panel (an older daemon does
+// not report its build at all). The package was updated and the service not restarted, so
+// what the panel offers may not exist in the daemon yet.
+func StaleDaemon(st contracts.Status, self string, offline bool) bool {
+	return self != "" && !offline && st.Build != self
+}
+
+// askRestart restarts the service on the installed build, only with no session open: a restart
+// would end the session and, with the strict guard, leave the network blocked.
+func (u *UI) askRestart() {
+	dialog.NewCustomConfirm(u.t("stale_btn"), u.t("stale_btn"), u.t("cancel"), wrapped(u.t("stale_ask")), func(ok bool) {
+		if !ok || u.st.Session != "" {
+			return
+		}
+		u.staleBtn.Disable()
+		u.setFlash(u.t("service_btn_password"))
+		u.wg.Add(1)
+		go func() {
+			defer u.wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			err := u.opt.RestartService(ctx)
+			fyne.Do(u.staleBtn.Enable)
+			u.say(u.t("stale_btn"), err, u.t("stale_done"))
+			if err == nil {
+				u.poll()
+			}
+		}()
+	}, u.panel).Show()
+}

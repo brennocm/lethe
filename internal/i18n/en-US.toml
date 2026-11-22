@@ -403,6 +403,13 @@ layer_vm = "Isolated machine"
 layer_vm_note = "A VM or a system like Whonix or Tails used only for the operation. lethe can't tell."
 layer_accounts = "Accounts and habits"
 layer_accounts_note = "Persona accounts only, never a personal login, nothing that links back to you."
+stale_title = "The lethe service is running an older build"
+stale_body = "The package on disk was updated, but the service still runs the build it started with. Features this panel offers, like Check my connection without a session, may fail until it restarts."
+stale_btn = "Restart lethe"
+stale_ask = "Restart the lethe service so it loads the installed build? No session is open, so nothing is lost. You'll be asked for the administrator password."
+stale_done = "lethe restarted on the installed build."
+stale_session = "A session is open. End it first: restarting the service mid-session would end it."
+stale_cmd = "Restart it in a terminal: sudo systemctl restart lethed@$USER"
 
 [actions]
 alert_tray = "Tray alert."

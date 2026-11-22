@@ -47,6 +47,11 @@ type Options struct {
 	// Cleanup releases a block a dead session left (lethe-cleanup.service: lethe cleanup as root,
 	// polkit asking the password); nil = the panel only says how.
 	Cleanup func(ctx context.Context) error
+	// RestartService restarts the operator's unit if it runs (TryRestartUnit, polkit asking the
+	// password), so a daemon still on an older build loads the installed one; nil = only says how.
+	RestartService func(ctx context.Context) error
+	// Build is this panel's commit (buildinfo.Commit); "" turns the build comparison off.
+	Build string
 }
 
 const maxEvents = 500
@@ -117,6 +122,9 @@ type UI struct {
 	quickBtn                                *widget.Button // Check my connection (Overview, no session)
 	quickCard                               *fyne.Container
 	quickOut                                *widget.Label
+	staleCard                               *card // the daemon runs another build than the panel
+	staleBtn                                *widget.Button
+	staleNote                               *widget.Label
 	dnsBusy                                 bool             // a DNS test is running
 	dnsBtns                                 []*widget.Button // every button that starts one
 	muted                                   map[string]bool  // warnings hidden on screen this session (MuteKey)

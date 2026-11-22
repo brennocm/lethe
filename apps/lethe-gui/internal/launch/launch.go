@@ -13,6 +13,7 @@ import (
 
 	"lethe/apps/lethe-gui/internal/gui"
 	"lethe/apps/lethe-gui/internal/sysd"
+	"lethe/internal/buildinfo"
 )
 
 // Setup builds the UI on a: the flags, the daemon client (the portable socket, then the
@@ -33,9 +34,11 @@ func Setup(a fyne.App, args []string) (*gui.UI, error) {
 		if _, err := sysd.Unit(me.Username); err == nil {
 			name := me.Username
 			opt.StartService = func(ctx context.Context) error { return sysd.Start(ctx, name) }
+			opt.RestartService = func(ctx context.Context) error { return sysd.Restart(ctx, name) }
 		}
 	}
 	opt.Cleanup = sysd.Cleanup
+	opt.Build = buildinfo.Commit()
 	tctx, tcancel := context.WithTimeout(context.Background(), 2*time.Second)
 	opt.NoTray = !sysd.TrayHost(tctx)
 	tcancel()
