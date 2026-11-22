@@ -37,17 +37,19 @@ func MkdirAt(parent *os.File, name string, perm uint32) (*os.File, error) {
 	return os.NewFile(uintptr(fd), parent.Name()+"/"+name), nil // #nosec G115 -- fd from openat(2)
 }
 
-// SecureDir sets the owner (-1 keeps it) and the mode (permission, setgid and sticky bits) of
-// an open directory.
+// SecureDir sets the mode (permission, setgid and sticky bits) and the owner (-1 keeps it) of
+// an open directory. The mode goes first, while the caller still owns the directory: the
+// service daemon is root without CAP_FOWNER, so once it has handed the directory to the
+// operator it may no longer chmod it (ADR 0019). chown(2) keeps a directory's setgid bit.
 func SecureDir(d *os.File, uid, gid int, mode uint32) error {
 	fd := int(d.Fd()) // #nosec G115 -- fd
+	if err := unix.Fchmod(fd, mode); err != nil {
+		return &os.PathError{Op: "chmod", Path: d.Name(), Err: err}
+	}
 	if uid >= 0 || gid >= 0 {
 		if err := unix.Fchown(fd, uid, gid); err != nil {
 			return &os.PathError{Op: "chown", Path: d.Name(), Err: err}
 		}
-	}
-	if err := unix.Fchmod(fd, mode); err != nil {
-		return &os.PathError{Op: "chmod", Path: d.Name(), Err: err}
 	}
 	return nil
 }
@@ -118,11 +120,11 @@ func WriteFileAt(dir *os.File, name string, data []byte, perm uint32, uid, gid i
 	}
 	f := os.NewFile(uintptr(fd), dir.Name()+"/"+tmp) // #nosec G115 -- fd from openat(2)
 	_, err = f.Write(data)
+	if err == nil { // perm as given, whatever the umask (the service units run with 0077)
+		err = unix.Fchmod(fd, perm) // before the chown: without CAP_FOWNER root may not chmod what it gave away
+	}
 	if err == nil && (uid >= 0 || gid >= 0) {
 		err = unix.Fchown(fd, uid, gid)
-	}
-	if err == nil { // perm as given, whatever the umask (the service units run with 0077)
-		err = unix.Fchmod(fd, perm)
 	}
 	if err == nil {
 		err = f.Sync()

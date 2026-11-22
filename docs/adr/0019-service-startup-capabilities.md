@@ -32,3 +32,13 @@ path, never saw this. The unit test only compared the unit with `privsep.Keep`.
   still checks that the bounding set equals `Keep`.
 - The panel now says when a started service never answers (`service_no_answer`), with the
   `journalctl` command that shows why, instead of "connects in a moment".
+
+## Addendum (2026-11-21): order of chmod and chown
+With `CAP_CHOWN` the start went one step further and stopped at `ipc: chmod /run/lethe:
+operation not permitted`. The units do not grant `CAP_FOWNER`, and root without it may chmod
+only what it owns: `SecureDir` and `WriteFileAt` chowned to the operator first and chmodded
+after. Both now set the mode first, while root still owns the inode (chown(2) keeps a
+directory's setgid bit), and `ipc.Listen` uses `EnsureDir`, which changes nothing that is
+already in place. `CAP_FOWNER` stays out of the units. `TestE2E_M14_ServiceStartupCaps` runs
+that start-up in a child bounded to `Keep` + `Startup`; it needs the initial user namespace
+(`sudo mise run e2e`, as in CI) and skips under an unprivileged one, which maps a single uid.

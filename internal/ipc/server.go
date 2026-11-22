@@ -119,7 +119,7 @@ func Listen(path string, uid, gid int) (*net.UnixListener, error) {
 	if root {
 		owner, group = uid, gid
 	}
-	if err := platform.SecureDir(d, owner, group, 0o700); err != nil {
+	if err := platform.EnsureDir(d, owner, group, 0o700); err != nil {
 		return nil, fmt.Errorf("ipc: %w", err)
 	}
 	dfd := int(d.Fd()) // #nosec G115 -- fd
