@@ -79,7 +79,14 @@ banner() {
     b=$(( from[2] + (to[2] - from[2]) * i / (n - 1) ))
     printf '  %s%s%s\n' "$(rgb "$r" "$g" "$b" $(( i < n / 2 ? 179 : 108 )))" "${rows[$i]}" "$RESET"
   done
-  printf '  %sOpSec monitor %s IP, DNS and identity leaks outside the tunnel%s\n\n' "$DIM" "$DOT" "$RESET"
+  printf '  %sOpSec monitor %s IP, DNS and identity leaks outside the tunnel%s\n' "$DIM" "$DOT" "$RESET"
+  # the repository, clickable where the terminal knows OSC 8 links (others print the text alone)
+  local repo=https://github.com/brennocm/lethe
+  if [[ $color == 1 ]]; then
+    printf '  %s\033]8;;%s\033\\%s\033]8;;\033\\%s\n\n' "$GOLD" "$repo" "$repo" "$RESET"
+  else
+    printf '  %s\n\n' "$repo"
+  fi
 }
 
 section() { printf '\n%s%s%s\n' "$BOLD$TEXT" "$*" "$RESET"; }
