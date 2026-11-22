@@ -277,10 +277,12 @@ if [[ $start == yes ]]; then
   step "Reload systemd" sudo -n systemctl daemon-reload
   step "Enable $unit at boot" sudo -n systemctl enable "$unit"
   if systemctl is-active --quiet "$unit"; then
+    # restart only when no session is open (a restart mid-session ends it and, with the strict
+    # guard, leaves the network blocked); an unknown state counts as a session. No answer at all
+    # means the daemon is stuck: the restart is what fixes it.
     case $(state) in
-      ARMED|VERIFIED|PANIC)
-        note "a session is open: the service keeps the old version until you end it and run: sudo systemctl restart $unit" ;;
-      *) step "Restart $unit on the new version" sudo -n systemctl restart "$unit" ;;
+      READY|NO_BASELINE|NO_DAEMON|'') step "Restart $unit on the new version" sudo -n systemctl restart "$unit" ;;
+      *) note "a session is open: the service keeps the old version until you end it and run: sudo systemctl restart $unit" ;;
     esac
   else
     sudo -n systemctl reset-failed "$unit" >>"$log" 2>&1 || true
