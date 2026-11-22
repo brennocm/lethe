@@ -1,12 +1,12 @@
-# lethe — Especificação Técnica v1 (Linux)
+# lethe — Especificação Técnica v1 (Linux; Windows 11 na Parte IV)
 
 > Monitor local de OpSec para operações de investigação/CTI: detecta, registra e reage a vazamentos de IP, DNS e identidade durante toda a operação.
 
 | Campo | Valor |
 |---|---|
-| Versão do documento | 0.2 (revisada para execução por agente de código) |
-| Data | 2026-11-15 |
-| Plataforma v1 | Linux (x86_64 e arm64) |
+| Versão do documento | 0.3 (Parte IV: Windows 11) |
+| Data | 2026-11-19 |
+| Plataforma v1 | Linux (x86_64 e arm64); Windows 11 x64 na Parte IV |
 | Nome | `lethe` (binários `lethe` e `lethe-gui`; antes chamado `opsecmon`) |
 | Status | Pronto para implementação (decisões padrão em §25; revisáveis por ADR) |
 
@@ -14,7 +14,7 @@
 
 ## Como ler este documento
 
-- **Parte I (§1–§22)** diz **o que** construir. **Parte II (§23–§27)** diz **em que ordem** e **como provar** que está pronto. A Parte III tem os apêndices: ferramentas parecidas, correções feitas em relação à v0.1 e glossário.
+- **Parte I (§1–§22)** diz **o que** construir. **Parte II (§23–§27)** diz **em que ordem** e **como provar** que está pronto. A Parte III tem os apêndices: ferramentas parecidas, correções feitas em relação à v0.1 e glossário. A **Parte IV (W1–W12)** estende tudo isso ao Windows 11.
 - As palavras **DEVE**, **NÃO DEVE**, **DEVERIA** e **PODE** seguem a RFC 2119. Um agente de código trata DEVE como requisito testável e DEVERIA como padrão, que só pode ser descartado com um ADR.
 - Toda lacuna que esta spec não resolve segue a §25 (decisões padrão). Se nem ela resolver, o agente **escolhe a opção mais restritiva (fail-closed), registra a escolha em `docs/adr/` e continua**, sem parar para perguntar.
 - IDs (`NET-001`, `ST-NET-001`, `AC-04`, `M5`) são estáveis: aparecem no código, nos testes e nos commits.
@@ -57,6 +57,9 @@
 - [B. Correções em relação à v0.1](#apêndice-b--correções-em-relação-à-v01)
 - [C. Glossário](#apêndice-c--glossário)
 
+**Parte IV — Windows 11**
+- [W1–W12](#parte-iv--windows-11): escopo, núcleo e plataforma, arquitetura, descoberta, sensores, guarda WFP, checks, respostas, distribuição, testes, limitações e marcos
+
 ---
 
 # Parte I — Produto
@@ -97,7 +100,7 @@ DNS, IPv6, WebRTC, NTP e mDNS são subclassificações dessa regra ou verificaç
 - Não é cliente VPN nem cliente Tor.
 - Não protege contra o host comprometido com root (§22).
 - Não testa o fingerprint do navegador (isso exige uma extensão; §27).
-- Não cobre Windows nem macOS.
+- Não cobre macOS. O Windows 11 entra pela Parte IV.
 - Não inspeciona o conteúdo do tráfego que passa **dentro** do túnel (§27, IDN-001).
 
 ---
@@ -1434,7 +1437,6 @@ Cada critério é um teste automatizado (`TestE2E_ACxx_*`) no netlab, salvo indi
 
 ### v2.0
 - **Modo sensor:** o mesmo binário rodando num dispositivo em linha (Raspberry Pi, mini-PC) entre a máquina do operador e a rede, mandando eventos para a GUI por canal autenticado (WireGuard ponto a ponto). Fecha a limitação 22.1.
-- Windows (ETW/Npcap para captura, WFP para o guarda).
 - macOS (pf anchors, Network Extension).
 
 ---
@@ -1514,3 +1516,275 @@ Conclusão: vale construir. Não vale reinventar o firewall de aplicação: para
 | Âncora | Impressão digital da chave de sessão registrada fora da máquina (§14.2) |
 | Netlab | Topologia de network namespaces usada nos testes (§23.2) |
 | CINZA | Visibilidade degradada; nunca equivale a "seguro" |
+
+---
+
+# Parte IV — Windows 11
+
+Esta parte estende a v1 para o Windows 11 (ADR 0017). Tudo o que as Partes I–III dizem vale também no Windows, **exceto** o que esta parte troca. Onde ela não diz nada, vale a regra geral da spec: a opção mais restritiva, registrada num ADR. Os IDs desta parte (`W3`, `AC-W04`, `W5`) são estáveis como os da v1.
+
+## W1. Escopo e requisitos
+
+### W1.1 Alvo
+
+| Item | Valor |
+|---|---|
+| Sistema | Windows 11 23H2, 24H2 e 25H2, x64. arm64 fica para depois (a GUI com cgo precisa de uma toolchain mingw arm64 conferida) |
+| Fora | Windows 10 (fim do suporte em out/2025), Windows Server, macOS |
+| Privilégio | Administrador (UAC) no modo portátil; serviço do Windows no modo serviço |
+| Túneis | WireGuard for Windows (WireGuardNT), OpenVPN (TAP-Windows6, Wintun e ovpn-dco), clientes comerciais (Mullvad, Proton, IVPN etc.: detecção genérica), Tor (tor do sistema ou do Tor Browser) |
+
+### W1.2 Paridade
+
+O Windows entrega as mesmas funções da v1: descoberta, checks passivos, ativos e de preflight, os três modos de guarda (`off`, `reactive`, `strict`), pânico e unpanic, journal cifrado e encadeado, baseline, perfil, relatório, `verify`, selftest, CLI, TUI e GUI. Os formatos (perfil, baseline, journal, eventos, IPC) são **os mesmos**: um journal gravado no Windows é verificado no Linux e vice-versa. A lista de tipos de evento (§14.1) não muda.
+
+### W1.3 Restrições que continuam valendo
+
+- **Sem Npcap e sem driver de kernel próprio ou de terceiros.** Só APIs que o Windows já traz: WFP (Windows Filtering Platform), ETW, IP Helper, Native Wifi e registro. Motivo: o Npcap só pode ser redistribuído com licença OEM paga, e um driver próprio exige certificado EV e assinatura de atestação da Microsoft (ADR 0017).
+- **Sem `exec` de comandos externos** (princípio 10): nada de `netsh`, `pktmon`, `powershell`, `wmic`, `manage-bde`. A exceção do Windows é a mesma da v1, adaptada: o próprio `lethe.exe` (para separar privilégios) e o `lethe-gui.exe` da mesma pasta, conferido pelo hash antes de abrir (W3.1).
+- O núcleo continua sem cgo (`CGO_ENABLED=0`): as APIs do Windows entram por `golang.org/x/sys/windows` (DLLs carregadas sob demanda).
+
+## W2. Núcleo e plataforma
+
+O repositório é um só. O código se divide em:
+
+| Camada | Pacotes | No Windows |
+|---|---|---|
+| Núcleo (sem mudança) | `engine`, `contracts`, `journal`, `profile`, `baseline`, `report`, `geo`, `i18n`, `tui`, avaliadores dos `checks`, `setup` | Igual |
+| Interface de plataforma | `discovery`, `sensors/*`, `guard`, `response`, `privsep`, `platform`, `ipc` (transporte), `agent` | Uma implementação por sistema, atrás de interfaces Go, em arquivos `_linux.go`/`_windows.go` ou subpacotes (`guard/nft`, `guard/wfp`) |
+| Só Windows | `internal/win/*` (wrappers de WFP, ETW, IP Helper, wlanapi, pipes, ACL) | Novo |
+
+Regras (impostas pelo `depguard` e pelo `check`):
+
+- O `check` compila e roda `go vet` também com `GOOS=windows`. Um pacote do núcleo que não compila no Windows quebra o `check`.
+- Código `_windows.go` não importa bibliotecas que só existem no Linux (netlink, nftables, nflog, libcap, seccomp), e vice-versa.
+- O registry de checks é por plataforma: um check que não se aplica a um sistema **não é registrado** nele. O `status` e o relatório listam os checks que não se aplicam como "não se aplica neste sistema", sem deixar o estado CINZA (CINZA continua sendo "devia ver e não vê").
+- O comportamento no Linux não muda: o `mise run e2e` continua verde em todo marco Wn.
+
+## W3. Arquitetura no Windows
+
+### W3.1 Processos e modos
+
+| Processo | No Windows |
+|---|---|
+| `lethe daemon` | Serviço `lethed` (modo serviço) ou processo elevado do `lethe run` (portátil). Conta `LocalSystem` com SID de serviço restrito e só os privilégios da W3.3 |
+| `lethe agent` | Na sessão do operador, sem elevação. No portátil, o `run` o inicia com o token não elevado do próprio operador (`TokenLinkedToken`); no serviço, o daemon o inicia na sessão interativa do operador (`WTSQueryUserToken`). Nos dois casos, o binário é o próprio `lethe.exe` (`privsep`) |
+| `lethe` (CLI/TUI) | Usuário; o `run` pede elevação pelo UAC re-executando o próprio binário |
+| `lethe-gui` | Usuário. Quem abre é o agente, e só o `lethe-gui.exe` da mesma pasta do `lethe.exe`, com o SHA-256 conferido contra o valor gravado no build |
+
+O operador é o SID do usuário que pediu o `run` (portátil) ou o declarado na configuração do serviço (`LETHE_OPERATOR`, como na v1).
+
+### W3.2 IPC
+
+- Named pipe `\\.\pipe\lethe` (serviço) ou `\\.\pipe\lethe-<SID do operador>` (portátil), criado com `FILE_FLAG_FIRST_PIPE_INSTANCE` (outro processo não ocupa o nome antes) e DACL que só dá acesso ao SYSTEM e ao SID do operador. Sem porta TCP.
+- Autenticação do peer: `GetNamedPipeClientProcessId` e o token do processo (SID do usuário). Só o operador e o SYSTEM passam; o resto gera `ipc.denied` (como o `SO_PEERCRED` da §17.1).
+- O cliente só fala com o daemon depois de conferir, por `GetNamedPipeServerProcessId`, que quem atende roda como SYSTEM (como o `ipc.DialDaemon` confere root no Linux).
+- Protocolo, papéis e prova de passphrase: idênticos à §17.2–§17.3.
+
+### W3.3 Privilégios e endurecimento (equivalente à §19.3)
+
+1. Token do daemon reduzido aos privilégios necessários (`SeChangeNotifyPrivilege`, `SeSecurityPrivilege` só se as net events do WFP exigirem, `SeDebugPrivilege` só se a atribuição de processos de outros usuários exigir: decidido no W0 e registrado em ADR). No serviço, por `SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO` e `SERVICE_SID_TYPE_RESTRICTED`; no portátil, removendo os privilégios do token (`AdjustTokenPrivileges` com `SE_PRIVILEGE_REMOVED`) depois do arm.
+2. Políticas de mitigação do processo (`SetProcessMitigationPolicy`): sem código dinâmico, sem pontos de extensão legados, verificação estrita de handles, imagens só do System32 e da pasta do lethe, e **sem processos filhos** depois de iniciar o agente (o equivalente da allowlist do seccomp).
+3. Sem dumps: Windows Error Reporting desligado para o processo, e segredos em memória com `VirtualLock` e zeragem (§19.4).
+4. Daemon morto ou encerrado à força deixa os filtros do guarda (W6.4): a rede fica fechada e o `lethe status` aponta o `lethe cleanup` como administrador.
+
+### W3.4 Armazenamento
+
+- `storage.dir` padrão: `%USERPROFILE%\lethe`. ACL: operador com controle sobre perfil e baseline; `sessions\` e `state\` com escrita só do SYSTEM e leitura do operador (o equivalente do `root:operador 02750` da v1).
+- O daemon escreve como SYSTEM numa pasta que o operador controla. Por isso, todo caminho dentro dela é aberto com `FILE_FLAG_OPEN_REPARSE_POINT` e recusado se for reparse point (junction, symlink, mount point): o equivalente do `O_NOFOLLOW` e do `platform.WriteFileAt` da v1. Arquivos novos são criados com `CREATE_NEW` e renomeados com `SetFileInformationByHandle` (`FileRenameInfo`).
+- Socket e estado de execução: em `%ProgramData%\lethe` (serviço) ou `%LOCALAPPDATA%\lethe\run` (portátil), com a mesma regra de reparse points.
+
+## W4. Descoberta no Windows
+
+| Item | Fonte |
+|---|---|
+| Interfaces e topologia | `GetAdaptersAddresses`, `GetIfTable2` (`MIB_IF_ROW2`: `Type`, `MediaType`, `PhysicalMediumType`, `InterfaceAndOperStatusFlags.HardwareInterface`, `PermanentPhysicalAddress`) |
+| Mudanças | `NotifyIpInterfaceChange`, `NotifyUnicastIpAddressChange`, `NotifyRouteChange2`, com debounce de 100 ms e releitura a cada 5 s (§7) |
+| Rotas e rota efetiva | `GetIpForwardTable2`; `GetBestRoute2` para `192.0.2.1` e `2001:db8::1` (NET-004) |
+| WireGuard | WireGuardNT: IOCTL de leitura de configuração no adaptador (endpoints, último handshake, contadores) num cliente próprio mínimo (`internal/win/wgnt`), porque o `wgctrl` não fala com o WireGuardNT |
+| OpenVPN e clientes comerciais | Sockets do processo do cliente por `GetExtendedTcpTable`/`GetExtendedUdpTable` (com o PID dono), e aprendizado pelas net events do WFP (o equivalente do NFLOG da §7.4) |
+| Tor | O mesmo `torctl` da v1 |
+| DNS efetivo | DNS por adaptador (`GetAdaptersAddresses`), regras NRPT (registro local e de política), DoH (`Dnscache\Parameters` e por interface), métrica das interfaces, política de resolução multi-homed inteligente (`DisableSmartNameResolution`), LLMNR e NetBIOS sobre TCP/IP por adaptador |
+| Wi-Fi | Native Wifi (`WlanQueryInterface`: SSID, BSSID; `WlanRegisterNotification` para mudanças) |
+| Firewalls de terceiros | Enumeração de provedores, subcamadas e filtros do WFP de outros provedores (TUN-004/007) |
+
+Classificação (§7.2) no Windows, nesta ordem: `loopback` (Loopback Pseudo-Interface); `override` (perfil); `tunnel` (WireGuardNT, Wintun, TAP-Windows6, ovpn-dco, ou nome/descrição conhecida); `egress` (`HardwareInterface` verdadeiro, ou um vEthernet de switch externo do Hyper-V ligado a uma interface `egress`); `internal` (vEthernet de switch interno, NAT padrão do Hyper-V, WSL); `unknown` (todo o resto, tratada como `egress`).
+
+## W5. Sensores no Windows
+
+### W5.1 Tráfego fora do túnel (NET-001, NET-002, NET-010)
+
+O equivalente da §8 tem duas fontes:
+
+1. **Net events do WFP** (obrigatória). O daemon assina as net events (`FwpmNetEventSubscribe`) com a coleta ligada (`FWPM_ENGINE_COLLECT_NET_EVENTS`) e as palavras-chave de classificação permitida. Cada evento traz a 5-tupla, o executável (`appId`) e o SID do usuário:
+   - **NET-002:** descarte por um filtro do provedor `lethe` (tentativa bloqueada no estrito), com processo e usuário.
+   - **NET-001:** conexão permitida cujo endereço local é de uma interface `egress` ou `unknown` e cujo destino não está no allowlist. A interface vem do endereço local, e o processo vem do evento: a atribuição (NET-010) é `confidence: high` por construção.
+   - Limite: o WFP vê **fluxos**, não pacotes (a camada ALE classifica o primeiro pacote de cada fluxo). Basta para dizer que houve vazamento e quem vazou, mas não traz o conteúdo (qname do DNS, cabeçalho STUN, hostname anunciado).
+2. **Captura de pacotes pelo ETW** (`Microsoft-Windows-NDIS-PacketCapture`, o `ndiscap` que o Windows já traz), numa sessão de tempo real aberta pelo próprio daemon, só nas interfaces `egress`, com o filtro do provedor reduzindo o volume e truncamento em 512 bytes. Ela traz o conteúdo para DNS-001 (qname), NET-012 (cabeçalho STUN) e NET-009 (hostname anunciado). **Depende do spike do W0:** se não funcionar sem `exec` e dentro das metas da §21, esses três checks ficam com a classificação por porta (dport 53/853, 3478…, 5353/5355/137/138/1900), sem conteúdo, e a limitação entra na W11.
+
+A perda (SELF-002) é medida pelos eventos perdidos da sessão ETW e pelas net events descartadas.
+
+Como no Linux (§8.2): no estrito, o que o guarda barra aparece como NET-002, e um NET-001 no estrito é também defeito do guarda (`guard.bypass_detected`). Tráfego enviado por drivers de protocolo NDIS de terceiros não passa pelas camadas IP do WFP; a camada MAC (W6.3) cobre o pânico, e a W11 documenta o resto.
+
+### W5.2 Outros sensores
+
+| Sensor da v1 | No Windows |
+|---|---|
+| `netlinkmon` | Notificações do IP Helper (W4) |
+| `sockdiag` | `GetExtendedTcpTable`/`GetExtendedUdpTable` com o PID dono, a cada 1 s e sob demanda |
+| `procscan` | Lista de processos (`CreateToolhelp32Snapshot`), executável por `QueryFullProcessImageNameW`, linha de comando por `NtQueryInformationProcess(ProcessCommandLineInformation)`, a cada 2 s |
+| `nftmon` | `wfpmon`: `FwpmFilterSubscribeChanges0` e releitura a cada 5 s dos objetos do WFP, de terceiros (TUN-004) e do próprio lethe (adulteração do guarda) |
+| `fswatch` (DNS-004) | `RegNotifyChangeKeyValue` nas chaves de DNS do `Tcpip`, `Tcpip6`, `Dnscache` e NRPT, e `ReadDirectoryChangesW` na pasta do arquivo `hosts` |
+| `dbusmon` | Native Wifi, registro e serviços (W7) |
+| `hostinfo` | Registro e APIs do sistema (W7) |
+| Relógio (SELF-005) | Comparação a cada 1 s entre o relógio do sistema e `QueryUnbiasedInterruptTime` (salto > 2 s) |
+
+## W6. Guarda no Windows (WFP)
+
+### W6.1 Objetos
+
+- Um provedor `lethe` e duas subcamadas, `lethe` e `lethe_panic`, com GUIDs fixos e o maior peso (a avaliação começa por elas).
+- Filtros **não persistentes**, criados fora de sessão dinâmica: sobrevivem à morte do daemon (fail-closed, como as tabelas da §11) e somem no reboot (como a §11.6). Toda aplicação e toda atualização acontecem numa transação do WFP (`FwpmTransactionBegin0`/`Commit0`), o equivalente da transação netlink.
+- Os filtros de bloqueio usam `FWPM_FILTER_FLAG_CLEAR_ACTION_RIGHT`, para que um permit de outra subcamada não os anule. Um permit "duro" de terceiro numa subcamada de peso maior que o do lethe, ou um callout de terceiro nas mesmas camadas, é vigiado pelo TUN-004/TUN-007, que alertam.
+
+### W6.2 Estrito (equivalente da §11.3)
+
+Nas camadas `ALE_AUTH_CONNECT_V4/V6` (novos fluxos, com processo) e `OUTBOUND_IPPACKET_V4/V6` (pacotes, para cortar fluxos que existiam antes do arm), nesta ordem de peso dentro da subcamada `lethe`:
+
+1. permite loopback (`FWP_CONDITION_FLAG_IS_LOOPBACK`);
+2. permite as interfaces `tunnel` e `internal` (`FWPM_CONDITION_IP_LOCAL_INTERFACE`, pelo LUID);
+3. permite os endpoints (endereço remoto, protocolo e porta remota);
+4. permite DHCPv4 (UDP 68→67), DHCPv6 (UDP 546→547), ICMPv6 NDP (133, 135, 136) e MLDv2 (143);
+5. permite a LAN, só com `network.allow_lan: true`;
+6. bloqueia o resto (o bloqueio gera a net event do NET-002).
+
+Interfaces que não são `tunnel` nem `internal` caem no bloqueio, inclusive as que ainda não foram classificadas: o equivalente da política `drop` com allowlist de interfaces. A camada `IPFORWARD_V4/V6` bloqueia o encaminhamento para as interfaces `egress` (ICS, NAT do Hyper-V e do WSL saindo por fora), como a chain `forward` da §11.3. Com `egress.allow_vpn_client_dns`, o permite de DNS vale só para o executável do cliente VPN (`FWPM_CONDITION_ALE_APP_ID`), nunca para o processo inteiro de um serviço compartilhado (`svchost`).
+
+### W6.3 Pânico (equivalente da §11.4)
+
+Na subcamada `lethe_panic`: bloqueio de tudo nas camadas ALE (conexão e recepção), `OUTBOUND_IPPACKET`/`INBOUND_IPPACKET` (corta conexões estabelecidas) e `IPFORWARD`, exceto loopback. Com `keep_tunnel: true`, também se permitem o túnel e os endpoints. Sem `keep_tunnel`, um filtro na camada MAC de saída (`OUTBOUND_MAC_FRAME_NATIVE`) das interfaces `egress` descarta todos os quadros, cobrindo também os drivers de protocolo NDIS: é o equivalente da camada `netdev egress` da §11.5. O `link_down` não existe no Windows: o perfil aceita a chave, e o preflight avisa (I) que ela não tem efeito neste sistema.
+
+### W6.4 Remoção, sobras e adulteração
+
+- `disarm` remove todos os objetos do provedor `lethe` numa transação. `lethe cleanup` (administrador) faz o mesmo sem daemon, e só toca no provedor `lethe`.
+- `lethe status` sem daemon, como administrador, lista os filtros do provedor que sobraram e diz que a rede está bloqueada por eles (§10.6 itens 5–7).
+- O serviço BFE perde os filtros não persistentes se reiniciar. O `wfpmon` percebe o guarda ausente durante uma sessão armada, reaplica o guarda na hora e abre CRITICAL (`guard.bypass_detected`), porque houve uma janela sem proteção.
+
+### W6.5 Selftest
+
+As exceções temporárias da §18.1 são filtros de permite com a 5-tupla exata do caso e o `appId` do `lethe.exe`, removidos na mesma rodada.
+
+## W7. Checks no Windows
+
+Os IDs, severidades e respostas da §9 continuam. Muda o método:
+
+| Check | No Windows |
+|---|---|
+| NET-001, NET-002, NET-010 | W5.1 |
+| NET-003, NET-004, NET-005, NET-006 | IP Helper (W4) |
+| NET-007 | Native Wifi |
+| NET-008 | MAC atual = `PermanentPhysicalAddress`; endereços aleatórios do Windows ligados contam como MAC trocado |
+| NET-009, NET-012, DNS-001 | W5.1 (com conteúdo só se o spike da captura ETW passar) |
+| NET-011 | Igual; o socket é preso ao túnel com `IP_UNICAST_IF`/`IPV6_UNICAST_IF` |
+| NET-013 | Sondagem ativa do NCSI ligada (`NlaSvc\Parameters\Internet\EnableActiveProbing`) |
+| NET-014 | O Windows manda o hostname no DHCP: W quando o hostname é o da baseline |
+| DNS-002 | DNS por adaptador, NRPT e o teste de vazamento de DNS (§9.9) |
+| DNS-003 | DNS configurado numa interface `egress` com métrica de interface menor que a do túnel, ou NRPT que manda domínios para fora do túnel |
+| DNS-004 | Registro e arquivo `hosts` (W5.2) |
+| TUN-001, TUN-002 | Estado do adaptador; WireGuardNT (W4) |
+| TUN-003, TUN-006, TUN-008 | Iguais |
+| TUN-004 | Objetos do WFP de outros provedores: mudança = W; sumiço de um filtro de bloqueio de outro provedor = C |
+| TUN-005 | Filtros de permite por aplicativo de clientes VPN (split tunneling por app) e rotas de exclusão |
+| TUN-007 | Callouts de terceiros nas camadas que o lethe usa: o lethe não enxerga o que eles fazem (W, CINZA parcial) |
+| HOST-001 | Por `exe` (caminho ou nome do executável). `comm` e `cgroup` não existem no Windows: o validador do perfil os recusa nesse sistema e sugere `exe` |
+| HOST-002 | Câmera e microfone em uso pelo `CapabilityAccessManager\ConsentStore` (agente, no registro do usuário) |
+| HOST-003 | Processos conhecidos de acesso remoto e compartilhamento de tela |
+| HOST-004, HOST-005 | Nome do computador; fuso, locale do sistema e do usuário (agente) |
+| HOST-006 | BitLocker no volume do sistema e paginação cifrada (`NtfsEncryptPagingFile`). O método de leitura do BitLocker sem `exec` (WMI por COM) é decidido no W7, e uma dependência nova exige ADR |
+| HOST-007 | Configuração do `W32Time` |
+| HOST-008 | Perfis Wi-Fi salvos com SSID da baseline e conexão automática (Native Wifi) |
+| HOST-009 | Serviço de localização do Windows ligado (`ConsentStore\location`) |
+| PER-001 | Layout de teclado do usuário (agente), fuso e locale |
+| PER-002 | Firefox e Tor Browser como na v1 (em `%APPDATA%`); Chrome e Edge pelas políticas do registro (`WebRtcIPHandling`) |
+| PER-003 | Igual, pela linha de comando do processo |
+| SELF-001…006 | Iguais; SELF-002 e SELF-005 pela W5 |
+
+Checks novos, só do Windows (DEVEM entrar no registry do Windows, na matriz de rastreabilidade e no i18n):
+
+| ID | Nome | Tipo | Método | Sev. |
+|---|---|---|---|---|
+| NET-015 | Tecnologias de transição IPv6 ativas | PF/P | Teredo, 6to4, ISATAP ou IP-HTTPS com adaptador ativo: IPv6 que sai encapsulado por fora do túnel. C se houver rota default v6 por elas | W/C |
+| NET-016 | Proxy automático (WPAD) ou proxy do sistema fora do túnel | PF | Descoberta automática de proxy ligada, ou proxy do sistema cujo destino não sai pelo túnel | W |
+| DNS-006 | Resolução multi-homed inteligente ligada | PF/P | O Windows manda a consulta para os DNS de todas as interfaces ao mesmo tempo: com DNS numa interface `egress`, a consulta sai por fora mesmo com o túnel certo | W |
+| HOST-010 | Conta Microsoft e sincronização na sessão | PF | Conta Microsoft conectada ao usuário, OneDrive ou sincronização de configurações ligados: identificam o operador **mesmo pelo túnel** | W |
+
+## W8. Respostas no Windows
+
+| Ação | No Windows |
+|---|---|
+| `block_all` | W6.3 |
+| `kill_processes`, `kill_offender` | `TerminateProcess`, só em processos do operador (como a revisão do ADR 0015) |
+| `link_down` | Não existe (W6.3) |
+| `lock_screen` | O daemon desconecta a sessão interativa do operador (`WTSDisconnectSession`), o que volta para a tela de bloqueio |
+| `alert_tray`, `alert_sound`, `alert_fullscreen` | GUI e agente. Notificações sem `exec` (Shell_NotifyIcon ou toast por COM, decidido no W9), som por `PlaySound` |
+
+## W9. Distribuição e build
+
+- `lethe.exe`: compilação cruzada a partir do Linux (`GOOS=windows`, `CGO_ENABLED=0`), coberta pelo `repro-check` (dois builds, bytes idênticos).
+- `lethe-gui.exe`: cgo com mingw-w64, num job `windows-latest` do CI. A reprodutibilidade dele é meta, conferida a partir do W10.
+- Instalador MSI (instala em `Program Files`, registra o serviço `lethed` **sem** iniciar, cria a entrada no Menu Iniciar) e um `.zip` portátil. A ferramenta do MSI é escolhida no W10 por ADR (de preferência uma que rode no Linux, para o build ficar no mesmo pipeline).
+- **Assinatura Authenticode** do `.exe` e do `.msi` (dono do projeto). Sem ela, o SmartScreen avisa, e o Smart App Control do Windows 11 **bloqueia** binários sem assinatura. O certificado tem custo (W12) e a chave nunca vai para o CI, como na §19.2.
+- SBOM, `SHA256SUMS` e minisign iguais à v1.
+
+## W10. Testes no Windows
+
+| Camada | Onde | Observação |
+|---|---|---|
+| Unit | `windows-latest` no CI (`go test` nativo) e compilação cruzada no `check` | O gerador de filtros do WFP é testado como **dados** (lista de filtros com camadas, condições e pesos), com golden, como o ruleset nft da v1 |
+| Integração | `windows-latest`, como administrador | **Escopo de laboratório:** todo filtro de bloqueio aplicado no CI recebe uma condição a mais que o restringe aos destinos de documentação (RFC 5737, `2001:db8::/32`). Assim o guarda é exercido sem cortar a rede do runner. O golden confirma que, tirando essa condição, os filtros são idênticos aos da produção |
+| E2E | VM Hyper-V descartável (`test/winlab`), com runner próprio e checkpoint restaurado a cada rodada | Guarda sem escopo, pânico, túnel WireGuard real contra um servidor numa segunda VM, sniffer externo (o equivalente do `isp0`) |
+| Manual | Windows 11 real com Wi-Fi, WireGuard for Windows, um cliente comercial e o Tor Browser | `docs/runbooks/manual-acceptance-windows.md` |
+
+**Trava de segurança (como a do netlab):** o código que aplica filtros sem o escopo de laboratório recusa rodar se não achar o marcador da VM de teste (chave de registro criada pelo provisionamento do `test/winlab`). Nenhum teste aplica o guarda no Windows de desenvolvimento do dono.
+
+### W10.1 Critérios de aceitação
+
+Os AC-01…AC-18 valem no Windows com o prefixo `AC-W` (`AC-W04` é o AC-04 no `winlab`), trocando nftables por WFP e `ip link set down` pela desativação do adaptador. Mais:
+
+| ID | Cenário | Esperado |
+|---|---|---|
+| AC-W19 | Estrito; uma conexão TCP para fora do túnel aberta **antes** do arm | Cortada pelo arm (camada de pacotes); NET-002 registrado |
+| AC-W20 | Um filtro de permite duro de outro provedor, numa subcamada de peso maior, é criado durante a sessão | TUN-004 CRITICAL |
+| AC-W21 | Estrito; o daemon é encerrado à força; tráfego gerado; depois reboot | Os filtros ficam até o reboot; o sniffer vê zero vazamentos; depois do reboot não há filtro do provedor `lethe` |
+| AC-W22 | DNS numa interface `egress` com resolução multi-homed ligada | DNS-006 no preflight; com o guarda `off`, DNS-001 quando a consulta sai por fora |
+| AC-W23 | Teredo ativo com rota v6 | NET-015 CRITICAL |
+| AC-W24 | Serviço BFE reiniciado durante a sessão armada (só no `winlab`) | Guarda reaplicado; CRITICAL `guard.bypass_detected` |
+
+## W11. Limitações conhecidas no Windows
+
+1. Administrador local comprometido cega o daemon, como o root no Linux (§22.1).
+2. Sem a captura ETW (spike do W0), DNS-001, NET-012 e NET-009 classificam por porta, sem o conteúdo.
+3. Drivers de protocolo NDIS de terceiros (ferramentas de captura e injeção) enviam por baixo das camadas IP do WFP. A camada MAC os barra no pânico, mas no estrito eles só aparecem se a captura ETW estiver ativa.
+4. Callouts de terceiros nas mesmas camadas podem vetar ou liberar tráfego sem que o lethe saiba o porquê (TUN-007).
+5. Reinício do serviço BFE apaga os filtros não persistentes: o lethe os repõe, mas houve uma janela (W6.4).
+6. Quase todo DNS do sistema sai pelo serviço `Dnscache` (`svchost`): a atribuição de DNS-001 aponta o serviço, não o aplicativo que pediu, exceto quando a captura ETW e o provedor `Microsoft-Windows-DNS-Client` permitirem ligar a consulta ao processo.
+7. Sem assinatura Authenticode, o Smart App Control bloqueia o lethe.
+
+## W12. Marcos do Windows
+
+As regras da §24 valem (ordem, `check` verde, commits atômicos, "Estado" do `AGENTS.md` atualizado). O `check` passa a incluir a compilação para Windows a partir do W1.
+
+| Marco | Entrega | Pronto quando |
+|---|---|---|
+| **W0 — Spikes** | Provas de conceito descartáveis, fora de `internal/`: (a) captura ETW do `ndiscap` em Go puro, sem `exec`; (b) latência e conteúdo das net events do WFP (permitidas e descartadas, com `appId`); (c) se um fluxo aberto antes do arm é cortado pela camada ALE ou só pela de pacotes; (d) IOCTL do WireGuardNT; (e) GUI Fyne com mingw e notificações sem `exec`; (f) a biblioteca do WFP (`github.com/tailscale/wf` ou wrapper próprio) | ADR 0018 com o resultado de cada spike e a decisão; a W5.1 e a W11 ajustadas ao resultado |
+| **W1 — Núcleo portável** | Interfaces de plataforma, separação `_linux`/`_windows`, registry por plataforma, compilação e `vet` com `GOOS=windows` no `check`, job `windows-latest` com os unit tests | `check` verde nos dois sistemas; `mise run e2e` do Linux verde, sem mudança de comportamento |
+| **W2 — Base do Windows** | Armazenamento com ACL e sem reparse points, `VirtualLock`, IPC por named pipe com SID do peer, `lethe version`, perfil, baseline, journal, `report` e `verify` no Windows | AC-W14; journal do Windows verificado no Linux e vice-versa |
+| **W3 — Descoberta** | W4 inteira, `lethe discover --json` | Unit com fixtures; no `winlab`, túnel WireGuard classificado e endpoint descoberto |
+| **W4 — Sensores** | W5 inteira | NET-001/002/010 com processo atribuído no `winlab`; AC-W01, AC-W02 (conforme o spike), AC-W03 |
+| **W5 — Guarda WFP** | W6 inteira (estrito, reativo, pânico, camada MAC, remoção, sobras, adulteração) | Golden dos filtros; integração com escopo de laboratório no CI; AC-W04, AC-W05, AC-W08, AC-W09, AC-W13, AC-W19, AC-W21, AC-W24 no `winlab` |
+| **W6 — Daemon, serviço e privsep** | Serviço `lethed`, `run` com UAC, agente na sessão do operador, W3.3, §10.6 no Windows | AC-W16, AC-W17, AC-W18; privilégios e mitigações conferidos no token e na política do processo |
+| **W7 — Checks restantes** | TUN, HOST, PER e SELF da W7, NET-015, NET-016, DNS-006, HOST-010 | Matriz de rastreabilidade sem lacunas no registry do Windows; AC-W06, AC-W07, AC-W20, AC-W22, AC-W23 |
+| **W8 — Selftest** | §18.2 no Windows (ST-NET-006 com um adaptador de teste ou SKIP justificado, ST-TUN-004 com uma subcamada de teste, ST-HOST-001 com uma cópia do próprio binário) e `lethe setup` | AC-W11 |
+| **W9 — GUI e respostas** | GUI no Windows (bandeja, tela cheia, notificações sem `exec`), W8 inteira | Driver de teste da Fyne no `windows-latest`; roteiro manual |
+| **W10 — Empacotamento** | MSI, `.zip` portátil, serviço registrado sem iniciar, SBOM, `SHA256SUMS`, `repro-check` do `lethe.exe`, runbooks do Windows | AC-W12; dois builds do `lethe.exe` idênticos |
+| **W11 — Entrega** | Guia de release do Windows para o dono (Authenticode, assinatura do MSI, distribuição) e aceitação manual | `docs/runbooks/release-windows.md` completo; a automação não assina nem publica |
