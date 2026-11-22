@@ -83,6 +83,18 @@ type DNSLeakResult struct {
 	// Quick: run without a session (no profile, no baseline); Matched then names the interface
 	// whose own DNS server answered, not a baseline field.
 	Quick bool `json:"quick,omitempty"`
+	// Findings: in a quick test, what the machine's routes show right now (NET-003 IPv6 and
+	// NET-004 effective route outside the tunnel), by check and interface.
+	Findings []QuickFinding `json:"findings,omitempty"`
+}
+
+// QuickFinding is one condition a quick test saw (never a baseline value: an interface name and
+// the reason code of the check).
+type QuickFinding struct {
+	Check    string `json:"check"`
+	Severity string `json:"severity"`
+	Iface    string `json:"iface,omitempty"`
+	Reason   string `json:"reason,omitempty"`
 }
 
 // Lockdown explains a network blocked by lethe in three parts (spec §10.6 item 5): what is

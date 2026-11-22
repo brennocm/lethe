@@ -225,6 +225,15 @@ func TestDNS002_QuickLeakTestWithoutSession(t *testing.T) {
 	if r.Verdict != "leak" || strings.Contains(string(raw), "198.51.100.53") || r.DNS[1].Matched != "eth0" {
 		t.Fatalf("%s", raw)
 	}
+	if len(r.Findings) != 0 {
+		t.Fatalf("the route goes through wg0: no finding: %+v", r.Findings)
+	}
+	f.k.setProbe(2) // the effective route now leaves through eth0
+	r, _ = f.d.DNSLeakTest(context.Background())
+	if len(r.Findings) != 1 || r.Findings[0].Check != "NET-004" || r.Findings[0].Iface != "eth0" || r.Findings[0].Reason != "route_ipv4" {
+		t.Fatalf("the quick test reports the effective route: %+v", r.Findings)
+	}
+	f.k.setProbe(3)
 	if st := f.d.Status(); len(st.Alerts) != 0 || f.d.sess != nil {
 		t.Fatalf("no session: no alert, nothing opened: %+v", st.Alerts)
 	}

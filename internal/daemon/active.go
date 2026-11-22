@@ -229,20 +229,39 @@ func (d *Daemon) quickLeakTestUnlocking(ctx context.Context) (contracts.DNSLeakR
 	}
 	defer d.leakBusy.Store(false)
 	snap := d.discoverLocked(nil)
+	findings := quickFindings(snap)
 	snap.Tunnels = upTunnels(snap) // a tunnel that is down carries nothing: no path, not a bind error
 	path, name := d.pathLocked(snap, "", nil)
 	known := checks.Known{Resolvers: outsideResolvers(snap, name)}
 	cfg := egressip.LeakConfig{Config: egressip.Config{RootCAs: d.cfg.ActiveRootCAs}, Lookup: d.cfg.LeakLookup,
 		Domain: egressip.DefaultLeakDomain, API: egressip.DefaultLeakAPI}
 	d.mu.Unlock()
-	out := contracts.DNSLeakResult{At: d.cfg.Now().UTC(), Quick: true}
+	out := contracts.DNSLeakResult{At: d.cfg.Now().UTC(), Quick: true, Findings: findings}
 	if name == "" {
 		out.Verdict, out.Detail = "skipped", egressip.ErrNoPath.Error()
 		return out, nil
 	}
 	res := LeakVerdict(d.cfg.DNSLeak(ctx, path, cfg), known, out.At)
-	res.Quick = true
+	res.Quick, res.Findings = true, findings
 	return res, nil
+}
+
+// quickFindings are the route conditions a quick test reports with its answer: IPv6 (NET-003,
+// as when the profile expects IPv6, so only a tunnel without IPv6 beside an egress route counts)
+// and the effective route (NET-004).
+func quickFindings(snap discovery.Snapshot) []contracts.QuickFinding {
+	var out []contracts.QuickFinding
+	all := append(checks.NET003{}.Evaluate(&snap, true), checks.NET004{}.Evaluate(&snap)...)
+	for _, f := range all {
+		q := contracts.QuickFinding{Check: f.Check, Severity: string(f.Severity)}
+		q.Iface, _ = f.Data["iface"].(string)
+		q.Reason, _ = f.Data["reason"].(string)
+		if fam, ok := f.Data["family"].(string); ok && q.Reason == "" {
+			q.Reason = "route_" + fam // NET-004 names the address family
+		}
+		out = append(out, q)
+	}
+	return out
 }
 
 // upTunnels are the snapshot's tunnels whose interface is up.
