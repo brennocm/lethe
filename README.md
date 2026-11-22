@@ -17,58 +17,64 @@ Everything is done from the panel (`lethe-gui`). The terminal is only needed to 
 ## Install
 
 There are no published release files yet, so for now you build the packages from this
-repository (about five minutes, once). Run everything below as your **normal user**, not as
+repository (about five minutes the first time). Run everything as your **normal user**, not as
 root: `sudo` is asked for only where it is needed.
-
-**1. Install [mise](https://mise.jdx.dev)**, the tool that fetches the pinned Go toolchain and
-runs the build. It is not in the distro repositories:
-
-```sh
-curl https://mise.run | sh            # installs ~/.local/bin/mise (does not change your shell)
-echo $SHELL                           # which shell you use: .../bash or .../zsh
-```
-
-Then activate it in that shell (the installer only prints this line, it does not run it):
-
-```sh
-echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc && exec bash   # bash
-echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc && exec zsh      # zsh (Kali's default)
-mise doctor                                                                  # check
-```
-
-**2. Build the packages** (needs `git` and `curl`; the GUI step installs a C compiler and the
-OpenGL/X11/Wayland headers if they are missing, after asking once):
 
 ```sh
 git clone https://github.com/brennocm/lethe.git && cd lethe
-mise trust                         # allow this repository's .mise.toml
-mise install                       # Go, linters and nfpm at the pinned versions
-mise run release -- 0.1.0 --gui    # writes dist/0.1.0/ with the .deb and .rpm files
+./install.sh
 ```
 
-**3. Install them:**
+`install.sh` needs `git`, `curl`, `sudo` and systemd, and works with apt (Debian, Ubuntu, Kali),
+dnf (Fedora) or zypper (openSUSE), on amd64 or arm64. It:
+
+1. installs [mise](https://mise.jdx.dev) to `~/.local/bin` if it is missing (your shell
+   configuration is left alone);
+2. fetches the pinned Go toolchain and builds the `.deb`/`.rpm` packages into `dist/<version>/`,
+   asking once to install a C compiler and the OpenGL/X11/Wayland headers the GUI build needs;
+3. installs `lethe` and `lethe-gui` (a rebuild of the same version is reinstalled, not skipped);
+4. asks whether to start lethe for your user (`lethed@<user>.service`, also at every boot) and
+   waits for it to answer. If it does not, it prints the service's log. A service that was
+   already running is restarted on the new version, unless a session is open.
+
+| Option | Effect |
+|---|---|
+| `--no-gui` | CLI/TUI only: no GUI package, no C compiler or graphics headers |
+| `--no-start` | install only; start later with **Start lethe** in the panel |
+| `--yes` | start the service without asking (also needed when there is no terminal) |
+| `--allow-dirty` | build even with uncommitted changes in the clone |
+
+To update, `git pull && ./install.sh`. Starting the service applies no firewall rule: the network
+is guarded only when you start a session.
+
+<details>
+<summary>The same steps by hand</summary>
 
 ```sh
-sudo apt install ./dist/0.1.0/lethe_*_amd64.deb ./dist/0.1.0/lethe-gui_*_amd64.deb   # Debian, Ubuntu, Kali
+curl https://mise.run | sh                                   # ~/.local/bin/mise
+echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc && exec bash   # or zsh / ~/.zshrc
+mise trust && mise install                                   # inside the clone
+mise run release -- 0.1.0 --gui                              # dist/0.1.0/
+sudo apt install ./dist/0.1.0/lethe_*_amd64.deb ./dist/0.1.0/lethe-gui_*_amd64.deb      # Debian, Ubuntu, Kali
 sudo dnf install ./dist/0.1.0/lethe-[0-9]*.x86_64.rpm ./dist/0.1.0/lethe-gui-*.x86_64.rpm # Fedora
-lethe version
+sudo systemctl enable --now lethed@$USER                     # or Start lethe in the panel
 ```
 
-The `lethe-gui` package pulls in the graphics libraries it needs. On an arm64 machine use the
-`arm64` / `aarch64` files.
-
-Once release files are published, only step 3 is needed (with the downloaded files).
+On arm64 use the `arm64` / `aarch64` files. Once release files are published, only the package
+install is needed.
+</details>
 
 **Troubleshooting**
 
 | Message | Fix |
 |---|---|
-| `mise: command not found` right after installing it | The installer does not touch your shell: run the `echo ... activate` line and `exec $SHELL` (or call `~/.local/bin/mise` directly). |
-| `mise: command not found` | Step 1 was skipped, or it was run as root (it went to `/root/.local/bin`): `exit`, repeat it as your user, and remove the root copy with `sudo rm -rf /root/.local/bin/mise /root/.local/share/mise`. |
-| `apt install mise`: *Unable to locate package* | Expected: mise is not packaged by the distro; use step 1. |
-| `Config files in ... are not trusted` | Run `mise trust` inside the repository. |
-| `release: the tree has uncommitted changes` | You edited files; `git stash`, or add `--allow-dirty`. |
-| Anything under `sudo su` / as root | Leave the root shell (`exit`) and run as your user. |
+| `install: run as your normal user, not root` | Leave the root shell (`exit`) and run `./install.sh` as your user. If mise was installed as root, remove it: `sudo rm -rf /root/.local/bin/mise /root/.local/share/mise`. |
+| `release: the tree has uncommitted changes` | You edited files: `git stash`, or `./install.sh --allow-dirty`. |
+| `The service did not answer within 15 s`, or in the panel *lethe did not answer* | The log printed below it (or `sudo journalctl -u lethed@$USER -n 40 --no-pager`) says why; report it with that log. Stop the retries with `sudo systemctl disable --now lethed@$USER`. |
+| `ipc: chown /run/lethe` or `ipc: chmod /run/lethe: operation not permitted` | Packages built before this fix: `git pull && ./install.sh`. |
+| `N: Download is performed unsandboxed as root` | Harmless apt note when installing from a private home by hand; `install.sh` avoids it. |
+| `mise: command not found` after a manual install | mise does not touch your shell: run the `activate` line, or call `~/.local/bin/mise`. `install.sh` does not need this. |
+| `Config files in ... are not trusted` | Run `mise trust` inside the clone. |
 
 ## Use
 
