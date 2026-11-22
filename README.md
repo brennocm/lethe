@@ -101,8 +101,9 @@ For a full session:
 4. While the session runs, the Overview shows whether you are covered, and the route shows where
    the web sees you. A critical leak opens a full-screen red alert that closes only with a reason
    and the passphrase. Panic blocks the network at once.
-5. To find out whether your VPN's own kill switch holds, use Test a VPN drop on the Session page:
-   you disconnect the VPN for a few seconds and lethe reports what tried to leave. The Events
+5. To find out whether your VPN's own kill switch holds, start a session in Observe only and use
+   Test a VPN drop on the Session page: you disconnect the VPN for a few seconds and lethe
+   reports what got out. The Events
    page groups alerts by program, and a repeated warning can be hidden on screen for the session.
 6. End session asks for the passphrase, removes the rules and closes the log. Reports are on the
    Session page.

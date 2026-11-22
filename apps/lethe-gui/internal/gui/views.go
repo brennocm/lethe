@@ -332,25 +332,37 @@ func procName(ev contracts.Event) string {
 // ProgramRow is one program on the events page's "who tried to get out" list.
 type ProgramRow struct {
 	Proc             string
-	Outside, Blocked int // traffic that left outside the tunnel; attempts the guard dropped
-	Worst            string
+	Outside, Blocked int // occurrences that left outside the tunnel; attempts the guard dropped
 	Last             time.Time
 }
 
-// outsideChecks left the machine outside the tunnel; NET-002 is the guard's drop.
-var outsideChecks = []string{"NET-001", "NET-010", "NET-012", "DNS-001"}
+// outsideChecks left the machine outside the tunnel (the events page's "outside" counter);
+// NET-002 is the guard's drop.
+var outsideChecks = []string{"NET-001", "NET-012", "DNS-001"}
 
 // ByProgram groups the network alerts by the program that sent them, most outside traffic first.
-func ByProgram(evs []contracts.Event) []ProgramRow {
+// The daemon journals an alert once (a repeat only raises its count), so the occurrences come
+// from the alerts' counts and the program from the event that opened each one.
+func ByProgram(evs []contracts.Event, alerts []contracts.AlertView) []ProgramRow {
+	count := map[string]contracts.AlertView{}
+	for _, a := range alerts {
+		count[a.ID] = a
+	}
 	idx := map[string]int{}
+	done := map[string]bool{}
 	var out []ProgramRow
 	for _, ev := range evs {
-		if ev.Type != contracts.EvCheckAlert || ev.Selftest {
+		if ev.Type != contracts.EvCheckAlert || ev.Selftest || done[ev.AlertID] {
 			continue
 		}
-		out2 := hasPrefix(ev.Check, outsideChecks)
-		if !out2 && ev.Check != "NET-002" {
+		outside := hasPrefix(ev.Check, outsideChecks)
+		if !outside && ev.Check != "NET-002" {
 			continue
+		}
+		n, last := 1, ev.TS
+		if a, ok := count[ev.AlertID]; ok && ev.AlertID != "" {
+			done[ev.AlertID] = true
+			n, last = a.Count, a.LastSeen
 		}
 		name := procName(ev)
 		if name == "" {
@@ -363,18 +375,13 @@ func ByProgram(evs []contracts.Event) []ProgramRow {
 			out = append(out, ProgramRow{Proc: name})
 		}
 		r := &out[i]
-		if out2 {
-			r.Outside++
+		if outside {
+			r.Outside += n
 		} else {
-			r.Blocked++
+			r.Blocked += n
 		}
-		if r.Worst != "CRITICAL" && ev.Severity != "" {
-			if ev.Severity == contracts.SeverityCritical || r.Worst == "" || r.Worst == "INFO" {
-				r.Worst = string(ev.Severity)
-			}
-		}
-		if ev.TS.After(r.Last) {
-			r.Last = ev.TS
+		if last.After(r.Last) {
+			r.Last = last
 		}
 	}
 	sort.SliceStable(out, func(a, b int) bool {
@@ -412,52 +419,55 @@ func Unmuted(evs []contracts.Event, muted map[string]bool) ([]contracts.Event, i
 
 // DropReport is what a guided VPN drop test saw between its start and its end.
 type DropReport struct {
-	TunnelDown bool // TUN-001 fired: lethe saw the tunnel go
-	Outside    int  // alerts of traffic that left outside the tunnel
-	Blocked    int  // attempts the guard dropped
+	TunnelDown bool // TUN-001 fired or repeated: lethe saw the tunnel go
+	Outside    int  // occurrences of traffic that left outside the tunnel
 	Procs      []string
 }
 
-// DropVerdict keys: drop_leak (something got out), drop_blocked (only the guard stopped it: the
-// VPN's own kill switch did not), drop_ok (nothing tried, tunnel seen going down) and
-// drop_unseen (lethe never saw the tunnel go down).
+// Verdict keys: drop_leak (something got out), drop_ok (the tunnel went down and nothing got
+// out) and drop_unseen (lethe never saw the tunnel go down, so the test says nothing).
 func (r DropReport) Verdict() string {
 	switch {
 	case r.Outside > 0:
 		return "drop_leak"
-	case r.Blocked > 0:
-		return "drop_blocked"
 	case r.TunnelDown:
 		return "drop_ok"
 	}
 	return "drop_unseen"
 }
 
-// DropOf reads the events after seq (the last one before the test began).
-func DropOf(evs []contracts.Event, seq uint64) DropReport {
+// DropOf compares the alerts at the end of the test with those at its start. A repeat of an
+// open alert is not journaled again (dedup), so the counts are what moved; the program comes
+// from the event that opened the alert.
+func DropOf(before, after []contracts.AlertView, evs []contracts.Event) DropReport {
+	prev := map[string]int{}
+	for _, a := range before {
+		prev[a.ID] = a.Count
+	}
+	proc := map[string]string{}
+	for _, ev := range evs {
+		if ev.AlertID != "" && ev.Type == contracts.EvCheckAlert {
+			if p := procName(ev); p != "" {
+				proc[ev.AlertID] = p
+			}
+		}
+	}
 	var r DropReport
 	seen := map[string]bool{}
-	for _, ev := range evs {
-		if ev.Seq <= seq || ev.Selftest {
-			continue
-		}
-		if ev.Check == "TUN-001" && ev.Type == contracts.EvCheckAlert {
-			r.TunnelDown = true
-		}
-		if ev.Type != contracts.EvCheckAlert {
+	for _, a := range after {
+		d := a.Count - prev[a.ID]
+		if d <= 0 {
 			continue
 		}
 		switch {
-		case hasPrefix(ev.Check, outsideChecks): // a route through eth0 alone (NET-004) is not traffic
-			r.Outside++
-		case ev.Check == "NET-002":
-			r.Blocked++
-		default:
-			continue
-		}
-		if p := procName(ev); p != "" && !seen[p] {
-			seen[p] = true
-			r.Procs = append(r.Procs, p)
+		case a.Check == "TUN-001":
+			r.TunnelDown = true
+		case hasPrefix(a.Check, outsideChecks):
+			r.Outside += d
+			if p := proc[a.ID]; p != "" && !seen[p] {
+				seen[p] = true
+				r.Procs = append(r.Procs, p)
+			}
 		}
 	}
 	return r

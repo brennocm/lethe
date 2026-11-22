@@ -272,10 +272,11 @@ func (u *UI) applyOverview(st contracts.Status, session bool) {
 			v.Refresh()
 		}
 	}
-	n := len(u.evs)
+	evs, _ := Unmuted(u.evs, u.muted) // a warning hidden on screen is hidden here too
+	n := len(evs)
 	for i, r := range u.recent {
 		if i < n {
-			r.fillRecent(RowOf(u.evs[n-1-i], u.lang))
+			r.fillRecent(RowOf(evs[n-1-i], u.lang))
 		}
 		show(u.recentRows[i], i < n)
 	}
@@ -536,26 +537,35 @@ func (u *UI) applyEvents(st contracts.Status) {
 	u.evStats[1].set(fmt.Sprint(blocked), u.t("ev_times"), map[bool]tone{true: toneWarn, false: toneOK}[blocked > 0], "")
 	u.evStats[2].set(fmt.Sprint(open), "", toneOf(OpenWorst(st)), "")
 	u.evStats[3].set(fmt.Sprint(len(u.evs)), "", toneMuted, "")
+	progs := ByProgram(u.evs, st.Alerts)
+	if len(progs) > 8 {
+		progs = progs[:8]
+	}
+	// rebuilt only when it changed: Apply runs at every status
+	if sig := fmt.Sprint(progs); sig != u.progSig || len(u.progRows.Objects) == 0 {
+		u.progSig = sig
+		u.fillPrograms(progs)
+	}
+	opts := append([]string{u.t("filter_iface_all")}, Ifaces(u.evs)...)
+	if strings.Join(opts, "\x00") != strings.Join(u.ifaceSel.Options, "\x00") {
+		u.ifaceSel.Options = opts
+		u.ifaceSel.Refresh()
+	}
+}
+
+// fillPrograms redraws the "who tried to get out" rows.
+func (u *UI) fillPrograms(progs []ProgramRow) {
 	u.progRows.RemoveAll()
-	progs := ByProgram(u.evs)
 	if len(progs) == 0 {
 		u.progRows.Add(lowLabel(u.t("prog_none")))
 	}
-	for i, p := range progs {
-		if i == 8 {
-			break
-		}
+	for _, p := range progs {
 		c := newEventCells(len(progCols))
 		c.cells[0].SetText(p.Proc)
 		setCell(c.cells[1], fmt.Sprint(p.Outside), importanceOf(map[bool]tone{true: toneBad, false: toneMuted}[p.Outside > 0]))
 		setCell(c.cells[2], fmt.Sprint(p.Blocked), importanceOf(map[bool]tone{true: toneWarn, false: toneMuted}[p.Blocked > 0]))
 		c.cells[3].SetText(p.Last.Local().Format("15:04:05"))
 		u.progRows.Add(container.New(cols{w: progCols}, c.objects()...))
-	}
-	opts := append([]string{u.t("filter_iface_all")}, Ifaces(u.evs)...)
-	if strings.Join(opts, "\x00") != strings.Join(u.ifaceSel.Options, "\x00") {
-		u.ifaceSel.Options = opts
-		u.ifaceSel.Refresh()
 	}
 }
 

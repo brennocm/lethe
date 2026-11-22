@@ -122,7 +122,8 @@ type UI struct {
 	mutedNote                               *fyne.Container
 	mutedLbl                                *widget.Label
 	progRows                                *fyne.Container // events page: who tried to get out
-	layerBadges                             []*badge        // session page: the layers of cover
+	progSig                                 string
+	layerBadges                             []*badge // session page: the layers of cover
 	dropBtn                                 *widget.Button
 	quickExit                               *contracts.DNSLeakServer // the exit a test without a session saw
 	quickAt                                 time.Time
@@ -1239,23 +1240,21 @@ func (u *UI) mute(ev contracts.Event) {
 }
 
 // askDrop guides a VPN drop test (the VPNalyzer finding: kill switches leak). The operator drops
-// the VPN by hand; lethe only reads its own events between the start and Done.
+// the VPN by hand; lethe only compares its own alerts at the start and at Done. Only in Observe
+// only: with strict or reactive protection TUN-001 is CRITICAL and blocks the network and closes
+// the operation's programs (§10.4), which is the guard working, not a test.
 func (u *UI) askDrop() {
-	note := u.t("drop_note_" + guardOf(u.st))
-	body := wrapped(u.t("drop_intro") + "\n\n" + note)
-	dialog.NewCustomConfirm(u.t("drop_btn"), u.t("drop_start"), u.t("cancel"), body, func(yes bool) {
+	if guardOf(u.st) != "off" {
+		dialog.NewCustom(u.t("drop_btn"), u.t("close"), wrapped(u.t("drop_needs_observe")), u.panel).Show()
+		return
+	}
+	dialog.NewCustomConfirm(u.t("drop_btn"), u.t("drop_start"), u.t("cancel"), wrapped(u.t("drop_intro")), func(yes bool) {
 		if !yes {
 			return
 		}
-		var seq uint64
-		for _, ev := range u.evs {
-			if ev.Seq > seq {
-				seq = ev.Seq
-			}
-		}
-		steps := wrapped(u.t("drop_steps"))
-		d := dialog.NewCustom(u.t("drop_btn"), u.t("drop_done"), steps, u.panel)
-		d.SetOnClosed(func() { u.showDrop(DropOf(u.evs, seq)) })
+		before := append([]contracts.AlertView(nil), u.st.Alerts...)
+		d := dialog.NewCustom(u.t("drop_btn"), u.t("drop_done"), wrapped(u.t("drop_steps")), u.panel)
+		d.SetOnClosed(func() { u.showDrop(DropOf(before, u.st.Alerts, u.evs)) })
 		d.Show()
 	}, u.panel).Show()
 }
@@ -1263,14 +1262,14 @@ func (u *UI) askDrop() {
 func (u *UI) showDrop(r DropReport) {
 	key := r.Verdict()
 	msg := u.t(key)
-	if r.Outside > 0 || r.Blocked > 0 {
-		msg += "\n\n" + fmt.Sprintf(u.t("drop_counts"), r.Outside, r.Blocked)
+	if r.Outside > 0 {
+		msg += "\n\n" + fmt.Sprintf(u.t("drop_counts"), r.Outside)
 	}
 	if len(r.Procs) > 0 {
 		msg += "\n" + u.t("drop_procs") + " " + strings.Join(r.Procs, ", ")
 	}
 	l := wrapped(msg)
-	l.Importance = map[string]widget.Importance{"drop_leak": widget.DangerImportance, "drop_blocked": widget.WarningImportance,
+	l.Importance = map[string]widget.Importance{"drop_leak": widget.DangerImportance,
 		"drop_ok": widget.SuccessImportance, "drop_unseen": widget.WarningImportance}[key]
 	dialog.NewCustom(u.t("drop_btn"), u.t("close"), l, u.panel).Show()
 }

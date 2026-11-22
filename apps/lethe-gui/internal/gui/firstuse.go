@@ -135,7 +135,17 @@ func (u *UI) buildFirstUse() {
 		row.Add(n)
 	}
 	f.back = widget.NewButton(u.t("step_back"), func() { u.firstStep(f.step - 1) })
-	f.next = widget.NewButton(u.t("step_next"), func() { u.firstStep(f.step + 1) })
+	f.next = widget.NewButton(u.t("step_next"), func() {
+		if f.step == 1 { // every field Validate checks is on the persona step: say it here
+			a := u.firstAnswers()
+			if err := a.Validate(); err != nil {
+				u.setFlash(u.t("first_title") + ": " + err.Error())
+				return
+			}
+			u.setFlash("")
+		}
+		u.firstStep(f.step + 1)
+	})
 	f.next.Importance = widget.HighImportance
 	form := container.NewVBox(title, intro, widget.NewSeparator(), pad(row, 0, 4), network, persona, pass,
 		container.NewHBox(f.back, f.next, f.createBtn))
@@ -221,7 +231,7 @@ func (u *UI) detect(askIP bool) {
 			keep(f.netIP, ip)
 			switch {
 			case d.TunnelUp:
-				f.detectNote.SetText(u.t("detect_tunnel_up"))
+				f.detectNote.SetText(u.t("detect_ip_note")) // the red note above says why
 			case ip == "":
 				f.detectNote.SetText(u.t("detect_failed"))
 			default:
@@ -273,6 +283,7 @@ func (u *UI) createFirst() {
 	if err := a.Validate(); err != nil {
 		wipe(p1)
 		u.setFlash(u.t("first_title") + ": " + err.Error())
+		u.firstStep(1)
 		return
 	}
 	f.createBtn.Disable()
