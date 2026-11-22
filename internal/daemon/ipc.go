@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"lethe/internal/buildinfo"
 	"lethe/internal/contracts"
 	"lethe/internal/ipc"
 	"lethe/internal/privsep"
@@ -19,7 +20,7 @@ import (
 func (d *Daemon) Status() Status {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	st := Status{State: string(d.eng.Session()), Color: string(d.colorLocked()), Alerts: []AlertView{}, Degraded: []string{}, Sensors: []SensorView{}, Agent: d.agent != nil}
+	st := Status{State: string(d.eng.Session()), Color: string(d.colorLocked()), Build: buildinfo.Commit(), Alerts: []AlertView{}, Degraded: []string{}, Sensors: []SensorView{}, Agent: d.agent != nil}
 	s := d.sess
 	if s == nil {
 		st.Lockdown = LeftoverLockdown(d.leftoverLocked(), true)

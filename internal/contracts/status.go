@@ -14,6 +14,7 @@ import (
 type Status struct {
 	State       string       `json:"state"`
 	Color       string       `json:"color"`
+	Build       string       `json:"build,omitempty"` // the daemon's commit: the panel warns when it runs another build
 	Session     string       `json:"session,omitempty"`
 	Fingerprint string       `json:"fingerprint,omitempty"`
 	Guard       string       `json:"guard,omitempty"`

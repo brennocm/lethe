@@ -29,6 +29,19 @@ type Info struct {
 	GeoDBDate string `json:"geo_db_date"`
 }
 
+// Commit is the VCS revision this binary was built from, or "" when the build carries none
+// (go test, a build outside the repository). The panel compares it with the daemon's.
+func Commit() string {
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range bi.Settings {
+			if s.Key == "vcs.revision" {
+				return s.Value
+			}
+		}
+	}
+	return ""
+}
+
 // Read collects build information. exePath is the binary to hash; pass "" for /proc/self/exe.
 func Read(exePath string) (Info, error) {
 	info := Info{
