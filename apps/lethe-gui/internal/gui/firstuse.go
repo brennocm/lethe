@@ -50,7 +50,13 @@ func (u *UI) buildFirstUse() {
 		e.SetText(v)
 		return e
 	}
-	f.opID, f.persona, f.country = entry(def.OpID), entry(def.Persona), entry(def.Country)
+	// the operation ID and the persona have no real default: an example, as a placeholder
+	example := func(v string) *widget.Entry {
+		e := widget.NewEntry()
+		e.SetPlaceHolder(v)
+		return e
+	}
+	f.opID, f.persona, f.country = example(def.OpID), example(def.Persona), entry(def.Country)
 	f.tz, f.locale, f.kb = entry(def.Timezone), entry(def.Locale), entry(def.Keyboard)
 	f.netName, f.netIP, f.resolvers, f.gateway = entry(def.Network.Name), entry(""), entry(""), entry("")
 	f.netIP.TextStyle = fyne.TextStyle{Monospace: true}
@@ -75,15 +81,16 @@ func (u *UI) buildFirstUse() {
 	f.createBtn.Importance = widget.HighImportance
 	f.pass2.OnSubmit = u.createFirst
 
-	title := widget.NewLabel(u.t("first_title"))
-	title.TextStyle = fyne.TextStyle{Bold: true}
+	title := text(u.t("first_title"), colText, 20, true, false)
 	intro := wrapped(u.t("first_intro"))
-	sub := widget.NewLabel(u.t("real_net"))
-	sub.TextStyle = fyne.TextStyle{Bold: true}
+	// a label is small and muted above its field, so it never reads as typed text
 	field := func(key string, o fyne.CanvasObject) fyne.CanvasObject {
-		return container.NewVBox(widget.NewLabel(u.t(key)), o)
+		return container.NewVBox(pad(text(u.t(key), colText2, 12, false, false), 0, 2), o)
 	}
-	network := container.NewVBox(widget.NewSeparator(), sub,
+	section := func(key string) fyne.CanvasObject {
+		return container.NewVBox(widget.NewSeparator(), pad(caption(u.t(key)), 6, 2))
+	}
+	network := container.NewVBox(section("real_net"),
 		container.NewGridWithColumns(2, field("net_name", f.netName), field("net_gateway", f.gateway)),
 		field("net_ip", container.NewBorder(nil, nil, nil, f.detectBtn, f.netIP)), f.detectNote,
 		field("net_resolvers", f.resolvers))
@@ -92,14 +99,14 @@ func (u *UI) buildFirstUse() {
 	if _, err := os.Stat(base); err == nil {
 		// the baseline is kept: its own passphrase, and no network questions (they would be lost)
 		f.baseExists = true
-		network = container.NewVBox(widget.NewSeparator(), wrapped(fmt.Sprintf(u.t("first_base_exists"), base)))
+		network = container.NewVBox(section("real_net"), wrapped(fmt.Sprintf(u.t("first_base_exists"), base)))
 		passes = container.NewGridWithColumns(2, field("passphrase", f.pass1), field("new_pass2", f.pass2))
 	}
-	form := container.NewVBox(title, intro,
+	form := container.NewVBox(title, intro, section("sec_persona"),
 		container.NewGridWithColumns(2, field("op_id", f.opID), field("persona", f.persona)),
 		container.NewGridWithColumns(2, field("egress_type", f.egress), field("expect_country", f.country)),
 		container.NewGridWithColumns(3, field("persona_tz", f.tz), field("persona_locale", f.locale), field("persona_kb", f.kb)),
-		network, widget.NewSeparator(), passes)
+		network, section("sec_pass"), passes)
 	if u.opt.X11 {
 		x := wrapped(u.t("x11_warning"))
 		x.Importance = widget.LowImportance
@@ -166,7 +173,13 @@ func (u *UI) firstAnswers() lsetup.Answers {
 	f := u.firstForm
 	a := lsetup.Defaults(u.opt.Home)
 	tr := func(e *widget.Entry) string { return strings.TrimSpace(e.Text) }
-	a.OpID, a.Persona, a.Egress, a.Country = tr(f.opID), tr(f.persona), f.egressByLabel[f.egress.Selected], tr(f.country)
+	orExample := func(e *widget.Entry) string { // left empty: the example it shows
+		if v := tr(e); v != "" {
+			return v
+		}
+		return e.PlaceHolder
+	}
+	a.OpID, a.Persona, a.Egress, a.Country = orExample(f.opID), orExample(f.persona), f.egressByLabel[f.egress.Selected], tr(f.country)
 	a.Timezone, a.Locale, a.Keyboard = tr(f.tz), tr(f.locale), tr(f.kb)
 	a.WorkLimit = u.opt.WorkFactor
 	a.Network.Name, a.Network.GatewayIP = tr(f.netName), tr(f.gateway)

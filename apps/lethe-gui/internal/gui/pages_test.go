@@ -77,9 +77,27 @@ func TestNET011_LeaksPage(t *testing.T) {
 	if len(u.dnsRows.Objects) != 2 || u.dnsBadge.t.Text != "VAZOU" || u.page != "overview" {
 		t.Fatalf("dns rows: %d %q", len(u.dnsRows.Objects), u.dnsBadge.t.Text)
 	}
-	u.Apply(contracts.Status{State: "READY", Color: "GRAY"}, nil)
-	if u.leakActs.Visible() || !u.leakNote.Visible() {
-		t.Fatal("the tests need a session")
+	// without a session the DNS test still runs (a quick test); check now needs a session
+	ready := contracts.Status{State: "READY", Color: "GRAY"}
+	u.Apply(ready, nil)
+	if !u.leakActs.Visible() || u.checkBtn.Visible() || !u.leakNote.Visible() || u.leakNote.Text != u.t("leaks_quick") {
+		t.Fatalf("no session: the DNS test only, with the quick note: %q", u.leakNote.Text)
+	}
+	u.showDNS(contracts.DNSLeakResult{Verdict: "leak", Quick: true, At: t0, Exit: &contracts.DNSLeakServer{IP: "203.0.113.9", Country: "NL", ASN: "AS64500"},
+		DNS: []contracts.DNSLeakServer{{Matched: "eth0", Country: "BR"}}}, nil)
+	if u.idIP.Text != "203.0.113.9" || u.idBadge.t.Text != u.t("badge_quick") || u.idPath.Text != u.t("id_path_quick") ||
+		!strings.Contains(u.dnsOut.Text, u.t("dns_quick_note")) || !strings.Contains(u.dnsOut.Text, "DNS de eth0, fora do túnel") ||
+		strings.Contains(u.dnsOut.Text, u.t("dns_leak")) {
+		t.Fatalf("quick test: %q %q %q", u.idIP.Text, u.idBadge.t.Text, u.dnsOut.Text)
+	}
+	u.Apply(ready, nil) // the next status keeps what the quick test saw
+	if u.idIP.Text != "203.0.113.9" {
+		t.Fatalf("%q", u.idIP.Text)
+	}
+	ready.State = "PANIC"
+	u.Apply(ready, nil)
+	if u.leakActs.Visible() || u.leakNote.Text != u.t("leaks_need_daemon") {
+		t.Fatal("in panic nothing leaves: no test")
 	}
 }
 

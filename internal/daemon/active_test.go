@@ -12,6 +12,7 @@ import (
 	"lethe/internal/baseline"
 	"lethe/internal/checks"
 	"lethe/internal/contracts"
+	"lethe/internal/discovery"
 	"lethe/internal/geo"
 	"lethe/internal/sensors/egressip"
 )
@@ -110,9 +111,6 @@ func TestNET011_DNSLeakTestVerdicts(t *testing.T) {
 	b.Networks = []baseline.Network{{Name: "casa", Resolvers: []string{"198.51.100.53"}}}
 	f.base, _ = baseline.Encrypt(b, f.pass, 10)
 	f.ident, _ = b.Identity()
-	if _, err := f.d.DNSLeakTest(context.Background()); err == nil {
-		t.Fatal("no session: the test must be refused")
-	}
 	answer := egressip.LeakResult{Exit: &egressip.LeakServer{IP: netip.MustParseAddr("203.0.113.9"), Country: "NL"},
 		DNS: []egressip.LeakServer{{IP: netip.MustParseAddr("203.0.113.53"), Country: "NL"}}}
 	var gotPath egressip.Path
@@ -196,5 +194,44 @@ func TestNET011_CheckNowKeepsAGap(t *testing.T) {
 		if d := at[i].Sub(at[i-1]); d < 290*time.Millisecond {
 			t.Fatalf("rounds %v apart", d)
 		}
+	}
+}
+
+type fakeResolved []discovery.ResolvedLink
+
+func (r fakeResolved) Links(map[int]string) ([]discovery.ResolvedLink, error) { return r, nil }
+
+// Without a session the DNS leak test still runs, through the tunnel, with no profile and no
+// baseline: a server configured on an interface outside the tunnel is a leak, named by the
+// interface; nothing is journaled and no alert is raised. With no tunnel it does not run.
+func TestDNS002_QuickLeakTestWithoutSession(t *testing.T) {
+	f := newFixture(t)
+	f.d.cfg.Resolved = fakeResolved{{Iface: "eth0", Servers: []string{"198.51.100.53"}}, {Iface: "wg0", Servers: []string{"10.64.0.1"}}}
+	answer := egressip.LeakResult{Exit: &egressip.LeakServer{IP: netip.MustParseAddr("203.0.113.9"), Country: "NL"},
+		DNS: []egressip.LeakServer{{IP: netip.MustParseAddr("203.0.113.53"), Country: "NL"}}}
+	var got egressip.LeakConfig
+	var gotPath egressip.Path
+	f.d.cfg.DNSLeak = func(_ context.Context, p egressip.Path, c egressip.LeakConfig) egressip.LeakResult {
+		gotPath, got = p, c
+		return answer
+	}
+	r, err := f.d.DNSLeakTest(context.Background())
+	if err != nil || !r.Quick || r.Verdict != "ok" || gotPath.Tunnel != "wg0" || got.Domain != egressip.DefaultLeakDomain || r.Exit.IP != "203.0.113.9" {
+		t.Fatalf("%+v %v %+v %+v", r, err, gotPath, got)
+	}
+	answer.DNS = append(answer.DNS, egressip.LeakServer{IP: netip.MustParseAddr("198.51.100.53"), Country: "BR"})
+	r, _ = f.d.DNSLeakTest(context.Background())
+	raw, _ := json.Marshal(r)
+	if r.Verdict != "leak" || strings.Contains(string(raw), "198.51.100.53") || r.DNS[1].Matched != "eth0" {
+		t.Fatalf("%s", raw)
+	}
+	if st := f.d.Status(); len(st.Alerts) != 0 || f.d.sess != nil {
+		t.Fatalf("no session: no alert, nothing opened: %+v", st.Alerts)
+	}
+	f.k.mu.Lock()
+	f.k.wgDown = true
+	f.k.mu.Unlock()
+	if r, err := f.d.DNSLeakTest(context.Background()); err != nil || r.Verdict != "skipped" || !r.Quick {
+		t.Fatalf("no tunnel: skipped before any name is resolved: %+v %v", r, err)
 	}
 }

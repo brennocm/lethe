@@ -9,6 +9,7 @@ import (
 
 	"lethe/internal/checks"
 	"lethe/internal/contracts"
+	"lethe/internal/discovery"
 	"lethe/internal/sensors/egressip"
 	"lethe/internal/sensors/hostinfo"
 )
@@ -61,8 +62,13 @@ func (d *Daemon) activeLoop(ctx context.Context, s *session) {
 // activePath chooses how the query leaves: Tor's SOCKS port for tor profiles, else the first
 // tunnel interface with its DNS servers.
 func (d *Daemon) activePathLocked(s *session) (egressip.Path, string) {
-	snap := d.snap
-	if t := s.prof.Egress.Type; t == "tor" || t == "vpn+tor" {
+	return d.pathLocked(d.snap, s.prof.Egress.Type, s.prof.ActiveChecks.ParsedTunnelDNS)
+}
+
+// pathLocked is activePath for a snapshot, an egress type ("" without a profile: the tunnel
+// only) and the profile's tunnel DNS servers.
+func (d *Daemon) pathLocked(snap discovery.Snapshot, egress string, tunnelDNS []netip.Addr) (egressip.Path, string) {
+	if t := egress; t == "tor" || t == "vpn+tor" {
 		if snap.Tor != nil {
 			for _, sp := range snap.Tor.Socks {
 				if ap, err := netip.ParseAddrPort(sp); err == nil {
@@ -93,7 +99,7 @@ func (d *Daemon) activePathLocked(s *session) (egressip.Path, string) {
 		}
 		return names[r.LinkIndex]
 	}
-	dns := egressip.TunnelDNS(iface, s.prof.ActiveChecks.ParsedTunnelDNS, linkDNS, snap.DNS.ResolvConf.Nameservers, via)
+	dns := egressip.TunnelDNS(iface, tunnelDNS, linkDNS, snap.DNS.ResolvConf.Nameservers, via)
 	return egressip.Path{Tunnel: iface, DNS: dns}, iface
 }
 
@@ -178,8 +184,7 @@ func (d *Daemon) DNSLeakTest(ctx context.Context) (contracts.DNSLeakResult, erro
 	d.mu.Lock()
 	s := d.sess
 	if s == nil {
-		d.mu.Unlock()
-		return contracts.DNSLeakResult{}, errState(errNotArmed)
+		return d.quickLeakTestUnlocking(ctx)
 	}
 	if !d.activeOn(s) {
 		d.mu.Unlock()
@@ -209,6 +214,67 @@ func (d *Daemon) DNSLeakTest(ctx context.Context) (contracts.DNSLeakResult, erro
 		d.mu.Unlock()
 	}
 	return res, nil
+}
+
+// quickLeakTestUnlocking is the DNS leak test without a session (spec §9.9): no profile and no
+// baseline, so it discovers the network now, leaves only through a tunnel interface (never the
+// bare connection; Tor needs a session with a tor profile), uses the default test service and
+// judges against what the machine itself shows: a DNS server configured on an interface outside
+// the tunnel is a leak, a server in another country than the exit is suspect. Nothing is
+// journaled (there is no session) and no alert is raised. Called with d.mu held; releases it.
+func (d *Daemon) quickLeakTestUnlocking(ctx context.Context) (contracts.DNSLeakResult, error) {
+	if !d.leakBusy.CompareAndSwap(false, true) {
+		d.mu.Unlock()
+		return contracts.DNSLeakResult{}, errState(errLeakBusy)
+	}
+	defer d.leakBusy.Store(false)
+	snap := d.discoverLocked(nil)
+	snap.Tunnels = upTunnels(snap) // a tunnel that is down carries nothing: no path, not a bind error
+	path, name := d.pathLocked(snap, "", nil)
+	known := checks.Known{Resolvers: outsideResolvers(snap, name)}
+	cfg := egressip.LeakConfig{Config: egressip.Config{RootCAs: d.cfg.ActiveRootCAs}, Lookup: d.cfg.LeakLookup,
+		Domain: egressip.DefaultLeakDomain, API: egressip.DefaultLeakAPI}
+	d.mu.Unlock()
+	out := contracts.DNSLeakResult{At: d.cfg.Now().UTC(), Quick: true}
+	if name == "" {
+		out.Verdict, out.Detail = "skipped", egressip.ErrNoPath.Error()
+		return out, nil
+	}
+	res := LeakVerdict(d.cfg.DNSLeak(ctx, path, cfg), known, out.At)
+	res.Quick = true
+	return res, nil
+}
+
+// upTunnels are the snapshot's tunnels whose interface is up.
+func upTunnels(snap discovery.Snapshot) []discovery.Tunnel {
+	up := map[string]bool{}
+	for _, i := range snap.Ifaces {
+		up[i.Name] = i.Up
+	}
+	var out []discovery.Tunnel
+	for _, t := range snap.Tunnels {
+		if up[t.Iface] {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// outsideResolvers are the DNS servers systemd-resolved has on links other than the tunnel,
+// named by their interface (never by address): what a leak would show without a baseline.
+func outsideResolvers(snap discovery.Snapshot, tunnel string) map[netip.Addr]string {
+	out := map[netip.Addr]string{}
+	for _, l := range snap.DNS.Resolved.Links {
+		if l.Iface == tunnel || l.Iface == "" {
+			continue
+		}
+		for _, srv := range l.Servers {
+			if a, err := netip.ParseAddr(srv); err == nil && !a.IsLoopback() {
+				out[a.Unmap()] = l.Iface
+			}
+		}
+	}
+	return out
 }
 
 // LeakVerdict turns the test's answer into what the operator sees.

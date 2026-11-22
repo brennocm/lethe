@@ -282,7 +282,7 @@ func ServerRows(r contracts.DNSLeakResult, lang string) []ServerRow {
 		row := ServerRow{Server: clean(d.IP), Country: clean(d.Country), ASN: clean(d.ASN), Status: t("dns_row_ok"), Tone: toneOK}
 		switch {
 		case d.Matched != "":
-			row.Server = fmt.Sprintf(t("dns_real"), clean(d.Matched))
+			row.Server = fmt.Sprintf(t(matchedKey(r)), clean(d.Matched))
 			row.Status, row.Tone = t("dns_row_leak"), toneBad
 		case r.Exit != nil && d.Country != "" && r.Exit.Country != "" && d.Country != r.Exit.Country:
 			row.Status, row.Tone = t("dns_row_suspect"), toneWarn
@@ -290,6 +290,15 @@ func ServerRows(r contracts.DNSLeakResult, lang string) []ServerRow {
 		out = append(out, row)
 	}
 	return out
+}
+
+// matchedKey names what a matched DNS server is: a baseline field in a session, an interface's
+// own DNS server outside the tunnel in a quick test (no baseline).
+func matchedKey(r contracts.DNSLeakResult) string {
+	if r.Quick {
+		return "dns_outside"
+	}
+	return "dns_real"
 }
 
 // SensorsUp counts the sensors with a heartbeat.

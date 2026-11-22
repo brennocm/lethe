@@ -39,8 +39,10 @@ func (letheTheme) Color(n fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color 
 	switch n {
 	case theme.ColorNameBackground, theme.ColorNameMenuBackground, theme.ColorNameHeaderBackground:
 		return colCanvas
-	case theme.ColorNameOverlayBackground, theme.ColorNameInputBackground:
+	case theme.ColorNameOverlayBackground:
 		return colRaised
+	case theme.ColorNameInputBackground:
+		return colSidebar // a well below the card it sits in, so a field reads as a field
 	case theme.ColorNameButton:
 		return colRaised
 	case theme.ColorNameDisabledButton:

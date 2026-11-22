@@ -113,6 +113,9 @@ type UI struct {
 	// DNS & IP
 	leakActs                                *fyne.Container
 	leakNote                                *widget.Label
+	checkBtn                                *widget.Button
+	quickExit                               *contracts.DNSLeakServer // the exit a test without a session saw
+	quickAt                                 time.Time
 	idBadge, dnsBadge                       *badge
 	idIP, idPlace, idASN, idPath, idChecked *canvas.Text
 	dnsOut                                  *widget.Label
@@ -512,7 +515,11 @@ func (u *UI) checkNow() {
 
 // askDNS explains what the DNS test reveals before running it.
 func (u *UI) askDNS() {
-	dialog.NewCustomConfirm(u.t("dns_btn"), u.t("dns_run"), u.t("cancel"), wrapped(u.t("dns_ask")), func(yes bool) {
+	ask := u.t("dns_ask")
+	if u.st.Session == "" {
+		ask += "\n\n" + u.t("dns_ask_quick")
+	}
+	dialog.NewCustomConfirm(u.t("dns_btn"), u.t("dns_run"), u.t("cancel"), wrapped(ask), func(yes bool) {
 		if !yes {
 			return
 		}
@@ -543,6 +550,11 @@ func (u *UI) showDNS(r contracts.DNSLeakResult, err error) {
 	u.dnsOut.Importance = imp
 	u.dnsOut.SetText(s)
 	u.showDNSRows(r)
+	if r.Quick && r.Exit != nil { // no session: the identity card shows what this test saw
+		e := *r.Exit
+		u.quickExit, u.quickAt = &e, r.At
+		u.applyLeaks(u.st, false)
+	}
 	u.relayout()
 }
 
@@ -558,13 +570,16 @@ func DNSText(r contracts.DNSLeakResult, lang string) (string, widget.Importance)
 		s, imp = t("dns_suspect"), widget.WarningImportance
 	case "leak":
 		s, imp = t("dns_leak"), widget.DangerImportance
+		if r.Quick {
+			s = t("dns_leak_quick")
+		}
 	default:
 		return fmt.Sprintf(t("dns_skipped"), r.Detail), widget.WarningImportance
 	}
 	server := func(v contracts.DNSLeakServer) string {
 		who := v.IP
 		if v.Matched != "" {
-			who = v.Matched
+			who = fmt.Sprintf(t(matchedKey(r)), v.Matched)
 		}
 		var more []string
 		if v.Country != "" {
@@ -577,6 +592,9 @@ func DNSText(r contracts.DNSLeakResult, lang string) (string, widget.Importance)
 			who += " (" + strings.Join(more, ", ") + ")"
 		}
 		return who
+	}
+	if r.Quick {
+		s += "\n" + t("dns_quick_note")
 	}
 	if r.Exit != nil {
 		s += "\n" + t("dns_web_sees") + ": " + server(*r.Exit)

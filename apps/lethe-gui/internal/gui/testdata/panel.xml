@@ -450,7 +450,7 @@
 			</container>
 			<container size="232x712">
 				<container size="232x712">
-					<rectangle fillColor="rgba(25,28,29,255)" size="232x712"/>
+					<rectangle fillColor="inputBackground" size="232x712"/>
 					<container size="232x712">
 						<container pos="14,16" size="204x680">
 							<container size="204x296">

@@ -80,6 +80,9 @@ type DNSLeakResult struct {
 	Exit    *DNSLeakServer  `json:"exit,omitempty"`
 	DNS     []DNSLeakServer `json:"dns,omitempty"`
 	At      time.Time       `json:"at"`
+	// Quick: run without a session (no profile, no baseline); Matched then names the interface
+	// whose own DNS server answered, not a baseline field.
+	Quick bool `json:"quick,omitempty"`
 }
 
 // Lockdown explains a network blocked by lethe in three parts (spec §10.6 item 5): what is

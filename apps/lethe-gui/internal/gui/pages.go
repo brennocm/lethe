@@ -276,7 +276,8 @@ type vecCard struct {
 func (u *UI) buildLeaks() fyne.CanvasObject {
 	dnsBtn := widget.NewButtonWithIcon(u.t("dns_btn"), theme.SearchIcon(), u.askDNS)
 	dnsBtn.Importance = widget.HighImportance
-	u.leakActs = container.NewHBox(dnsBtn, widget.NewButtonWithIcon(u.t("check_now_btn"), theme.ViewRefreshIcon(), u.checkNow))
+	u.checkBtn = widget.NewButtonWithIcon(u.t("check_now_btn"), theme.ViewRefreshIcon(), u.checkNow)
+	u.leakActs = container.NewHBox(dnsBtn, u.checkBtn)
 	u.leakNote = wrapped(u.t("leaks_need_session"))
 	u.leakNote.Importance = widget.LowImportance
 	title := text(u.t("leaks_title"), colText, 22, true, false)
@@ -322,9 +323,18 @@ func (u *UI) buildLeaks() fyne.CanvasObject {
 }
 
 func (u *UI) applyLeaks(st contracts.Status, session bool) {
-	acts := session && u.offline == nil && st.State != "PANIC"
+	// the DNS test runs without a session too (a quick test through the tunnel); check now
+	// starts a round of the session's NET-011, so it needs one
+	acts := u.offline == nil && st.State != "PANIC"
 	show(u.leakActs, acts)
-	show(u.leakNote, !acts)
+	show(u.checkBtn, acts && session)
+	switch {
+	case !acts:
+		u.leakNote.SetText(u.t("leaks_need_daemon"))
+	case !session:
+		u.leakNote.SetText(u.t("leaks_quick"))
+	}
+	show(u.leakNote, !acts || !session)
 	set := func(t *canvas.Text, s string) {
 		if t.Text != s {
 			t.Text = s
@@ -334,6 +344,8 @@ func (u *UI) applyLeaks(st contracts.Status, session bool) {
 	r := RouteOf(st, u.lang)
 	ip, place, asn, path, checked := "—", "—", "—", "—", "—"
 	switch {
+	case !session && u.quickExit != nil:
+		u.idBadge.set(u.t("badge_quick"), toneMuted)
 	case !session:
 		u.idBadge.set(u.t("badge_none"), toneMuted)
 	case st.State == "PANIC":
@@ -366,6 +378,15 @@ func (u *UI) applyLeaks(st contracts.Status, session bool) {
 		checked = e.At.Local().Format("15:04:05")
 		if e.PlaceSource != "" {
 			checked += " · " + e.PlaceSource
+		}
+	}
+	if e := u.quickExit; !session && e != nil {
+		ip, path, checked = clean(e.IP), u.t("id_path_quick"), u.quickAt.Local().Format("15:04:05")
+		if e.Country != "" {
+			place = clean(e.Country)
+		}
+		if e.ASN != "" {
+			asn = clean(e.ASN)
 		}
 	}
 	switch {
