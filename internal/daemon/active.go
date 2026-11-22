@@ -230,9 +230,10 @@ func (d *Daemon) quickLeakTestUnlocking(ctx context.Context) (contracts.DNSLeakR
 	defer d.leakBusy.Store(false)
 	snap := d.discoverLocked(nil)
 	findings := quickFindings(snap)
+	all := snap
 	snap.Tunnels = upTunnels(snap) // a tunnel that is down carries nothing: no path, not a bind error
 	path, name := d.pathLocked(snap, "", nil)
-	known := checks.Known{Resolvers: outsideResolvers(snap, name)}
+	known := checks.Known{Resolvers: outsideResolvers(all, name)}
 	cfg := egressip.LeakConfig{Config: egressip.Config{RootCAs: d.cfg.ActiveRootCAs}, Lookup: d.cfg.LeakLookup,
 		Domain: egressip.DefaultLeakDomain, API: egressip.DefaultLeakAPI}
 	d.mu.Unlock()
@@ -279,12 +280,18 @@ func upTunnels(snap discovery.Snapshot) []discovery.Tunnel {
 	return out
 }
 
-// outsideResolvers are the DNS servers systemd-resolved has on links other than the tunnel,
-// named by their interface (never by address): what a leak would show without a baseline.
+// outsideResolvers are the DNS servers systemd-resolved has on links that are not tunnels,
+// named by their interface (never by address): what a leak would show without a baseline. Every
+// tunnel is left out, up or not, not only the one the test leaves through: a second VPN's DNS is
+// not the real network.
 func outsideResolvers(snap discovery.Snapshot, tunnel string) map[netip.Addr]string {
+	tunnels := map[string]bool{tunnel: true, "": true}
+	for _, t := range snap.Tunnels {
+		tunnels[t.Iface] = true
+	}
 	out := map[netip.Addr]string{}
 	for _, l := range snap.DNS.Resolved.Links {
-		if l.Iface == tunnel || l.Iface == "" {
+		if tunnels[l.Iface] {
 			continue
 		}
 		for _, srv := range l.Servers {

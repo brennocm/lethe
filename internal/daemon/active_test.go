@@ -244,3 +244,19 @@ func TestDNS002_QuickLeakTestWithoutSession(t *testing.T) {
 		t.Fatalf("no tunnel: skipped before any name is resolved: %+v %v", r, err)
 	}
 }
+
+// TestDNS002_QuickOutsideResolversSkipEveryTunnel: a second tunnel's DNS (another VPN, or one
+// that is down) is not the real network, so the quick test never calls it a leak.
+func TestDNS002_QuickOutsideResolversSkipEveryTunnel(t *testing.T) {
+	var snap discovery.Snapshot
+	snap.Tunnels = []discovery.Tunnel{{Iface: "wg0"}, {Iface: "tun1"}}
+	snap.DNS.Resolved.Links = []discovery.ResolvedLink{
+		{Iface: "wg0", Servers: []string{"10.64.0.1"}},
+		{Iface: "tun1", Servers: []string{"10.8.0.1"}},
+		{Iface: "eth0", Servers: []string{"192.0.2.53", "127.0.0.53"}},
+	}
+	got := outsideResolvers(snap, "wg0")
+	if len(got) != 1 || got[netip.MustParseAddr("192.0.2.53")] != "eth0" {
+		t.Fatalf("%v", got)
+	}
+}
