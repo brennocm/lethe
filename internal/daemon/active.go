@@ -202,7 +202,7 @@ func (d *Daemon) DNSLeakTest(ctx context.Context) (contracts.DNSLeakResult, erro
 	d.mu.Unlock()
 	out := contracts.DNSLeakResult{At: d.cfg.Now().UTC()}
 	if name == "" {
-		out.Verdict, out.Detail = "skipped", egressip.ErrNoPath.Error()
+		out.Verdict, out.Detail, out.NoTunnel = "skipped", egressip.ErrNoPath.Error(), true
 		return out, nil
 	}
 	res := LeakVerdict(d.cfg.DNSLeak(ctx, path, cfg), known, out.At)
@@ -239,7 +239,7 @@ func (d *Daemon) quickLeakTestUnlocking(ctx context.Context) (contracts.DNSLeakR
 	d.mu.Unlock()
 	out := contracts.DNSLeakResult{At: d.cfg.Now().UTC(), Quick: true, Findings: findings}
 	if name == "" {
-		out.Verdict, out.Detail = "skipped", egressip.ErrNoPath.Error()
+		out.Verdict, out.Detail, out.NoTunnel = "skipped", egressip.ErrNoPath.Error(), true
 		return out, nil
 	}
 	res := LeakVerdict(d.cfg.DNSLeak(ctx, path, cfg), known, out.At)

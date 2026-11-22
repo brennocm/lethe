@@ -83,6 +83,9 @@ type DNSLeakResult struct {
 	// Quick: run without a session (no profile, no baseline); Matched then names the interface
 	// whose own DNS server answered, not a baseline field.
 	Quick bool `json:"quick,omitempty"`
+	// NoTunnel: a quick test found no tunnel up to leave through, so it skipped the DNS part (the
+	// routes in Findings are still read).
+	NoTunnel bool `json:"no_tunnel,omitempty"`
 	// Findings: in a quick test, what the machine's routes show right now (NET-003 IPv6 and
 	// NET-004 effective route outside the tunnel), by check and interface.
 	Findings []QuickFinding `json:"findings,omitempty"`

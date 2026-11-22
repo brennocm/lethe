@@ -240,7 +240,7 @@ func TestDNS002_QuickLeakTestWithoutSession(t *testing.T) {
 	f.k.mu.Lock()
 	f.k.wgDown = true
 	f.k.mu.Unlock()
-	if r, err := f.d.DNSLeakTest(context.Background()); err != nil || r.Verdict != "skipped" || !r.Quick {
+	if r, err := f.d.DNSLeakTest(context.Background()); err != nil || r.Verdict != "skipped" || !r.Quick || !r.NoTunnel {
 		t.Fatalf("no tunnel: skipped before any name is resolved: %+v %v", r, err)
 	}
 }
