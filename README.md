@@ -11,6 +11,8 @@ escapes the tunnel (IP, DNS, IPv6, WebRTC/STUN, LAN broadcasts), can block it wi
 
 Everything is done from the panel (`lethe-gui`). The terminal is only needed to install.
 
+How it works and why: [the lethe article](https://brennocm.github.io/articles/en-us/lethe.html).
+
 > **Status:** feature-complete, but the manual acceptance runs (real Tor, and the GUI on GNOME
 > and KDE) are still pending. Do not rely on it for real operations yet.
 
