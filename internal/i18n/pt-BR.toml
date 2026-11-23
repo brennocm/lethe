@@ -361,6 +361,7 @@ quick_none = "Ligue a VPN e clique em Verificar minha conexão. O lethe pergunta
 quick_browser = "O lethe não vê dentro do navegador. Abra estas páginas nele para conferir o WebRTC e a impressão digital:"
 quick_finding = "%s, visto pelo %s."
 quick_no_tunnel = "Nenhum túnel ligado, então a parte de DNS não rodou: ela nunca sai pela conexão nua. Ligue a VPN e verifique de novo."
+quick_bare_route = "Com a VPN desligada, o tráfego sai direto por %s. Agora isso é esperado; numa sessão é o que o lethe bloqueia ou alerta."
 quick_routes_ok = "Rotas: IPv4 e IPv6 passam pelo túnel."
 first_net_hint = "Desligue a VPN antes, na rede de onde vai trabalhar. O lethe registra esta rede como a que nunca pode aparecer."
 first_tunnel_up = "Há um túnel ligado, então o lethe registraria o túnel em vez da sua rede real. Desligue a VPN e clique em Achar meu IP."

@@ -359,6 +359,7 @@ quick_none = "Turn the VPN on and click Check my connection. lethe asks the web 
 quick_browser = "lethe can't see inside the browser. Open these pages there to check WebRTC and the fingerprint:"
 quick_finding = "%s, seen by %s."
 quick_no_tunnel = "No tunnel is up, so the DNS part didn't run: it never leaves over your bare connection. Turn the VPN on and check again."
+quick_bare_route = "With the VPN off, traffic leaves straight over %s. That's expected now; during a session it's what lethe blocks or reports."
 quick_routes_ok = "Routes: IPv4 and IPv6 both go through the tunnel."
 first_net_hint = "Turn the VPN off first, on the network you'll work from. lethe records this network as the one that must never show."
 first_tunnel_up = "A tunnel is up, so lethe would record the tunnel instead of your real network. Turn the VPN off, then click Find my IP."

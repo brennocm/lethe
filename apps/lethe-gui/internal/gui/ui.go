@@ -653,10 +653,28 @@ func DNSText(r contracts.DNSLeakResult, lang string) (string, widget.Importance)
 		}
 		return who
 	}
+	if r.Quick && r.NoTunnel {
+		// VPN off: every route leaves outside a tunnel by definition, so the findings only say
+		// which interfaces carry the traffic, once, as a warning; no DNS was compared.
+		if ifs := quickIfaces(r.Findings); ifs != "" {
+			s += "\n" + fmt.Sprintf(t("quick_bare_route"), ifs)
+		}
+		return s, widget.WarningImportance
+	}
 	for _, f := range r.Findings { // a quick test also reports the routes: IPv6 and the effective route
 		line := i18n.CheckText(lang, f.Check).Title
+		var where []string
 		if f.Iface != "" {
-			line += " (" + clean(f.Iface) + ")"
+			where = append(where, clean(f.Iface))
+		}
+		switch f.Reason {
+		case "route_ipv4":
+			where = append(where, "IPv4")
+		case "route_ipv6":
+			where = append(where, "IPv6")
+		}
+		if len(where) > 0 {
+			line += " (" + strings.Join(where, ", ") + ")"
 		}
 		s += "\n" + fmt.Sprintf(t("quick_finding"), line, f.Check)
 		if f.Severity == string(contracts.SeverityCritical) {
@@ -680,6 +698,20 @@ func DNSText(r contracts.DNSLeakResult, lang string) (string, widget.Importance)
 		s += "\n" + t("dns_seen") + ": " + strings.Join(list, "; ")
 	}
 	return s, imp
+}
+
+// quickIfaces are the interfaces a quick test's route findings name, each once, in order.
+func quickIfaces(fs []contracts.QuickFinding) string {
+	var out []string
+	seen := map[string]bool{}
+	for _, f := range fs {
+		if f.Iface == "" || seen[f.Iface] {
+			continue
+		}
+		seen[f.Iface] = true
+		out = append(out, clean(f.Iface))
+	}
+	return strings.Join(out, ", ")
 }
 
 // askEnd ends the session with the passphrase; in PANIC it says the block is lifted without the

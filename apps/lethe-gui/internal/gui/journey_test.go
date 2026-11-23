@@ -59,7 +59,7 @@ func TestNET004_QuickCheckReportsRoutes(t *testing.T) {
 	r := contracts.DNSLeakResult{Verdict: "ok", Quick: true,
 		Findings: []contracts.QuickFinding{{Check: "NET-004", Severity: "CRITICAL", Iface: "eth0", Reason: "route_ipv4"}}}
 	s, imp := DNSText(r, "en-US")
-	if !strings.Contains(s, "Effective route outside the tunnel (eth0), seen by NET-004.") || imp != widget.DangerImportance {
+	if !strings.Contains(s, "Effective route outside the tunnel (eth0, IPv4), seen by NET-004.") || imp != widget.DangerImportance {
 		t.Fatalf("%q %v", s, imp)
 	}
 	r.Findings = nil
@@ -238,8 +238,12 @@ func overlayText(w fyne.Window) string {
 func TestNET004_QuickCheckWithoutTunnelAndOneAtATime(t *testing.T) {
 	r := contracts.DNSLeakResult{Verdict: "skipped", Quick: true, NoTunnel: true, Detail: "no tunnel",
 		Findings: []contracts.QuickFinding{{Check: "NET-004", Severity: "CRITICAL", Iface: "eth0", Reason: "route_ipv4"}}}
+	r.Findings = append(r.Findings, contracts.QuickFinding{Check: "NET-004", Severity: "CRITICAL", Iface: "eth0", Reason: "route_ipv6"},
+		contracts.QuickFinding{Check: "NET-003", Severity: "HIGH", Iface: "eth0"})
 	s, imp := DNSText(r, "en-US")
-	if !strings.Contains(s, "No tunnel is up") || !strings.Contains(s, "(eth0), seen by NET-004") || imp != widget.DangerImportance {
+	// VPN off: one warning naming the interface once, no per-check lines, no quick-test note
+	if !strings.Contains(s, "No tunnel is up") || !strings.Contains(s, "traffic leaves straight over eth0.") ||
+		strings.Contains(s, "NET-004") || strings.Contains(s, "Quick test:") || imp != widget.WarningImportance {
 		t.Fatalf("%q %v", s, imp)
 	}
 	u, f, _ := setup(t, contracts.Status{State: "READY", Color: "GRAY"})
